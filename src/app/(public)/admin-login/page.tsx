@@ -41,13 +41,20 @@ export default function AdminLoginPage() {
       controller.abort();
     }, 12000);
 
+    const form = e.currentTarget;
+    const formEmail = (form.elements.namedItem('email') as HTMLInputElement)?.value || (form.elements.namedItem('identifier') as HTMLInputElement)?.value || '';
+    const formPassword = (form.elements.namedItem('password') as HTMLInputElement)?.value || '';
+    const submitIdentifier = (identifier.trim() || formEmail.trim());
+    const submitPassword = (password || formPassword);
+
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          identifier: identifier.trim(),
-          password,
+          identifier: submitIdentifier,
+          email: submitIdentifier,
+          password: submitPassword,
           role: 'ADMIN',
         }),
         signal: controller.signal,
@@ -65,8 +72,6 @@ export default function AdminLoginPage() {
 
       if (data.data?.token) {
         try {
-          // Double-layer session guarantee: ensure cookie is actively set in document
-          document.cookie = `spd-auth-token=${data.data.token}; path=/; max-age=604800; SameSite=Lax`;
           localStorage.setItem('spd_user', JSON.stringify(data.data));
           sessionStorage.setItem('spd_auth_token', data.data.token);
         } catch (storageErr) {
@@ -74,10 +79,10 @@ export default function AdminLoginPage() {
         }
       }
 
-      const targetUrl = data.data?.redirectUrl || '/admin/dashboard';
+      const targetUrl = data.data?.redirectUrl || '/admin';
       setTimeout(() => {
         window.location.replace(targetUrl);
-      }, 350);
+      }, 300);
     } catch (err: any) {
       clearTimeout(timeoutId);
       setStatus('ERROR');
@@ -147,14 +152,14 @@ export default function AdminLoginPage() {
             )}
             
             <div className="space-y-1.5">
-              <Label htmlFor="identifier" className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Email or Username
               </Label>
               <Input
-                id="identifier"
-                name="identifier"
+                id="email"
+                name="email"
                 type="text"
-                autoComplete="username"
+                autoComplete="username email"
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}

@@ -61,8 +61,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify password
-    const isPasswordValid = await comparePassword(password, user.password);
+    // Verify password (check raw and trimmed password to avoid accidental whitespace lockouts)
+    let isPasswordValid = await comparePassword(password, user.password);
+    if (!isPasswordValid && typeof password === 'string' && password.trim() !== password) {
+      isPasswordValid = await comparePassword(password.trim(), user.password);
+    }
     if (!isPasswordValid) {
       return NextResponse.json(
         { success: false, error: 'Invalid credentials. Please check your username and password.' },
@@ -122,7 +125,7 @@ export async function POST(request: Request) {
     }
 
     // Compute role-based destination redirect
-    let redirectUrl = '/admin/dashboard';
+    let redirectUrl = '/admin';
     if (user.role === 'CUSTOMER') {
       redirectUrl = '/customer/dashboard';
     } else if (user.role === 'DRIVER') {
@@ -143,9 +146,9 @@ export async function POST(request: Request) {
       },
     });
 
-    // Detect if connection is HTTPS. On HTTP (development/local/port-forward), secure must be false
-    // so modern browsers will not drop or block the cookie over HTTP.
-    const isHttps = request.headers.get('x-forwarded-proto') === 'https' || request.url.startsWith('https:');
+    // Detect if connection is genuinely HTTPS and not localhost
+    const isLocalhost = request.url.includes('localhost') || request.url.includes('127.0.0.1');
+    const isHttps = !isLocalhost && (request.headers.get('x-forwarded-proto') === 'https' || request.url.startsWith('https:'));
 
     // Set cookie directly on response
     response.cookies.set('spd-auth-token', token, {
