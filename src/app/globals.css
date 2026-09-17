@@ -1,0 +1,548 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* SPD Brand Identity */
+    --spd-red: 0 84% 50%;
+    --spd-blue: 221 72% 40%;
+
+    /* Light Mode Theme */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 4%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 4%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+
+    --primary: 0 84% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 221 72% 40%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 220 14% 96%;
+    --accent-foreground: 220 9% 20%;
+
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 221 72% 40%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* SPD Brand Identity (adjusted for dark backgrounds) */
+    --spd-red: 0 84% 60%;
+    --spd-blue: 217 91% 60%;
+
+    /* Dark Mode Theme */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 84% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 217 91% 60%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 64%;
+
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 63% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
+
+@layer utilities {
+  /* Premium hover effects */
+  .hover-lift {
+    transition: transform 2.0s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 2.0s cubic-bezier(0.16, 1, 0.3, 1), border-color 2.0s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .hover-lift:hover {
+    @apply -translate-y-0.5 shadow-lg;
+  }
+
+  .hover-glow {
+    transition: box-shadow 2.0s cubic-bezier(0.16, 1, 0.3, 1), transform 2.0s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .hover-glow:hover {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.15);
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-background/80 backdrop-blur-lg;
+  }
+
+  /* Gradient utilities */
+  .gradient-spd {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--spd-red)) 0%,
+      hsl(var(--spd-blue)) 100%
+    );
+  }
+
+  .gradient-spd-text {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--spd-red)) 0%,
+      hsl(var(--spd-blue)) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Print styles */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+
+    .print-only {
+      display: block !important;
+    }
+
+    body {
+      background: white !important;
+      color: black !important;
+    }
+  }
+
+  .print-only {
+    display: none;
+  }
+}
+
+/* 3D Flip Card Utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+.group:hover .group-hover-rotate-y-180,
+.group.flipped .group-hover-rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* Truck Video Background Overlay */
+.video-overlay-dark {
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.72) 0%,
+    rgba(11, 15, 25, 0.85) 60%,
+    rgba(11, 15, 25, 0.96) 100%
+  );
+}
+
+/* Pulse Glow Keyframes */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.4), 0 0 30px rgba(30, 64, 175, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(220, 38, 38, 0.7), 0 0 45px rgba(30, 64, 175, 0.4);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 3s infinite ease-in-out;
+}
+
+/* Explicit 3D Flip Card Hover & Active Styles */
+.faq-card-inner {
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+}
+
+.faq-card:hover .faq-card-inner,
+.faq-card.is-flipped .faq-card-inner {
+  transform: rotateY(180deg);
+}
+
+/* =================================================== */
+/* ADVANCED ANIMATION SYSTEM & SCROLL REVEAL ENGINE     */
+/* =================================================== */
+
+/* 1. Full Page Entrance Keyframes */
+@keyframes heroLogoEntrance {
+  0% {
+    opacity: 0;
+    transform: scale(0.78) translateY(-18px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes heroHeadingReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes heroParagraphSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroZoomOutEntrance {
+  0% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes heroButtonsMotion {
+  0% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes heroKenBurns {
+  0% {
+    transform: scale(1.02) translate(0%, 0%);
+  }
+  33% {
+    transform: scale(1.07) translate(-1.5%, -0.8%);
+  }
+  66% {
+    transform: scale(1.10) translate(1%, -1.2%);
+  }
+  100% {
+    transform: scale(1.03) translate(-0.5%, 0.5%);
+  }
+}
+
+.animate-hero-zoom-out {
+  animation: heroZoomOutEntrance 2.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-hero-logo {
+  animation: heroLogoEntrance 2.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-hero-heading {
+  animation: heroHeadingReveal 2.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+}
+
+.animate-hero-paragraph {
+  animation: heroParagraphSlide 2.7s cubic-bezier(0.16, 1, 0.3, 1) 0.6s both;
+}
+
+.animate-hero-btn-1 {
+  animation: heroButtonsMotion 2.5s cubic-bezier(0.16, 1, 0.3, 1) 0.8s both;
+}
+
+.animate-hero-btn-2 {
+  animation: heroButtonsMotion 2.5s cubic-bezier(0.16, 1, 0.3, 1) 1.0s both;
+}
+
+.animate-hero-btn-3 {
+  animation: heroButtonsMotion 2.5s cubic-bezier(0.16, 1, 0.3, 1) 1.2s both;
+}
+
+.animate-ken-burns {
+  animation: heroKenBurns 28s infinite alternate ease-in-out;
+  will-change: transform;
+}
+
+@keyframes heroKenBurns1 {
+  0% { transform: scale(1.02) translate(0%, 0%); }
+  50% { transform: scale(1.08) translate(-1.5%, -0.8%); }
+  100% { transform: scale(1.03) translate(-0.8%, 0.4%); }
+}
+
+@keyframes heroKenBurns2 {
+  0% { transform: scale(1.09) translate(1.2%, -0.5%); }
+  50% { transform: scale(1.04) translate(-0.6%, 0.8%); }
+  100% { transform: scale(1.02) translate(0%, 0%); }
+}
+
+@keyframes heroKenBurns3 {
+  0% { transform: scale(1.02) translate(0%, 0%); }
+  50% { transform: scale(1.07) translate(1.0%, -1.2%); }
+  100% { transform: scale(1.10) translate(0.5%, -0.6%); }
+}
+
+@keyframes heroKenBurns4 {
+  0% { transform: scale(1.08) translate(-1.0%, 0.6%); }
+  50% { transform: scale(1.04) translate(0.8%, -0.8%); }
+  100% { transform: scale(1.02) translate(0%, 0%); }
+}
+
+.animate-ken-burns-1 {
+  animation: heroKenBurns1 26s infinite alternate ease-in-out;
+  will-change: transform;
+}
+.animate-ken-burns-2 {
+  animation: heroKenBurns2 28s infinite alternate ease-in-out;
+  will-change: transform;
+}
+.animate-ken-burns-3 {
+  animation: heroKenBurns3 27s infinite alternate ease-in-out;
+  will-change: transform;
+}
+.animate-ken-burns-4 {
+  animation: heroKenBurns4 29s infinite alternate ease-in-out;
+  will-change: transform;
+}
+
+/* 2. Modern Scroll Reveal Engine (Smooth 2.8s Cinematic Transitions) */
+.reveal-init {
+  will-change: transform, opacity, filter;
+  transition: opacity 2.8s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 2.8s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 2.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* When client JS is active, unrevealed elements take starting position */
+.js-reveal-active .reveal-init:not(.revealed) {
+  opacity: 0;
+}
+
+/* 1. Slide from left */
+.js-reveal-active .reveal-left:not(.revealed),
+.js-reveal-active .reveal-slide-left:not(.revealed) {
+  transform: translate3d(-60px, 0, 0);
+  opacity: 0;
+}
+
+/* 2. Slide from right */
+.js-reveal-active .reveal-right:not(.revealed),
+.js-reveal-active .reveal-slide-right:not(.revealed) {
+  transform: translate3d(60px, 0, 0);
+  opacity: 0;
+}
+
+/* 3. Slide from bottom */
+.js-reveal-active .reveal-up:not(.revealed),
+.js-reveal-active .reveal-slide-up:not(.revealed) {
+  transform: translate3d(0, 48px, 0);
+  opacity: 0;
+}
+
+/* 4. Slide from top */
+.js-reveal-active .reveal-down:not(.revealed),
+.js-reveal-active .reveal-slide-down:not(.revealed) {
+  transform: translate3d(0, -48px, 0);
+  opacity: 0;
+}
+
+/* 5. Fade in */
+.js-reveal-active .reveal-fade:not(.revealed) {
+  opacity: 0;
+  transform: none;
+}
+
+/* 6. Blur to clear effect */
+.js-reveal-active .reveal-blur:not(.revealed) {
+  filter: blur(10px);
+  transform: translate3d(0, 26px, 0);
+  opacity: 0;
+}
+
+/* 7. Zoom in */
+.js-reveal-active .reveal-zoom:not(.revealed),
+.js-reveal-active .reveal-zoom-in:not(.revealed) {
+  transform: scale(0.88) translate3d(0, 16px, 0);
+  opacity: 0;
+}
+
+/* 8. Zoom out */
+.js-reveal-active .reveal-zoom-out:not(.revealed) {
+  transform: scale(1.12);
+  opacity: 0;
+}
+
+/* When scrolled into viewport */
+.reveal-init.revealed {
+  opacity: 1 !important;
+  transform: translate3d(0, 0, 0) scale(1) !important;
+  filter: blur(0) !important;
+}
+
+/* Staggered card delays */
+.stagger-1 { transition-delay: 0.15s; }
+.stagger-2 { transition-delay: 0.30s; }
+.stagger-3 { transition-delay: 0.45s; }
+.stagger-4 { transition-delay: 0.60s; }
+.stagger-5 { transition-delay: 0.75s; }
+.stagger-6 { transition-delay: 0.90s; }
+.stagger-7 { transition-delay: 1.05s; }
+
+/* 3. Premium Card Hover & Soft Scale Effects */
+.card-hover-lift {
+  transition: transform 2.0s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 2.0s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 2.0s ease;
+}
+.card-hover-lift:hover {
+  transform: translateY(-8px) scale(1.015);
+  box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.12), 0 10px 15px -5px rgba(0, 0, 0, 0.08);
+}
+.dark .card-hover-lift:hover {
+  box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.6), 0 0 20px rgba(220, 38, 38, 0.18);
+}
+
+/* 4. Image Slow Zoom & Parallax Container */
+.img-slow-zoom {
+  overflow: hidden;
+}
+.img-slow-zoom img {
+  transition: transform 2.6s cubic-bezier(0.16, 1, 0.3, 1), filter 2.6s ease;
+}
+.img-slow-zoom:hover img {
+  transform: scale(1.06);
+}
+
+/* 5. Premium Button Hover, Scale & Glow Effects */
+.btn-glow-red {
+  transition: transform 2.0s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 2.0s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-glow-red:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 10px 25px -5px rgba(220, 38, 38, 0.5);
+}
+.btn-glow-red:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.btn-glow-blue {
+  transition: transform 2.0s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 2.0s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-glow-blue:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 10px 25px -5px rgba(30, 64, 175, 0.5);
+}
+.btn-glow-blue:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* 6. Custom Cursor Desktop Pointer Override */
+@media (pointer: fine) {
+  html,
+  body,
+  *,
+  *::before,
+  *::after {
+    cursor: none !important;
+  }
+}
+
+/* 7. Text Reveal Animation Helpers */
+.reveal-text {
+  overflow: hidden;
+  display: inline-block;
+}
+.reveal-text > * {
+  display: inline-block;
+  transform: translate3d(0, 100%, 0);
+  opacity: 0;
+  transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.85s ease;
+}
+.reveal-init.revealed .reveal-text > *,
+.reveal-text.revealed > * {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+}
+
+
+
