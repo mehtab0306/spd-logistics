@@ -60,7 +60,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-    const { name, email, phone, avatar } = body;
+    const { name, email, phone, avatar, username } = body;
 
     // Validate email format and uniqueness if email is changed
     let cleanEmail: string | undefined = undefined;
@@ -93,7 +93,7 @@ export async function PUT(request: Request) {
       data: {
         name: name !== undefined ? name.trim() : undefined,
         email: cleanEmail,
-        username: cleanEmail ? null : undefined,
+        username: username !== undefined ? (username.trim() || null) : undefined,
         phone: phone !== undefined ? phone.trim() : undefined,
         avatar: avatar !== undefined ? (avatar === '' ? null : avatar) : undefined,
       },
