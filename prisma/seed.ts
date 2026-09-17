@@ -14,7 +14,7 @@ async function main() {
   console.log('🚀 SPD Logistics — Database Seed');
   console.log('================================');
 
-  // Create / upsert official admin user (admin@gmail.com / admin)
+  // Create / upsert official admin user
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@gmail.com';
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin';
   const adminName = process.env.ADMIN_NAME || 'System Admin';
@@ -23,6 +23,7 @@ async function main() {
   await prisma.user.upsert({
     where: { email: adminEmail },
     update: {
+      username: 'admin',
       password: hashedPassword,
       role: 'SUPER_ADMIN',
       status: 'ACTIVE',
@@ -37,7 +38,7 @@ async function main() {
       status: 'ACTIVE',
     },
   });
-  console.log(`✓ Primary Admin user verified/created: ${adminEmail} (password: ${adminPassword})`);
+  console.log(`✓ Primary Admin user verified/configured: ${adminEmail}`);
 
   // Create default cash books (empty, with 0 balance)
   const defaultCashBooks = [
