@@ -8,28 +8,28 @@ async function runTests() {
   console.log('  SPD LOGISTICS: REAL ADMIN CREDENTIAL TEST SUITE  ');
   console.log('====================================================\n');
 
-  // Baseline preparation: Ensure admin is admin@AGman.com / admin
+  // Baseline preparation: Ensure admin is admin@gmail.com / admin
   const baselineHash = await hashPassword('admin');
   const baselineUser = await prisma.user.findFirst({
-    where: { OR: [{ email: 'admin@AGman.com' }, { username: 'admin' }] },
+    where: { OR: [{ email: 'admin@gmail.com' }, { username: 'admin' }, { role: 'SUPER_ADMIN' }] },
   });
   if (!baselineUser) {
     throw new Error('Baseline admin user not found in database');
   }
   await prisma.user.update({
     where: { id: baselineUser.id },
-    data: { email: 'admin@AGman.com', password: baselineHash, role: 'SUPER_ADMIN', status: 'ACTIVE', username: 'admin' },
+    data: { email: 'admin@gmail.com', password: baselineHash, role: 'SUPER_ADMIN', status: 'ACTIVE', username: 'admin' },
   });
-  console.log('Baseline established: admin@AGman.com / password: admin\n');
+  console.log('Baseline established: admin@gmail.com / password: admin\n');
 
   // ----------------------------------------------------
   // TEST 1 — INITIAL LOGIN
   // ----------------------------------------------------
-  console.log('[TEST 1] Initial Login: admin@AGman.com / admin');
+  console.log('[TEST 1] Initial Login: admin@gmail.com / admin');
   const t1Res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@AGman.com', password: 'admin' }),
+    body: JSON.stringify({ email: 'admin@gmail.com', password: 'admin' }),
   });
   const t1Data = await t1Res.json();
   if (t1Res.status !== 200 || !t1Data.success || !t1Data.data?.token) {
@@ -118,7 +118,7 @@ async function runTests() {
   const t3Res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@AGman.com', password: 'admin' }),
+    body: JSON.stringify({ email: 'admin@gmail.com', password: 'admin' }),
   });
   const t3Data = await t3Res.json();
   if (t3Res.status === 200 && t3Data.success) {
@@ -134,7 +134,7 @@ async function runTests() {
   const t4Res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@AGman.com', password: 'TestNewPassword123!' }),
+    body: JSON.stringify({ email: 'admin@gmail.com', password: 'TestNewPassword123!' }),
   });
   const t4Data = await t4Res.json();
   if (t4Res.status !== 200 || !t4Data.success || !t4Data.data?.token) {
@@ -149,7 +149,7 @@ async function runTests() {
   // ----------------------------------------------------
   console.log('[TEST 5] Verify Direct DB Persistence & Bcrypt Verification');
   const userCheck = await prisma.user.findUnique({
-    where: { email: 'admin@AGman.com' },
+    where: { email: 'admin@gmail.com' },
   });
   if (!userCheck) throw new Error('[TEST 5 FAILED] User not found in DB');
   const hashMatches = await comparePassword('TestNewPassword123!', userCheck.password);
@@ -160,7 +160,7 @@ async function runTests() {
   // ----------------------------------------------------
   // TEST 6 — EMAIL CHANGE
   // ----------------------------------------------------
-  console.log('[TEST 6] Change Email: admin@AGman.com -> newadmin@AGman.com');
+  console.log('[TEST 6] Change Email: admin@gmail.com -> newadmin@gmail.com');
   const t6Update = await fetch(`${BASE_URL}/api/admin/profile`, {
     method: 'PUT',
     headers: {
@@ -169,7 +169,7 @@ async function runTests() {
       'Cookie': `spd-auth-token=${newToken}`,
     },
     body: JSON.stringify({
-      email: 'newadmin@AGman.com',
+      email: 'newadmin@gmail.com',
       name: 'System Admin',
     }),
   });
@@ -183,7 +183,7 @@ async function runTests() {
   const t6OldLogin = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@AGman.com', password: 'TestNewPassword123!' }),
+    body: JSON.stringify({ email: 'admin@gmail.com', password: 'TestNewPassword123!' }),
   });
   const t6OldData = await t6OldLogin.json();
   if (t6OldLogin.status === 200 && t6OldData.success) {
@@ -195,7 +195,7 @@ async function runTests() {
   const t6NewLogin = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'newadmin@agman.com', password: 'TestNewPassword123!' }),
+    body: JSON.stringify({ email: 'newadmin@gmail.com', password: 'TestNewPassword123!' }),
   });
   const t6NewData = await t6NewLogin.json();
   if (t6NewLogin.status !== 200 || !t6NewData.success) {
@@ -204,13 +204,13 @@ async function runTests() {
   console.log('  -> New email login succeeded: 200 OK | Authenticated:', t6NewData.data.email);
   console.log('  [PASS] Test 6: Old email revoked, new email + password logged in successfully.\n');
 
-  // Reset email back to admin@AGman.com and password to admin as initial development default
+  // Reset email back to admin@gmail.com and password to admin as initial development default
   const finalHash = await hashPassword('admin');
   await prisma.user.update({
     where: { id: userCheck.id },
-    data: { email: 'admin@AGman.com', password: finalHash },
+    data: { email: 'admin@gmail.com', password: finalHash, username: 'admin' },
   });
-  console.log('Clean Teardown: Re-established default baseline admin@AGman.com / admin.');
+  console.log('Clean Teardown: Re-established default baseline admin@gmail.com / admin.');
 
   console.log('\n====================================================');
   console.log('  SUCCESS: ALL 8 MANDATORY TESTS VERIFIED 100%     ');
