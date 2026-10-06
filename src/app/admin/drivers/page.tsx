@@ -38,12 +38,14 @@ import {
   Printer,
   Package,
 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 import { buildWhatsAppUrl, getAdminToDriverWhatsAppMessage } from "@/lib/whatsapp";
+import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 
 export default function DriversPage() {
   const router = useRouter();
   const [drivers, setDrivers] = useState<any[]>([]);
+  const { highlightClass } = useSmartHighlight(drivers);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -651,7 +653,15 @@ export default function DriversPage() {
             </TableHeader>
             <TableBody>
               {drivers.map((d) => (
-                <TableRow key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                <TableRow
+                  key={d.id}
+                  id={`record-${d.id}`}
+                  data-record-id={d.id}
+                  className={cn(
+                    "hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all",
+                    highlightClass(d.id)
+                  )}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-xs">

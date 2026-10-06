@@ -21,12 +21,14 @@ import {
   Package,
   FileSpreadsheet,
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { PrintableChallan } from "@/components/challan/printable-challan";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
+import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 
 export default function ChallanInTransitPage() {
   const [challans, setChallans] = useState<any[]>([]);
+  const { highlightClass } = useSmartHighlight(challans);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -217,7 +219,12 @@ export default function ChallanInTransitPage() {
             return (
               <div
                 key={c.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs p-5 space-y-4 hover:shadow-md transition-all"
+                id={`record-${c.id}`}
+                data-record-id={c.id}
+                className={cn(
+                  "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs p-5 space-y-4 hover:shadow-md transition-all",
+                  highlightClass(c.id) || highlightClass(c.challanNumber)
+                )}
               >
                 {/* Trip Card Top Bar */}
                 <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">

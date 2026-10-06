@@ -52,7 +52,8 @@ import {
   MapPin,
   TrendingUp,
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 
 // LocalStorage Keys for complete system-wide cross-module sync
 const LOCAL_ACCOUNTS_KEY = "spd_local_accounts";
@@ -101,6 +102,7 @@ interface AccountItem {
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
+  const { highlightClass } = useSmartHighlight(accounts);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -991,7 +993,15 @@ export default function AccountsPage() {
               </TableRow>
             ) : (
               filteredAccounts.map((a) => (
-                <TableRow key={a.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 text-xs">
+                <TableRow
+                  key={a.id}
+                  id={`record-${a.id}`}
+                  data-record-id={a.id}
+                  className={cn(
+                    "hover:bg-slate-50/60 dark:hover:bg-slate-800/40 text-xs transition-all",
+                    highlightClass(a.id)
+                  )}
+                >
                   <TableCell>
                     <div>
                       <div className="flex items-center gap-1.5">

@@ -43,16 +43,18 @@ import {
   Upload,
   Maximize2,
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import {
   buildWhatsAppUrl,
   getBiltyTrackingWhatsAppMessage,
   getAdminToDriverWhatsAppMessage,
 } from "@/lib/whatsapp";
+import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 
 export default function BiltyPage() {
   const router = useRouter();
   const [consignments, setConsignments] = useState<any[]>([]);
+  const { highlightClass } = useSmartHighlight(consignments);
   const [customers, setCustomers] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -1534,7 +1536,15 @@ export default function BiltyPage() {
                 </TableHeader>
                 <TableBody>
                   {consignments.map((c) => (
-                    <TableRow key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                    <TableRow
+                      key={c.id}
+                      id={`record-${c.id}`}
+                      data-record-id={c.id}
+                      className={cn(
+                        "hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all",
+                        highlightClass(c.id) || highlightClass(c.biltyNumber)
+                      )}
+                    >
                       <TableCell>
                         <div>
                           <p className="font-black text-xs text-slate-900 dark:text-white">{c.biltyNumber}</p>

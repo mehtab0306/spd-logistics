@@ -42,12 +42,14 @@ import {
   MessageSquare,
   X,
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { buildWhatsAppUrl, getAdminToCustomerWhatsAppMessage } from "@/lib/whatsapp";
+import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<any[]>([]);
+  const { highlightClass } = useSmartHighlight(customers);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [warehouseFilter, setWarehouseFilter] = useState("");
@@ -665,7 +667,15 @@ export default function CustomersPage() {
             </TableHeader>
             <TableBody>
               {customers.map((c) => (
-                <TableRow key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                <TableRow
+                  key={c.id}
+                  id={`record-${c.id}`}
+                  data-record-id={c.id}
+                  className={cn(
+                    "hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all",
+                    highlightClass(c.id)
+                  )}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">

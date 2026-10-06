@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -32,222 +33,221 @@ import {
   RotateCcw,
   Archive,
   AlertTriangle,
-  AlertOctagon,
   FileSpreadsheet,
+  Truck,
+  UserCheck,
+  Package,
+  FileText,
+  Filter,
+  Clock,
+  ArrowRight,
+  X,
+  CreditCard,
+  ChevronRight,
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { useSmartHighlight } from "@/hooks/use-smart-highlight";
+
+interface CashBookItem {
+  id: string;
+  name: string;
+  city: string;
+  description?: string;
+  openingBalance: number;
+  totalCredits: number;
+  totalDebits: number;
+  currentBalance: number;
+  transactionCount: number;
+  status: string;
+}
+
+interface TransactionItem {
+  id: string;
+  cashBookId: string;
+  date: string;
+  voucherNumber?: string;
+  description: string;
+  category?: string;
+  party?: string;
+  accountPerson?: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  paymentMethod: string;
+  notes?: string;
+  customerId?: string;
+  customer?: { id: string; name: string; phone?: string; companyName?: string };
+  vehicleId?: string;
+  vehicleNumber?: string;
+  vehicle?: { id: string; vehicleNumber: string; ownerName?: string };
+  driverId?: string;
+  driverName?: string;
+  driver?: { id: string; name: string; phone?: string };
+  biltyId?: string;
+  biltyNumber?: string;
+  bilty?: { id: string; biltyNumber: string; origin?: string; destination?: string };
+  challanId?: string;
+  challanNumber?: string;
+  challan?: { id: string; challanNumber: string; truckNumber?: string };
+  route?: string;
+}
+
+const CASH_IN_CATEGORIES = [
+  "Freight Collection",
+  "Customer Payment",
+  "Bank Withdrawal",
+  "Capital Inflow",
+  "Advance Received",
+  "Refund / Claim",
+  "Other Income",
+];
+
+const CASH_OUT_CATEGORIES = [
+  "Diesel / Fuel",
+  "Driver Advance",
+  "Challan Trip Expense",
+  "Labour / Loading",
+  "Vehicle Maintenance",
+  "Toll & Tax",
+  "Tyre & Spare Parts",
+  "Police / Chungi",
+  "Office Expense",
+  "Bank Deposit",
+  "Salary / Wages",
+  "Other Expense",
+];
 
 export default function CashBooksPage() {
-  const router = useRouter();
-  const [cashBooks, setCashBooks] = useState<any[]>([]);
-  const [selectedBook, setSelectedBook] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [bookLoading, setBookLoading] = useState(false);
-  const [search, setSearch] = useState("");
+  return (
+    <Suspense fallback={
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-spd-blue" />
+      </div>
+    }>
+      <CashBooksContent />
+    </Suspense>
+  );
+}
 
-  // Modals & Delete State (Entries)
+function CashBooksContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Highlight & navigation from Global Search
+  const highlightParam = searchParams?.get("highlight");
+  const bookIdParam = searchParams?.get("bookId");
+
+  const [cashBooks, setCashBooks] = useState<CashBookItem[]>([]);
+  const [selectedBook, setSelectedBook] = useState<CashBookItem | null>(null);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [txLoading, setTxLoading] = useState(false);
+
+  // Reference data for transport linking
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [challans, setChallans] = useState<any[]>([]);
+  const [bilties, setBilties] = useState<any[]>([]);
+
+  // Search & Filter state
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "IN" | "OUT">("ALL");
+  const [dateFilterMode, setDateFilterMode] = useState<"ALL" | "TODAY" | "YESTERDAY" | "THIS_WEEK" | "THIS_MONTH" | "CUSTOM">("ALL");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  // Modals
+  const [cashInModalOpen, setCashInModalOpen] = useState(false);
+  const [cashOutModalOpen, setCashOutModalOpen] = useState(false);
   const [createBookOpen, setCreateBookOpen] = useState(false);
-  const [addTxOpen, setAddTxOpen] = useState(false);
-  const [deleteTx, setDeleteTx] = useState<any>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [feedbackMsg, setFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [deleteTx, setDeleteTx] = useState<TransactionItem | null>(null);
+  const [deletingTx, setDeletingTx] = useState(false);
+  const [archiveBookOpen, setArchiveBookOpen] = useState(false);
+  const [archivingBook, setArchivingBook] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Safe Complete Cash Book Delete & Undo States
-  const [bookToDelete, setBookToDelete] = useState<any>(null);
-  const [deleteStep, setDeleteStep] = useState<1 | 2 | null>(null);
-  const [lastDeletedBook, setLastDeletedBook] = useState<{ id: string; name: string } | null>(null);
-  const [deletedBooksModalOpen, setDeletedBooksModalOpen] = useState(false);
-  const [deletedBooks, setDeletedBooks] = useState<any[]>([]);
-  const [loadingDeleted, setLoadingDeleted] = useState(false);
-  const [restoringId, setRestoringId] = useState<string | null>(null);
-
-  // New Book Form
+  // Form states
   const [newBookData, setNewBookData] = useState({
     name: "Hammad Cash Book",
-    city: "Islamabad",
-    description: "Operating cash book",
+    city: "Lahore",
+    description: "Main operating cash book",
     openingBalance: "0",
   });
 
-  // New Transaction Form
-  const [txData, setTxData] = useState({
+  const initialTxState = {
     date: new Date().toISOString().slice(0, 10),
-    voucherNumber: "",
-    description: "",
-    accountPerson: "",
-    type: "CREDIT", // CREDIT = Money Received / Inflow, DEBIT = Expense / Outflow
     amount: "",
+    category: "",
+    party: "",
+    description: "",
     paymentMethod: "CASH",
+    voucherNumber: "",
     notes: "",
-  });
-
-  // LocalStorage helpers for 100% offline & serverless resilience
-  const LOCAL_BOOKS_KEY = "spd_local_cash_books";
-  const LOCAL_TXS_KEY = "spd_local_cash_txs";
-  const LOCAL_DELETED_TXS_KEY = "spd_local_deleted_txs";
-
-  const getLocalBooks = (): any[] => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(LOCAL_BOOKS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
+    customerId: "",
+    vehicleId: "",
+    vehicleNumber: "",
+    driverId: "",
+    driverName: "",
+    biltyId: "",
+    biltyNumber: "",
+    challanId: "",
+    challanNumber: "",
+    route: "",
   };
 
-  const saveLocalBook = (book: any) => {
-    if (typeof window === "undefined") return;
-    try {
-      const books = getLocalBooks();
-      const idx = books.findIndex((b) => b.id === book.id);
-      if (idx >= 0) {
-        books[idx] = { ...books[idx], ...book };
-      } else {
-        books.unshift(book);
+  const [txFormData, setTxFormData] = useState(initialTxState);
+
+  // Smart highlight hook
+  const { highlightClass } = useSmartHighlight(transactions);
+
+  // 1. Initial Load of Cash Books and Dropdown data
+  useEffect(() => {
+    fetchCashBooks();
+    fetchDropdownData();
+  }, []);
+
+  // 2. Respond to bookIdParam when books are loaded
+  useEffect(() => {
+    if (bookIdParam && cashBooks.length > 0) {
+      const match = cashBooks.find((b) => b.id === bookIdParam);
+      if (match && selectedBook?.id !== match.id) {
+        setSelectedBook(match);
       }
-      localStorage.setItem(LOCAL_BOOKS_KEY, JSON.stringify(books));
-    } catch (err) {
-      console.warn("Failed to save local book:", err);
     }
-  };
+  }, [bookIdParam, cashBooks]);
 
-  const getLocalTransactions = (): any[] => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(LOCAL_TXS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
+  // 3. Fetch transactions whenever selectedBook or filters change
+  useEffect(() => {
+    if (selectedBook) {
+      fetchTransactions(selectedBook.id);
     }
-  };
-
-  const saveLocalTransaction = (tx: any) => {
-    if (typeof window === "undefined") return;
-    try {
-      const txs = getLocalTransactions();
-      const idx = txs.findIndex((t) => t.id === tx.id);
-      if (idx >= 0) {
-        txs[idx] = { ...txs[idx], ...tx };
-      } else {
-        txs.unshift(tx);
-      }
-      localStorage.setItem(LOCAL_TXS_KEY, JSON.stringify(txs));
-    } catch (err) {
-      console.warn("Failed to save local tx:", err);
-    }
-  };
-
-  const getDeletedTxIds = (): string[] => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(LOCAL_DELETED_TXS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const markTxDeleted = (txId: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      const deleted = getDeletedTxIds();
-      if (!deleted.includes(txId)) {
-        deleted.push(txId);
-        localStorage.setItem(LOCAL_DELETED_TXS_KEY, JSON.stringify(deleted));
-      }
-      const txs = getLocalTransactions().filter((t) => t.id !== txId);
-      localStorage.setItem(LOCAL_TXS_KEY, JSON.stringify(txs));
-    } catch (err) {
-      console.warn("Failed to mark tx deleted:", err);
-    }
-  };
-
-  const fetchDeletedBooks = async () => {
-    try {
-      setLoadingDeleted(true);
-      const res = await fetch("/api/admin/cash-books?status=DELETED");
-      const data = await res.json();
-      let delBooks = data.success ? data.data || [] : [];
-      const localBooks = getLocalBooks().filter((b) => b.status === "DELETED");
-      // Merge local deleted
-      for (const lb of localBooks) {
-        if (!delBooks.some((b: any) => b.id === lb.id)) {
-          delBooks.push(lb);
-        }
-      }
-      setDeletedBooks(delBooks);
-    } catch (err) {
-      console.error("Error fetching deleted cash books:", err);
-      const localBooks = getLocalBooks().filter((b) => b.status === "DELETED");
-      setDeletedBooks(localBooks);
-    } finally {
-      setLoadingDeleted(false);
-    }
-  };
+  }, [selectedBook?.id, categoryFilter, typeFilter, startDate, endDate]);
 
   const fetchCashBooks = async () => {
     try {
       setLoading(true);
-      let books: any[] = [];
-      try {
-        const res = await fetch("/api/admin/cash-books");
-        const data = await res.json();
-        if (data.success) {
-          books = data.data || [];
-        }
-      } catch (e) {
-        console.warn("Failed to fetch cash books from API, using fallback:", e);
+      const res = await fetch("/api/admin/cash-books");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        const activeBooks = data.data.filter((b: any) => b.status !== "DELETED");
+        setCashBooks(activeBooks);
+
+        // Retain current selection, or honor bookIdParam, or pick first
+        setSelectedBook((prev) => {
+          if (bookIdParam) {
+            const paramMatch = activeBooks.find((b: any) => b.id === bookIdParam);
+            if (paramMatch) return paramMatch;
+          }
+          if (prev) {
+            const currentMatch = activeBooks.find((b: any) => b.id === prev.id);
+            if (currentMatch) return currentMatch;
+          }
+          return activeBooks[0] || null;
+        });
       }
-
-      // Merge local books
-      const localBooks = getLocalBooks();
-      for (const lb of localBooks) {
-        const existingIdx = books.findIndex((b) => b.id === lb.id);
-        if (existingIdx >= 0) {
-          books[existingIdx] = { ...books[existingIdx], ...lb };
-        } else if (lb.status !== "DELETED") {
-          books.push(lb);
-        }
-      }
-
-      // Filter out deleted books
-      books = books.filter((b) => b.status !== "DELETED");
-
-      // Recalculate book balances taking local transactions into account
-      const allLocalTxs = getLocalTransactions();
-      const deletedIds = getDeletedTxIds();
-      const updatedBooks = books.map((b) => {
-        const bookLocalTxs = allLocalTxs.filter((t) => t.cashBookId === b.id && !deletedIds.includes(t.id));
-        const extraCredits = bookLocalTxs.reduce((acc, t) => acc + (t.credit || 0), 0);
-        const extraDebits = bookLocalTxs.reduce((acc, t) => acc + (t.debit || 0), 0);
-        return {
-          ...b,
-          totalCredits: (b.totalCredits || 0) + extraCredits,
-          totalDebits: (b.totalDebits || 0) + extraDebits,
-          currentBalance: (b.currentBalance || b.openingBalance || 0) + extraCredits - extraDebits,
-          transactionCount: (b.transactionCount || 0) + bookLocalTxs.length,
-        };
-      });
-
-      setCashBooks(updatedBooks);
-
-      // Select first book by default if none selected or if selected was deleted
-      setSelectedBook((prev: any) => {
-        if (prev && updatedBooks.some((b: any) => b.id === prev.id)) {
-          const updatedSelected = updatedBooks.find((b: any) => b.id === prev.id);
-          fetchBookDetails(prev.id);
-          return updatedSelected;
-        }
-        if (updatedBooks.length > 0) {
-          fetchBookDetails(updatedBooks[0].id);
-          return updatedBooks[0];
-        }
-        return null;
-      });
-
-      fetchDeletedBooks();
     } catch (err) {
       console.error("Error fetching cash books:", err);
     } finally {
@@ -255,1053 +255,1554 @@ export default function CashBooksPage() {
     }
   };
 
-  const fetchBookDetails = async (id: string) => {
+  const fetchTransactions = async (bookId: string) => {
     try {
-      setBookLoading(true);
-      let bookData: any = null;
-      try {
-        const res = await fetch(`/api/admin/cash-books?cashBookId=${id}&search=${encodeURIComponent(search)}`);
-        const data = await res.json();
-        if (data.success && data.data) {
-          bookData = data.data;
-        }
-      } catch (e) {
-        console.warn("API fetchBookDetails failed, fallback to local:", e);
-      }
+      setTxLoading(true);
+      const params = new URLSearchParams({ cashBookId: bookId });
+      if (categoryFilter !== "ALL") params.append("category", categoryFilter);
+      if (typeFilter !== "ALL") params.append("type", typeFilter);
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
 
-      if (!bookData) {
-        const found = cashBooks.find((b) => b.id === id) || getLocalBooks().find((b) => b.id === id);
-        bookData = found ? { ...found, transactions: [] } : null;
-      }
-
-      if (bookData) {
-        const deletedIds = getDeletedTxIds();
-        let allTxs: any[] = Array.isArray(bookData.transactions) ? [...bookData.transactions] : [];
-        
-        // Merge local transactions
-        const localTxs = getLocalTransactions().filter((t) => t.cashBookId === id);
-        for (const ltx of localTxs) {
-          if (!allTxs.some((t) => t.id === ltx.id)) {
-            allTxs.push(ltx);
-          }
-        }
-
-        // Filter out deleted transactions
-        allTxs = allTxs.filter((t) => !deletedIds.includes(t.id));
-
-        // Filter by search query if any
-        if (search.trim()) {
-          const s = search.toLowerCase();
-          allTxs = allTxs.filter(
-            (t) =>
-              (t.description && t.description.toLowerCase().includes(s)) ||
-              (t.accountPerson && t.accountPerson.toLowerCase().includes(s)) ||
-              (t.voucherNumber && t.voucherNumber.toLowerCase().includes(s))
-          );
-        }
-
-        // Recalculate sequential running balances
-        // Sort ascending by date & creation
-        allTxs.sort((a, b) => new Date(a.date || a.createdAt).getTime() - new Date(b.date || b.createdAt).getTime());
-        let running = bookData.openingBalance || 0;
-        const txsWithBalance = allTxs.map((tx) => {
-          running = running + (parseFloat(tx.credit) || 0) - (parseFloat(tx.debit) || 0);
+      const res = await fetch(`/api/admin/cash-books?${params.toString()}`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        setTransactions(data.data.transactions || []);
+        // Update selectedBook balances directly from server calculation
+        setSelectedBook((prev) => {
+          if (!prev) return null;
           return {
-            ...tx,
-            runningBalance: running,
+            ...prev,
+            totalCredits: data.data.totalCredits ?? prev.totalCredits,
+            totalDebits: data.data.totalDebits ?? prev.totalDebits,
+            currentBalance: data.data.currentBalance ?? prev.currentBalance,
+            transactionCount: data.data.transactionCount ?? prev.transactionCount,
           };
-        });
-
-        const totalCredits = allTxs.reduce((acc, t) => acc + (parseFloat(t.credit) || 0), 0);
-        const totalDebits = allTxs.reduce((acc, t) => acc + (parseFloat(t.debit) || 0), 0);
-
-        setSelectedBook({
-          ...bookData,
-          currentBalance: running,
-          totalCredits,
-          totalDebits,
-          transactions: txsWithBalance.reverse(), // Show newest first for table display
         });
       }
     } catch (err) {
-      console.error("Error fetching book details:", err);
+      console.error("Error fetching transactions:", err);
     } finally {
-      setBookLoading(false);
+      setTxLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchCashBooks();
-    fetchDeletedBooks();
-  }, []);
-
-  useEffect(() => {
-    if (selectedBook) {
-      fetchBookDetails(selectedBook.id);
-    }
-  }, [search]);
-
-  // Two-Step Delete Flow Handlers
-  const handleStartDeleteBook = (book: any) => {
-    setBookToDelete(book);
-    setDeleteStep(1);
-  };
-
-  const handleCancelDeleteBook = () => {
-    setBookToDelete(null);
-    setDeleteStep(null);
-  };
-
-  const handleStep1Continue = () => {
-    setDeleteStep(2);
-  };
-
-  const handleConfirmDeleteBook = async () => {
-    if (!bookToDelete) return;
-    setDeleting(true);
+  const fetchDropdownData = async () => {
     try {
-      // Background API delete
-      fetch(`/api/admin/cash-books?cashBookId=${bookToDelete.id}`, { method: "DELETE" }).catch(() => {});
+      const [vRes, dRes, cRes, chRes, bRes] = await Promise.allSettled([
+        fetch("/api/admin/vehicles").then((r) => r.json()),
+        fetch("/api/admin/drivers").then((r) => r.json()),
+        fetch("/api/admin/customers").then((r) => r.json()),
+        fetch("/api/admin/challan").then((r) => r.json()),
+        fetch("/api/admin/bilty").then((r) => r.json()),
+      ]);
 
-      // Mark locally deleted
-      saveLocalBook({ ...bookToDelete, status: "DELETED" });
-
-      setLastDeletedBook({ id: bookToDelete.id, name: bookToDelete.name });
-      setFeedbackMsg({
-        type: "success",
-        text: `Cash Book deleted.`,
-      });
-      setDeleteStep(null);
-      setBookToDelete(null);
-
-      // Refresh list
-      await fetchCashBooks();
-      await fetchDeletedBooks();
-    } catch (err: any) {
-      setFeedbackMsg({ type: "error", text: err.message || "Failed to delete Cash Book" });
-    } finally {
-      setDeleting(false);
+      if (vRes.status === "fulfilled" && vRes.value?.vehicles) setVehicles(vRes.value.vehicles);
+      if (dRes.status === "fulfilled" && dRes.value?.drivers) setDrivers(dRes.value.drivers);
+      if (cRes.status === "fulfilled" && cRes.value?.customers) setCustomers(cRes.value.customers);
+      if (chRes.status === "fulfilled" && chRes.value?.challans) setChallans(chRes.value.challans);
+      if (bRes.status === "fulfilled" && bRes.value?.consignments) setBilties(bRes.value.consignments);
+    } catch (err) {
+      console.warn("Dropdown data load warning:", err);
     }
   };
 
-  const handleRestoreBook = async (id: string) => {
-    setRestoringId(id);
-    try {
-      fetch("/api/admin/cash-books", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "RESTORE_BOOK", cashBookId: id }),
-      }).catch(() => {});
+  // Quick Date Filter presets
+  const handleDatePreset = (preset: "ALL" | "TODAY" | "YESTERDAY" | "THIS_WEEK" | "THIS_MONTH") => {
+    setDateFilterMode(preset);
+    const today = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-      // Mark locally active
-      const localBooks = getLocalBooks();
-      const target = localBooks.find((b) => b.id === id);
-      if (target) {
-        saveLocalBook({ ...target, status: "ACTIVE" });
-      }
-
-      setLastDeletedBook(null);
-      setFeedbackMsg({
-        type: "success",
-        text: `Cash Book restored successfully.`,
-      });
-
-      await fetchCashBooks();
-      await fetchDeletedBooks();
-      fetchBookDetails(id);
-    } catch (err: any) {
-      setFeedbackMsg({ type: "error", text: err.message || "Failed to restore Cash Book" });
-    } finally {
-      setRestoringId(null);
+    if (preset === "ALL") {
+      setStartDate("");
+      setEndDate("");
+    } else if (preset === "TODAY") {
+      const t = fmt(today);
+      setStartDate(t);
+      setEndDate(t);
+    } else if (preset === "YESTERDAY") {
+      const y = new Date();
+      y.setDate(today.getDate() - 1);
+      const yStr = fmt(y);
+      setStartDate(yStr);
+      setEndDate(yStr);
+    } else if (preset === "THIS_WEEK") {
+      const first = new Date(today);
+      first.setDate(today.getDate() - today.getDay());
+      setStartDate(fmt(first));
+      setEndDate(fmt(today));
+    } else if (preset === "THIS_MONTH") {
+      const first = new Date(today.getFullYear(), today.getMonth(), 1);
+      setStartDate(fmt(first));
+      setEndDate(fmt(today));
     }
   };
 
-  const handleCreateBook = async (e: React.FormEvent) => {
+  // Filter transactions locally by search query
+  const filteredTransactions = useMemo(() => {
+    if (!search.trim()) return transactions;
+    const q = search.toLowerCase().trim();
+    return transactions.filter((t) => {
+      return (
+        t.description?.toLowerCase().includes(q) ||
+        t.party?.toLowerCase().includes(q) ||
+        t.accountPerson?.toLowerCase().includes(q) ||
+        t.voucherNumber?.toLowerCase().includes(q) ||
+        t.category?.toLowerCase().includes(q) ||
+        t.vehicleNumber?.toLowerCase().includes(q) ||
+        t.driverName?.toLowerCase().includes(q) ||
+        t.biltyNumber?.toLowerCase().includes(q) ||
+        t.challanNumber?.toLowerCase().includes(q) ||
+        t.route?.toLowerCase().includes(q)
+      );
+    });
+  }, [transactions, search]);
+
+  // Open Cash IN Modal
+  const openCashIn = () => {
+    setTxFormData({
+      ...initialTxState,
+      category: "Freight Collection",
+      paymentMethod: "CASH",
+    });
+    setCashInModalOpen(true);
+  };
+
+  // Open Cash OUT Modal
+  const openCashOut = () => {
+    setTxFormData({
+      ...initialTxState,
+      category: "Diesel / Fuel",
+      paymentMethod: "CASH",
+    });
+    setCashOutModalOpen(true);
+  };
+
+  // Submit Cash IN
+  const handleSaveCashIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
+    if (!selectedBook) return;
+    const amountVal = parseFloat(txFormData.amount);
+    if (!amountVal || amountVal <= 0) {
+      setFeedback({ type: "error", message: "Please enter a valid amount greater than 0" });
+      return;
+    }
+
     try {
-      const openBal = parseFloat(newBookData.openingBalance) || 0;
-      const newBook = {
-        id: `cb_loc_${Date.now()}`,
-        name: newBookData.name,
-        city: newBookData.city,
-        description: newBookData.description || `Cash book operations for ${newBookData.city}`,
-        openingBalance: openBal,
-        currentBalance: openBal,
-        totalCredits: 0,
-        totalDebits: 0,
-        transactionCount: 0,
-        status: "ACTIVE",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      setSubmitting(true);
+      const payload = {
+        cashBookId: selectedBook.id,
+        type: "IN",
+        amount: amountVal,
+        date: txFormData.date,
+        voucherNumber: txFormData.voucherNumber || undefined,
+        category: txFormData.category || "Freight Collection",
+        party: txFormData.party || undefined,
+        accountPerson: txFormData.party || undefined,
+        description: txFormData.description || `${txFormData.category || "Cash Inflow"} - ${txFormData.party || "Counter"}`,
+        paymentMethod: txFormData.paymentMethod || "CASH",
+        notes: txFormData.notes || undefined,
+        customerId: txFormData.customerId || undefined,
+        biltyId: txFormData.biltyId || undefined,
+        biltyNumber: txFormData.biltyNumber || undefined,
       };
 
-      // Save to localStorage immediately
-      saveLocalBook(newBook);
+      const res = await fetch("/api/admin/cash-books", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      // Background API attempt
-      fetch("/api/admin/cash-books", {
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to record Cash IN");
+      }
+
+      setCashInModalOpen(false);
+      setFeedback({ type: "success", message: `Cash IN Rs ${amountVal.toLocaleString()} recorded successfully!` });
+      await fetchCashBooks();
+      await fetchTransactions(selectedBook.id);
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Failed to record Cash IN" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Submit Cash OUT
+  const handleSaveCashOut = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBook) return;
+    const amountVal = parseFloat(txFormData.amount);
+    if (!amountVal || amountVal <= 0) {
+      setFeedback({ type: "error", message: "Please enter a valid amount greater than 0" });
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const payload = {
+        cashBookId: selectedBook.id,
+        type: "OUT",
+        amount: amountVal,
+        date: txFormData.date,
+        voucherNumber: txFormData.voucherNumber || undefined,
+        category: txFormData.category || "Diesel / Fuel",
+        party: txFormData.party || undefined,
+        accountPerson: txFormData.party || undefined,
+        description:
+          txFormData.description ||
+          `${txFormData.category} ${txFormData.vehicleNumber ? "• " + txFormData.vehicleNumber : ""} ${txFormData.party ? "• " + txFormData.party : ""}`,
+        paymentMethod: txFormData.paymentMethod || "CASH",
+        notes: txFormData.notes || undefined,
+        vehicleId: txFormData.vehicleId || undefined,
+        vehicleNumber: txFormData.vehicleNumber || undefined,
+        driverId: txFormData.driverId || undefined,
+        driverName: txFormData.driverName || undefined,
+        challanId: txFormData.challanId || undefined,
+        challanNumber: txFormData.challanNumber || undefined,
+        biltyId: txFormData.biltyId || undefined,
+        biltyNumber: txFormData.biltyNumber || undefined,
+        route: txFormData.route || undefined,
+      };
+
+      const res = await fetch("/api/admin/cash-books", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to record Cash OUT");
+      }
+
+      setCashOutModalOpen(false);
+      setFeedback({ type: "success", message: `Cash OUT Rs ${amountVal.toLocaleString()} recorded successfully!` });
+      await fetchCashBooks();
+      await fetchTransactions(selectedBook.id);
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Failed to record Cash OUT" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Delete Transaction
+  const handleDeleteTransaction = async () => {
+    if (!deleteTx || !selectedBook) return;
+    try {
+      setDeletingTx(true);
+      const res = await fetch(`/api/admin/cash-books?txId=${deleteTx.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete entry");
+      }
+
+      setDeleteTx(null);
+      setFeedback({ type: "success", message: "Transaction removed successfully." });
+      await fetchCashBooks();
+      await fetchTransactions(selectedBook.id);
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Delete error" });
+    } finally {
+      setDeletingTx(false);
+    }
+  };
+
+  // Create New Cash Book
+  const handleCreateBook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBookData.name.trim() || !newBookData.city.trim()) {
+      setFeedback({ type: "error", message: "Book name and city are required." });
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const res = await fetch("/api/admin/cash-books", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "CREATE_BOOK",
-          ...newBookData,
+          name: newBookData.name.trim(),
+          city: newBookData.city.trim(),
+          description: newBookData.description.trim(),
+          openingBalance: parseFloat(newBookData.openingBalance) || 0,
         }),
-      }).catch(() => {});
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to create Cash Book");
+      }
 
       setCreateBookOpen(false);
-      setNewBookData({
-        name: "Hammad Cash Book",
-        city: "Islamabad",
-        description: "Operating cash book",
-        openingBalance: "0",
-      });
-      setFeedbackMsg({ type: "success", text: `Cash Book "${newBook.name}" created successfully.` });
-      setTimeout(() => setFeedbackMsg(null), 4000);
+      setFeedback({ type: "success", message: `Cash Book "${newBookData.name}" created!` });
       await fetchCashBooks();
-      setSelectedBook({ ...newBook, transactions: [] });
-    } catch (err) {
-      console.error("Error creating book:", err);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleAddTransaction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedBook) return;
-
-    setSubmitting(true);
-    const amt = parseFloat(txData.amount) || 0;
-    const isDebit = txData.type === "DEBIT";
-    const debitAmt = isDebit ? amt : 0;
-    const creditAmt = !isDebit ? amt : 0;
-    const vch = txData.voucherNumber.trim() || `VCH-${Date.now().toString().slice(-6)}`;
-
-    try {
-      const newTx = {
-        id: `tx_loc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        cashBookId: selectedBook.id,
-        date: txData.date || new Date().toISOString().slice(0, 10),
-        voucherNumber: vch,
-        description: txData.description,
-        accountPerson: txData.accountPerson || "General Account",
-        debit: debitAmt,
-        credit: creditAmt,
-        paymentMethod: txData.paymentMethod || "CASH",
-        notes: txData.notes || "",
-        createdAt: new Date().toISOString(),
-      };
-
-      // Save to localStorage immediately for instant persistence
-      saveLocalTransaction(newTx);
-
-      // Fire background API call
-      fetch("/api/admin/cash-books", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cashBookId: selectedBook.id,
-          date: txData.date,
-          voucherNumber: vch,
-          description: txData.description,
-          accountPerson: txData.accountPerson,
-          debit: debitAmt,
-          credit: creditAmt,
-          paymentMethod: txData.paymentMethod,
-          notes: txData.notes,
-        }),
-      }).catch((err) => console.warn("Background API save warning:", err));
-
-      setAddTxOpen(false);
-      setTxData({
-        date: new Date().toISOString().slice(0, 10),
-        voucherNumber: "",
-        description: "",
-        accountPerson: "",
-        type: "CREDIT",
-        amount: "",
-        paymentMethod: "CASH",
-        notes: "",
-      });
-
-      setFeedbackMsg({
-        type: "success",
-        text: `Cash entry (${formatCurrency(amt)}) recorded successfully.`,
-      });
-      setTimeout(() => setFeedbackMsg(null), 4000);
-
-      // Refresh book details and book list with new running balance immediately
-      await fetchBookDetails(selectedBook.id);
-      await fetchCashBooks();
-    } catch (err) {
-      console.error("Error adding transaction:", err);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDeleteTx = async () => {
-    if (!deleteTx) return;
-    setDeleting(true);
-    try {
-      // Mark deleted locally
-      markTxDeleted(deleteTx.id);
-
-      // Fire background API delete
-      fetch(`/api/admin/cash-books?id=${deleteTx.id}`, { method: "DELETE" }).catch(() => {});
-
-      setFeedbackMsg({ type: "success", text: "Cash Book entry deleted successfully." });
-      setDeleteTx(null);
-      if (selectedBook?.id) {
-        await fetchBookDetails(selectedBook.id);
+      if (data.data) {
+        setSelectedBook(data.data);
       }
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Failed to create Cash Book" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Archive / Soft Delete Cash Book
+  const handleArchiveBook = async () => {
+    if (!selectedBook) return;
+    try {
+      setArchivingBook(true);
+      const res = await fetch(`/api/admin/cash-books?cashBookId=${selectedBook.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to archive book");
+      }
+
+      setArchiveBookOpen(false);
+      setFeedback({ type: "success", message: `"${selectedBook.name}" archived.` });
       await fetchCashBooks();
     } catch (err: any) {
-      setFeedbackMsg({ type: "error", text: err.message || "Failed to delete entry" });
+      setFeedback({ type: "error", message: err.message || "Archive error" });
     } finally {
-      setDeleting(false);
-      setTimeout(() => setFeedbackMsg(null), 4000);
+      setArchivingBook(false);
     }
   };
 
+  // Export to CSV
   const handleExportCSV = () => {
-    if (!selectedBook || !selectedBook.transactions || selectedBook.transactions.length === 0) return;
-    const headers = ["Date", "Voucher #", "Description", "Account/Party", "Debit (Expense)", "Credit (Receipt)", "Balance", "Payment Method"];
-    const rows = selectedBook.transactions.map((t: any) => [
-      t.date ? t.date.slice(0, 10) : "",
-      `"${t.voucherNumber || ""}"`,
-      `"${t.description || ""}"`,
-      `"${t.accountPerson || ""}"`,
-      t.debit,
-      t.credit,
-      t.runningBalance,
+    if (!filteredTransactions.length || !selectedBook) return;
+    const headers = [
+      "Date",
+      "Voucher #",
+      "Description",
+      "Category",
+      "Party",
+      "Vehicle",
+      "Driver",
+      "Bilty #",
+      "Challan #",
+      "Payment Method",
+      "Cash IN (Debit)",
+      "Cash OUT (Credit)",
+      "Running Balance",
+    ];
+
+    const rows = filteredTransactions.map((t) => [
+      t.date ? new Date(t.date).toLocaleDateString("en-GB") : "",
+      t.voucherNumber || "",
+      `"${(t.description || "").replace(/"/g, '""')}"`,
+      t.category || "",
+      `"${(t.party || t.accountPerson || "").replace(/"/g, '""')}"`,
+      t.vehicleNumber || "",
+      t.driverName || "",
+      t.biltyNumber || "",
+      t.challanNumber || "",
       t.paymentMethod || "CASH",
+      t.credit || 0,
+      t.debit || 0,
+      t.balance || 0,
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r: any) => r.join(","))].join("\n");
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${selectedBook.name.replace(/\s+/g, "_")}_${selectedBook.city}_CashBook.csv`);
+    link.setAttribute(
+      "download",
+      `CashBook_${selectedBook.name.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.csv`
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-            Cash Books & Operating Accounts
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Strictly segregated financial accounts: Hammad Cash Book Lahore & Hammad Cash Book Karachi with running balances.
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
-          <Button
-            onClick={() => {
-              fetchDeletedBooks();
-              setDeletedBooksModalOpen(true);
-            }}
-            variant="outline"
-            className="w-full sm:w-auto rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold gap-2"
-            title="View and restore deleted cash books"
-          >
-            <Archive className="w-4 h-4 text-slate-500" />
-            <span>Deleted Cash Books</span>
-            {deletedBooks.length > 0 && (
-              <span className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
-                {deletedBooks.length}
-              </span>
-            )}
-          </Button>
-          <Button
-            onClick={() => router.push("/admin/cash-books/new")}
-            variant="outline"
-            className="w-full sm:w-auto rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold gap-2"
-          >
-            <Plus className="w-4 h-4 text-spd-blue" />
-            <span>Add Cash Book</span>
-          </Button>
-          <Button
-            onClick={() => setAddTxOpen(true)}
-            disabled={!selectedBook}
-            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Record Cash Entry</span>
-          </Button>
-        </div>
-      </div>
+  // Print Day Book
+  const handlePrint = () => {
+    window.print();
+  };
 
-      {/* Action Feedback Banner with Undo Option */}
-      {feedbackMsg && (
+  return (
+    <div className="space-y-6 pb-16">
+      {/* Toast Feedback */}
+      {feedback && (
         <div
-          className={`p-4 rounded-xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in duration-200 ${
-            feedbackMsg.type === "success"
-              ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-              : "bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800"
-          }`}
+          className={cn(
+            "p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium animate-in fade-in slide-in-from-top-2",
+            feedback.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
+              : "bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300"
+          )}
         >
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {feedbackMsg.type === "success" ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <div className="flex items-center gap-2">
+            {feedback.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             ) : (
-              <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             )}
-            <span>{feedbackMsg.text}</span>
-            {lastDeletedBook && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleRestoreBook(lastDeletedBook.id)}
-                className="ml-2 h-7 px-3 bg-white dark:bg-slate-900 hover:bg-emerald-100 dark:hover:bg-emerald-900 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 text-xs font-black rounded-lg gap-1.5 shadow-sm"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Undo</span>
-              </Button>
-            )}
+            <span>{feedback.message}</span>
           </div>
           <button
-            onClick={() => {
-              setFeedbackMsg(null);
-              setLastDeletedBook(null);
-            }}
-            className="text-xs opacity-70 hover:opacity-100 font-bold px-1"
+            onClick={() => setFeedback(null)}
+            className="text-muted-foreground hover:text-foreground text-xs p-1"
           >
-            ✕
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Cash Book Selector Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cashBooks.map((cb) => {
-          const isSelected = selectedBook?.id === cb.id;
-          const isKarachi = cb.city?.toUpperCase() === "KARACHI";
-
-          return (
-            <div
-              key={cb.id}
-              onClick={() => fetchBookDetails(cb.id)}
-              className={`p-5 rounded-2xl border cursor-pointer transition-all duration-200 relative overflow-hidden ${
-                isSelected
-                  ? isKarachi
-                    ? "border-spd-blue bg-blue-50/50 dark:bg-blue-950/20 shadow-md ring-2 ring-spd-blue/20"
-                    : "border-spd-red bg-red-50/50 dark:bg-red-950/20 shadow-md ring-2 ring-spd-red/20"
-                  : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 shadow-sm"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
-                      isKarachi
-                        ? "bg-blue-100 text-spd-blue dark:bg-blue-950 dark:text-blue-400"
-                        : "bg-red-100 text-spd-red dark:bg-red-950 dark:text-red-400"
-                    }`}
-                  >
-                    <Wallet className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                      {cb.name}
-                    </h3>
-                    <p className="text-[11px] font-bold text-slate-500">{cb.city} Office</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                      isSelected
-                        ? isKarachi
-                          ? "bg-spd-blue text-white"
-                          : "bg-spd-red text-white"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                    }`}
-                  >
-                    {isSelected ? "ACTIVE VIEW" : "SELECT"}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStartDeleteBook(cb);
-                    }}
-                    className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
-                    title={`Delete ${cb.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-400">Current Balance</p>
-                  <p className="text-lg font-black text-slate-900 dark:text-white mt-0.5">
-                    {formatCurrency(cb.currentBalance || 0)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] uppercase font-bold text-slate-400">Entries</p>
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5">
-                    {cb.transactionCount} vouchers
-                  </p>
-                </div>
-              </div>
+      {/* ======================================================== */}
+      {/* TOP HEADER: CASH BOOK SWITCHER & ACTIONS */}
+      {/* ======================================================== */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-spd-blue/10 dark:bg-spd-blue/20 text-spd-blue">
+              <Wallet className="h-6 w-6" />
             </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                Cash Book & Day Ledger
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                DigiKhata-style real-time cash tracking with vehicle, driver, challan & bilty linking
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchCashBooks}
+            className="rounded-xl text-xs h-9 font-bold"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", loading && "animate-spin")} />
+            Sync
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            disabled={!filteredTransactions.length}
+            className="rounded-xl text-xs h-9 font-bold"
+          >
+            <Download className="w-3.5 h-3.5 mr-1.5" />
+            Export CSV
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            disabled={!selectedBook}
+            className="rounded-xl text-xs h-9 font-bold"
+          >
+            <Printer className="w-3.5 h-3.5 mr-1.5" />
+            Print Day Book
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => setCreateBookOpen(true)}
+            className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:hover:bg-slate-200 dark:text-slate-900 rounded-xl text-xs h-9 font-bold"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
+            New Book
+          </Button>
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* CASH BOOK TABS SELECTOR */}
+      {/* ======================================================== */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-slate-200 dark:border-slate-800">
+        {cashBooks.map((b) => {
+          const isActive = selectedBook?.id === b.id;
+          return (
+            <button
+              key={b.id}
+              id={`record-${b.id}`}
+              data-record-id={b.id}
+              onClick={() => setSelectedBook(b)}
+              className={cn(
+                "flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 border",
+                isActive
+                  ? "bg-spd-blue text-white border-spd-blue shadow-md shadow-spd-blue/20"
+                  : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60",
+                highlightClass(b.id)
+              )}
+            >
+              <Building2 className={cn("w-3.5 h-3.5", isActive ? "text-white" : "text-spd-blue")} />
+              <span>{b.name}</span>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] px-1.5 py-0 font-mono",
+                  isActive
+                    ? "bg-white/20 text-white border-white/30"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-transparent"
+                )}
+              >
+                {b.city}
+              </Badge>
+              <span
+                className={cn(
+                  "text-[11px] font-mono font-black ml-1",
+                  isActive
+                    ? "text-white"
+                    : b.currentBalance >= 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-rose-600 dark:text-rose-400"
+                )}
+              >
+                Rs {b.currentBalance.toLocaleString()}
+              </span>
+            </button>
           );
         })}
       </div>
 
-      {/* Selected Cash Book Ledger View */}
-      {selectedBook && (
-        <div className="space-y-4">
-          {/* Ledger Banner */}
-          <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* ======================================================== */}
+      {/* TWO PRIMARY DIGIKHATA ACTION BUTTONS (CASH IN & CASH OUT) */}
+      {/* ======================================================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* GREEN + CASH IN (AAMAD) */}
+        <button
+          onClick={openCashIn}
+          disabled={!selectedBook}
+          className="group relative flex items-center justify-between p-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/20 hover:shadow-xl hover:shadow-emerald-600/30 transition-all duration-200 transform active:scale-[0.99] text-left overflow-hidden border border-emerald-500/30"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-13 h-13 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform">
+              <ArrowDownLeft className="w-7 h-7" />
+            </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                  {selectedBook.city} Hub
+                <span className="text-xl font-black tracking-tight">+ Cash IN</span>
+                <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">
+                  آمد / Wasool
                 </span>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                  {selectedBook.name} &bull; {selectedBook.city} Ledger
-                </h2>
               </div>
-              <p className="text-xs text-slate-500 mt-1">{selectedBook.description}</p>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="text-right pr-3 border-r border-slate-200 dark:border-slate-800 hidden sm:block">
-                <p className="text-[10px] uppercase font-bold text-slate-400">Total Credits</p>
-                <p className="text-xs font-bold text-emerald-600">{formatCurrency(selectedBook.totalCredits || 0)}</p>
-              </div>
-              <div className="text-right pr-3 border-r border-slate-200 dark:border-slate-800 hidden sm:block">
-                <p className="text-[10px] uppercase font-bold text-slate-400">Total Debits</p>
-                <p className="text-xs font-bold text-red-600">{formatCurrency(selectedBook.totalDebits || 0)}</p>
-              </div>
-              <div className="text-right pr-3">
-                <p className="text-[10px] uppercase font-bold text-slate-400">Running Balance</p>
-                <p className="text-base font-black text-slate-900 dark:text-white">{formatCurrency(selectedBook.currentBalance || 0)}</p>
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleExportCSV}
-                  className="rounded-xl text-xs font-bold gap-1.5"
-                  title="Export Excel / CSV Report"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> Excel / CSV
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.print()}
-                  className="rounded-xl text-xs font-bold gap-1.5"
-                >
-                  <Printer className="w-3.5 h-3.5" /> Print
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleStartDeleteBook(selectedBook)}
-                  className="rounded-xl text-xs font-bold gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200 dark:border-red-900/50"
-                  title={`Delete ${selectedBook.name}`}
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Delete Book
-                </Button>
-              </div>
+              <p className="text-xs text-emerald-100 font-medium mt-0.5">
+                Freight collections, customer payments, cash receipts
+              </p>
             </div>
           </div>
+          <ChevronRight className="w-6 h-6 text-white/70 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0" />
+        </button>
 
-          {/* Search bar inside book */}
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        {/* RED - CASH OUT (KHARCHA) */}
+        <button
+          onClick={openCashOut}
+          disabled={!selectedBook}
+          className="group relative flex items-center justify-between p-5 rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg shadow-rose-600/20 hover:shadow-xl hover:shadow-rose-600/30 transition-all duration-200 transform active:scale-[0.99] text-left overflow-hidden border border-rose-500/30"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-13 h-13 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform">
+              <ArrowUpRight className="w-7 h-7" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-black tracking-tight">- Cash OUT</span>
+                <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">
+                  خرچہ / Adaigi
+                </span>
+              </div>
+              <p className="text-xs text-rose-100 font-medium mt-0.5">
+                Diesel, driver advance, challan expense, labour, repairs
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-6 h-6 text-white/70 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0" />
+        </button>
+      </div>
+
+      {/* ======================================================== */}
+      {/* 4 TOP SUMMARY STAT CARDS */}
+      {/* ======================================================== */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        {/* Opening Balance */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+            Opening Balance
+          </p>
+          <p className="text-lg sm:text-xl font-black text-slate-800 dark:text-slate-100 mt-1 font-mono">
+            Rs {(selectedBook?.openingBalance || 0).toLocaleString()}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Initial base ledger</p>
+        </div>
+
+        {/* Total Cash IN */}
+        <div className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 rounded-2xl p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+              Total Cash IN
+            </p>
+            <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
+          </div>
+          <p className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono">
+            +Rs {(selectedBook?.totalCredits || 0).toLocaleString()}
+          </p>
+          <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
+            Total Inflow / Wasool
+          </p>
+        </div>
+
+        {/* Total Cash OUT */}
+        <div className="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-800/40 rounded-2xl p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider">
+              Total Cash OUT
+            </p>
+            <ArrowUpRight className="w-4 h-4 text-rose-600" />
+          </div>
+          <p className="text-lg sm:text-xl font-black text-rose-600 dark:text-rose-400 mt-1 font-mono">
+            -Rs {(selectedBook?.totalDebits || 0).toLocaleString()}
+          </p>
+          <p className="text-[10px] text-rose-700/80 dark:text-rose-400/80 mt-0.5">
+            Total Expenses / Kharcha
+          </p>
+        </div>
+
+        {/* Net Cash Balance */}
+        <div
+          className={cn(
+            "border rounded-2xl p-4 shadow-xs",
+            (selectedBook?.currentBalance || 0) >= 0
+              ? "bg-slate-900 text-white border-slate-800 dark:bg-slate-800"
+              : "bg-rose-900 text-white border-rose-800"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
+              Net Cash in Hand
+            </p>
+            <Wallet className="w-4 h-4 text-amber-400" />
+          </div>
+          <p className="text-lg sm:text-xl font-black text-amber-300 mt-1 font-mono">
+            Rs {(selectedBook?.currentBalance || 0).toLocaleString()}
+          </p>
+          <p className="text-[10px] text-slate-300 mt-0.5">
+            {selectedBook?.transactionCount || 0} Total entries recorded
+          </p>
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* QUICK DATE RANGE FILTER PILLS & SEARCH BAR */}
+      {/* ======================================================== */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3 shadow-xs">
+        {/* Fast Date Filter Pills (DigiKhata inspired) */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-bold text-muted-foreground mr-1 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> Date:
+            </span>
+            {(
+              [
+                ["ALL", "All Time"],
+                ["TODAY", "Today"],
+                ["YESTERDAY", "Yesterday"],
+                ["THIS_WEEK", "This Week"],
+                ["THIS_MONTH", "This Month"],
+              ] as const
+            ).map(([key, label]) => {
+              const active = dateFilterMode === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => handleDatePreset(key)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all border",
+                    active
+                      ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900"
+                      : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom Date Range Inputs */}
+          <div className="flex items-center gap-2 text-xs">
             <Input
-              placeholder="Search voucher, party, or description..."
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setDateFilterMode("CUSTOM");
+              }}
+              className="h-8 text-xs w-34 rounded-lg bg-slate-50 dark:bg-slate-800"
+            />
+            <span className="text-muted-foreground font-bold">to</span>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setDateFilterMode("CUSTOM");
+              }}
+              className="h-8 text-xs w-34 rounded-lg bg-slate-50 dark:bg-slate-800"
+            />
+          </div>
+        </div>
+
+        {/* Filter bar: Search, Type, Category */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="sm:col-span-6 relative">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              placeholder="Search by party, diesel, vehicle #, challan, bilty, voucher..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-xs"
+              className="pl-9 h-9 text-xs rounded-xl"
             />
           </div>
 
-          {/* Transactions Table */}
-          {bookLoading ? (
-            <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
-              <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-              <p className="text-xs text-slate-400 font-semibold">Calculating ledger running balances...</p>
-            </div>
-          ) : selectedBook.transactions?.length === 0 ? (
-            <EmptyState
-              icon={Wallet}
-              title="No cash book transactions"
-              description="Record your first debit or credit entry in this cash book."
-            />
-          ) : (
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-              <Table className="min-w-[850px]">
-                <TableHeader className="bg-slate-50/70 dark:bg-slate-800/50">
-                  <TableRow>
-                    <TableHead className="text-xs font-bold">Date & Voucher #</TableHead>
-                    <TableHead className="text-xs font-bold">Description</TableHead>
-                    <TableHead className="text-xs font-bold">Party / Person</TableHead>
-                    <TableHead className="text-xs font-bold">Method</TableHead>
-                    <TableHead className="text-xs font-bold text-red-600">Debit (Expense Out)</TableHead>
-                    <TableHead className="text-xs font-bold text-emerald-600">Credit (Income In)</TableHead>
-                    <TableHead className="text-xs font-bold text-right">Running Balance</TableHead>
-                    <TableHead className="text-xs font-bold text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedBook.transactions?.map((t: any) => (
-                    <TableRow key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                      <TableCell>
-                        <p className="font-bold text-xs text-slate-900 dark:text-white">{formatDate(t.date)}</p>
-                        <p className="text-[10px] text-slate-400 font-mono">{t.voucherNumber || "N/A"}</p>
-                      </TableCell>
-                      <TableCell>
-                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{t.description}</p>
-                        {t.notes && <p className="text-[10px] text-slate-400">{t.notes}</p>}
-                      </TableCell>
-                      <TableCell className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        {t.accountPerson || "General"}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                          {t.paymentMethod || "CASH"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs font-bold text-red-600">
-                        {t.debit > 0 ? formatCurrency(t.debit) : "-"}
-                      </TableCell>
-                      <TableCell className="text-xs font-bold text-emerald-600">
-                        {t.credit > 0 ? formatCurrency(t.credit) : "-"}
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-black text-slate-900 dark:text-white">
-                        {formatCurrency(t.runningBalance)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteTx(t)}
-                          className="h-8 w-8 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
-                          title="Delete Cash Book Entry"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+          <div className="sm:col-span-3">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as any)}
+              className="w-full h-9 rounded-xl border border-input bg-background px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="ALL">All Entries (IN & OUT)</option>
+              <option value="IN">Cash IN Only (آمد)</option>
+              <option value="OUT">Cash OUT Only (خرچہ)</option>
+            </select>
+          </div>
+
+          <div className="sm:col-span-3">
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="w-full h-9 rounded-xl border border-input bg-background px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="ALL">All Categories</option>
+              <optgroup label="Cash IN">
+                {CASH_IN_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Cash OUT">
+                {CASH_OUT_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* TRANSACTIONS DAY BOOK TABLE WITH RUNNING BALANCES */}
+      {/* ======================================================== */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="w-4 h-4 text-spd-blue" />
+            <h2 className="text-sm font-black text-slate-900 dark:text-white">
+              Ledger Transactions ({filteredTransactions.length})
+            </h2>
+            {selectedBook && (
+              <Badge variant="outline" className="text-[10px] font-mono">
+                {selectedBook.name}
+              </Badge>
+            )}
+          </div>
+
+          {selectedBook && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setArchiveBookOpen(true)}
+              className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 h-8 font-bold"
+            >
+              <Archive className="w-3.5 h-3.5 mr-1" />
+              Archive Book
+            </Button>
           )}
         </div>
-      )}
 
+        {txLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-spd-blue" />
+          </div>
+        ) : filteredTransactions.length === 0 ? (
+          <div className="p-12 text-center">
+            <EmptyState
+              icon={Wallet}
+              title="No cash transactions recorded"
+              description="Use the + Cash IN or - Cash OUT buttons above to record your first entry."
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/80 dark:bg-slate-800/50">
+                  <TableHead className="text-xs font-bold w-24">Date</TableHead>
+                  <TableHead className="text-xs font-bold w-28">Voucher / ID</TableHead>
+                  <TableHead className="text-xs font-bold">Details & Transport Linking</TableHead>
+                  <TableHead className="text-xs font-bold">Party / Vendor</TableHead>
+                  <TableHead className="text-xs font-bold w-24">Mode</TableHead>
+                  <TableHead className="text-xs font-bold text-right text-emerald-600 dark:text-emerald-400 w-32">
+                    Cash IN (آمد)
+                  </TableHead>
+                  <TableHead className="text-xs font-bold text-right text-rose-600 dark:text-rose-400 w-32">
+                    Cash OUT (خرچہ)
+                  </TableHead>
+                  <TableHead className="text-xs font-bold text-right font-mono w-32">
+                    Running Bal
+                  </TableHead>
+                  <TableHead className="text-xs font-bold text-center w-14">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTransactions.map((tx) => {
+                  const isIn = tx.credit > 0;
+                  const isOut = tx.debit > 0;
+                  return (
+                    <TableRow
+                      key={tx.id}
+                      id={`tx-row-${tx.id}`}
+                      data-record-id={tx.id}
+                      className={cn(
+                        "hover:bg-slate-50/60 dark:hover:bg-slate-800/40 text-xs transition-all",
+                        highlightClass(tx.id) || highlightClass(tx.voucherNumber)
+                      )}
+                    >
+                      {/* Date */}
+                      <TableCell className="font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                        {tx.date ? new Date(tx.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                      </TableCell>
 
+                      {/* Voucher # */}
+                      <TableCell>
+                        <span className="font-mono font-bold text-[11px] text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                          {tx.voucherNumber || tx.id.slice(0, 8)}
+                        </span>
+                      </TableCell>
 
-      {/* MODAL 2: ADD TRANSACTION */}
-      <Dialog open={addTxOpen} onOpenChange={setAddTxOpen}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                      {/* Details & Transport Linking Badges */}
+                      <TableCell>
+                        <div className="space-y-1">
+                          <p className="font-bold text-slate-900 dark:text-white text-xs">
+                            {tx.description}
+                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {tx.category && (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] px-1.5 py-0 font-medium",
+                                  isIn
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300"
+                                    : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300"
+                                )}
+                              >
+                                {tx.category}
+                              </Badge>
+                            )}
+
+                            {/* Transport badges */}
+                            {tx.vehicleNumber && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 flex items-center gap-1"
+                              >
+                                <Truck className="w-2.5 h-2.5" />
+                                {tx.vehicleNumber}
+                              </Badge>
+                            )}
+
+                            {tx.driverName && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 flex items-center gap-1"
+                              >
+                                <UserCheck className="w-2.5 h-2.5" />
+                                {tx.driverName}
+                              </Badge>
+                            )}
+
+                            {tx.challanNumber && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 flex items-center gap-1"
+                              >
+                                <FileText className="w-2.5 h-2.5" />
+                                Challan: {tx.challanNumber}
+                              </Badge>
+                            )}
+
+                            {tx.biltyNumber && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 flex items-center gap-1"
+                              >
+                                <Package className="w-2.5 h-2.5" />
+                                Bilty: {tx.biltyNumber}
+                              </Badge>
+                            )}
+
+                            {tx.route && (
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                ({tx.route})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      {/* Party */}
+                      <TableCell>
+                        <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
+                          {tx.party || tx.accountPerson || "-"}
+                        </span>
+                      </TableCell>
+
+                      {/* Mode */}
+                      <TableCell>
+                        <span className="text-[11px] font-mono font-medium text-muted-foreground uppercase">
+                          {tx.paymentMethod || "CASH"}
+                        </span>
+                      </TableCell>
+
+                      {/* Cash IN (Green) */}
+                      <TableCell className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {tx.credit > 0 ? `+Rs ${tx.credit.toLocaleString()}` : "-"}
+                      </TableCell>
+
+                      {/* Cash OUT (Red) */}
+                      <TableCell className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                        {tx.debit > 0 ? `-Rs ${tx.debit.toLocaleString()}` : "-"}
+                      </TableCell>
+
+                      {/* Running Balance */}
+                      <TableCell
+                        className={cn(
+                          "text-right font-mono font-black",
+                          (tx.balance || 0) >= 0
+                            ? "text-slate-900 dark:text-white"
+                            : "text-rose-600 dark:text-rose-400"
+                        )}
+                      >
+                        Rs {(tx.balance || 0).toLocaleString()}
+                      </TableCell>
+
+                      {/* Action */}
+                      <TableCell className="text-center">
+                        <button
+                          onClick={() => setDeleteTx(tx)}
+                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                          title="Delete entry"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      {/* ======================================================== */}
+      {/* MODAL 1: + CASH IN (AAMAD) */}
+      {/* ======================================================== */}
+      <Dialog open={cashInModalOpen} onOpenChange={setCashInModalOpen}>
+        <DialogContent className="sm:max-w-[540px]">
           <DialogHeader>
-            <DialogTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <Plus className="w-5 h-5 text-emerald-600" />
-              Record Entry in {selectedBook?.city} Cash Book
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600">
+                <ArrowDownLeft className="w-5 h-5" />
+              </div>
+              <span>Record Cash IN (+ آمد)</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Post an income credit (cash received) or expense debit (cash payment) to recalculate running balance.
+            <DialogDescription>
+              Record incoming money, freight collections, or customer payments to {selectedBook?.name}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleAddTransaction} className="space-y-4 pt-2">
+          <form onSubmit={handleSaveCashIn} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Transaction Type
-                </Label>
-                <select
-                  value={txData.type}
-                  onChange={(e) => setTxData({ ...txData, type: e.target.value })}
-                  className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
-                >
-                  <option value="CREDIT">Credit (Cash Received / In)</option>
-                  <option value="DEBIT">Debit (Payment / Out)</option>
-                </select>
+              <div>
+                <Label className="text-xs font-bold">Date *</Label>
+                <Input
+                  type="date"
+                  required
+                  value={txFormData.date}
+                  onChange={(e) => setTxFormData({ ...txFormData, date: e.target.value })}
+                  className="h-9 text-xs mt-1"
+                />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              <div>
+                <Label className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
                   Amount (PKR) *
                 </Label>
                 <Input
-                  required
                   type="number"
-                  placeholder="e.g. 15000"
-                  value={txData.amount}
-                  onChange={(e) => setTxData({ ...txData, amount: e.target.value })}
-                  className="rounded-xl h-10 text-xs font-bold"
+                  required
+                  min="1"
+                  step="any"
+                  placeholder="e.g. 25000"
+                  value={txFormData.amount}
+                  onChange={(e) => setTxFormData({ ...txFormData, amount: e.target.value })}
+                  className="h-9 text-sm font-mono font-bold border-emerald-300 focus-visible:ring-emerald-500 mt-1"
                 />
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Description / Purpose *
-              </Label>
-              <Input
-                required
-                placeholder="e.g. Freight received for Bilty #SPD-LHR-0012 or Fuel expense"
-                value={txData.description}
-                onChange={(e) => setTxData({ ...txData, description: e.target.value })}
-                className="rounded-xl h-10 text-xs"
-              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Party / Person Name
-                </Label>
-                <Input
-                  placeholder="e.g. Malik Traders / Driver Ali"
-                  value={txData.accountPerson}
-                  onChange={(e) => setTxData({ ...txData, accountPerson: e.target.value })}
-                  className="rounded-xl h-10 text-xs"
-                />
+              <div>
+                <Label className="text-xs font-bold">Category</Label>
+                <select
+                  value={txFormData.category}
+                  onChange={(e) => setTxFormData({ ...txFormData, category: e.target.value })}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1"
+                >
+                  {CASH_IN_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Payment Method
-                </Label>
+              <div>
+                <Label className="text-xs font-bold">Payment Mode</Label>
                 <select
-                  value={txData.paymentMethod}
-                  onChange={(e) => setTxData({ ...txData, paymentMethod: e.target.value })}
-                  className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+                  value={txFormData.paymentMethod}
+                  onChange={(e) => setTxFormData({ ...txFormData, paymentMethod: e.target.value })}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1"
                 >
-                  <option value="CASH">Cash</option>
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                  <option value="ONLINE_JAZZCASH">JazzCash / EasyPaisa</option>
-                  <option value="CHEQUE">Cheque</option>
+                  <option value="CASH">CASH (نقدی)</option>
+                  <option value="BANK">BANK TRANSFER</option>
+                  <option value="CHEQUE">CHEQUE</option>
+                  <option value="ONLINE">ONLINE / JAZZCASH / EASYPAISA</option>
                 </select>
               </div>
             </div>
 
+            {/* Customer / Party Linking */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Date
-                </Label>
-                <Input
-                  type="date"
-                  value={txData.date}
-                  onChange={(e) => setTxData({ ...txData, date: e.target.value })}
-                  className="rounded-xl h-10 text-xs"
-                />
+              <div>
+                <Label className="text-xs font-bold">Link Customer / Client</Label>
+                <select
+                  value={txFormData.customerId}
+                  onChange={(e) => {
+                    const cust = customers.find((c) => c.id === e.target.value);
+                    setTxFormData({
+                      ...txFormData,
+                      customerId: e.target.value,
+                      party: cust ? (cust.companyName || cust.name) : txFormData.party,
+                    });
+                  }}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1"
+                >
+                  <option value="">-- None / Direct Counter --</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.companyName || c.name} ({c.city || "Client"})
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Voucher # (Optional)
-                </Label>
+              <div>
+                <Label className="text-xs font-bold">Party / Payer Name</Label>
                 <Input
-                  placeholder="VCH-00123"
-                  value={txData.voucherNumber}
-                  onChange={(e) => setTxData({ ...txData, voucherNumber: e.target.value })}
-                  className="rounded-xl h-10 text-xs"
+                  placeholder="e.g. Tariq Textiles"
+                  value={txFormData.party}
+                  onChange={(e) => setTxFormData({ ...txFormData, party: e.target.value })}
+                  className="h-9 text-xs mt-1"
                 />
               </div>
             </div>
 
-            <DialogFooter>
+            {/* Bilty Reference */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Link Bilty # (Optional)</Label>
+                <select
+                  value={txFormData.biltyId}
+                  onChange={(e) => {
+                    const blt = bilties.find((b) => b.id === e.target.value);
+                    setTxFormData({
+                      ...txFormData,
+                      biltyId: e.target.value,
+                      biltyNumber: blt ? blt.biltyNumber : "",
+                    });
+                  }}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1"
+                >
+                  <option value="">-- None --</option>
+                  {bilties.slice(0, 30).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.biltyNumber} ({b.origin} → {b.destination})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold">Voucher / Receipt #</Label>
+                <Input
+                  placeholder="Auto or e.g. REC-1049"
+                  value={txFormData.voucherNumber}
+                  onChange={(e) => setTxFormData({ ...txFormData, voucherNumber: e.target.value })}
+                  className="h-9 text-xs mt-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-bold">Description / Remarks</Label>
+              <Input
+                placeholder="Details of the cash received..."
+                value={txFormData.description}
+                onChange={(e) => setTxFormData({ ...txFormData, description: e.target.value })}
+                className="h-9 text-xs mt-1"
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setAddTxOpen(false)}
-                className="rounded-xl text-xs font-semibold"
+                onClick={() => setCashInModalOpen(false)}
+                className="rounded-xl text-xs"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={submitting}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md gap-2"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
               >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Entry"}
+                {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                Confirm Cash IN (+ آمد)
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 3: CONFIRM DELETE CASH BOOK ENTRY */}
-      <Dialog open={!!deleteTx} onOpenChange={(open) => !deleting && !open && setDeleteTx(null)}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+      {/* ======================================================== */}
+      {/* MODAL 2: - CASH OUT (KHARCHA) WITH TRANSPORT LINKING */}
+      {/* ======================================================== */}
+      <Dialog open={cashOutModalOpen} onOpenChange={setCashOutModalOpen}>
+        <DialogContent className="sm:max-w-[620px]">
           <DialogHeader>
-            <DialogTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2 text-red-600">
-              <Trash2 className="w-5 h-5" />
-              Delete Cash Book Entry
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-600 dark:text-slate-400 mt-2 space-y-2">
-              <span className="font-bold text-slate-900 dark:text-white text-sm block">
-                Are you sure you want to delete this Cash Book entry?
-              </span>
-              <div className="p-3 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs space-y-1.5 border border-slate-200/80 dark:border-slate-700/80">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Date:</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{deleteTx && formatDate(deleteTx.date)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Voucher #:</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{deleteTx?.voucherNumber || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Description:</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{deleteTx?.description}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Party / Person:</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{deleteTx?.accountPerson || "General"}</span>
-                </div>
-                <div className="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
-                  <span className="text-slate-500">Amount:</span>
-                  <span className={`font-black ${deleteTx?.debit > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                    {deleteTx?.debit > 0 ? `Debit: ${formatCurrency(deleteTx.debit)}` : `Credit: ${formatCurrency(deleteTx?.credit || 0)}`}
-                  </span>
-                </div>
+            <DialogTitle className="flex items-center gap-2 text-rose-600">
+              <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-600">
+                <ArrowUpRight className="w-5 h-5" />
               </div>
-              <span className="text-[11px] text-slate-500 block leading-relaxed">
-                Deleting this entry will remove it from the Cash Book and recalculate the running balance. Any associated commercial bilties, customer accounts, or ledger records will remain safely preserved.
-              </span>
+              <span>Record Cash OUT (- خرچہ / Adaigi)</span>
+            </DialogTitle>
+            <DialogDescription>
+              Record diesel, driver advance, trip expenses, or maintenance from {selectedBook?.name}
             </DialogDescription>
           </DialogHeader>
 
-          <DialogFooter className="flex gap-2 sm:justify-end mt-4">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={deleting}
-              onClick={() => setDeleteTx(null)}
-              className="rounded-xl text-xs font-semibold"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={deleting}
-              onClick={handleDeleteTx}
-              className="bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold gap-1.5 shadow-md"
-            >
-              {deleting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Deleting...</span>
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4" />
-                  <span>Delete</span>
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL 4: STEP 1 - FIRST CONFIRMATION FOR COMPLETE CASH BOOK */}
-      <Dialog open={deleteStep === 1} onOpenChange={(open) => !open && handleCancelDeleteBook()}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-              Are you sure you want to delete this Cash Book?
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-600 dark:text-slate-400 mt-2 space-y-3">
-              <span className="text-sm font-medium text-slate-800 dark:text-slate-200 block">
-                This action will remove the Cash Book from the active list. Please confirm before continuing.
-              </span>
-              <div className="p-3.5 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs space-y-2 border border-slate-200/80 dark:border-slate-700/80">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Cash Book:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">{bookToDelete?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Office / Location:</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{bookToDelete?.city} Station</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Current Balance:</span>
-                  <span className="font-black text-slate-900 dark:text-white">{formatCurrency(bookToDelete?.currentBalance || 0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Recorded Entries:</span>
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">{bookToDelete?.transactionCount || 0} vouchers</span>
-                </div>
+          <form onSubmit={handleSaveCashOut} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Date *</Label>
+                <Input
+                  type="date"
+                  required
+                  value={txFormData.date}
+                  onChange={(e) => setTxFormData({ ...txFormData, date: e.target.value })}
+                  className="h-9 text-xs mt-1"
+                />
               </div>
-            </DialogDescription>
-          </DialogHeader>
 
-          <DialogFooter className="flex gap-2 sm:justify-end mt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancelDeleteBook}
-              className="rounded-xl text-xs font-semibold"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleStep1Continue}
-              className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold gap-1.5 shadow-md"
-            >
-              Continue
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL 5: STEP 2 - SECOND FINAL CONFIRMATION FOR COMPLETE CASH BOOK */}
-      <Dialog open={deleteStep === 2} onOpenChange={(open) => !deleting && !open && handleCancelDeleteBook()}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border-red-200 dark:border-red-950/60 shadow-xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-black text-red-600 dark:text-red-500 flex items-center gap-2">
-              <AlertOctagon className="w-5 h-5 text-red-600 shrink-0" />
-              Confirm Cash Book Deletion
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-600 dark:text-slate-400 mt-2 space-y-3">
-              <span className="text-sm font-bold text-red-600 dark:text-red-400 block">
-                Are you absolutely sure you want to delete this Cash Book? This action affects the complete Cash Book and its transactions.
-              </span>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                The Cash Book &ldquo;{bookToDelete?.name} ({bookToDelete?.city})&rdquo; will be safely deactivated and moved to Deleted Cash Books. All historical financial entries, ledger history, and running records will be preserved and can be restored at any time.
-              </p>
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogFooter className="flex gap-2 sm:justify-end mt-4">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={deleting}
-              onClick={handleCancelDeleteBook}
-              className="rounded-xl text-xs font-semibold"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={deleting}
-              onClick={handleConfirmDeleteBook}
-              className="bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold gap-1.5 shadow-md"
-            >
-              {deleting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Deleting Cash Book...</span>
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4" />
-                  <span>Yes, Delete Cash Book</span>
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL 6: DELETED CASH BOOKS RECOVERY AREA */}
-      <Dialog open={deletedBooksModalOpen} onOpenChange={setDeletedBooksModalOpen}>
-        <DialogContent className="max-w-2xl rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <Archive className="w-5 h-5 text-spd-blue shrink-0" />
-              Deleted Cash Books
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Recover previously deleted Cash Books. The original Cash Book and all its historical transactions and balances will be safely restored without duplication.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="mt-4">
-            {loadingDeleted ? (
-              <div className="py-8 text-center flex flex-col items-center justify-center gap-2">
-                <Loader2 className="w-6 h-6 animate-spin text-spd-blue" />
-                <p className="text-xs text-slate-400">Loading deleted cash books...</p>
+              <div>
+                <Label className="text-xs font-bold text-rose-700 dark:text-rose-400">
+                  Amount (PKR) *
+                </Label>
+                <Input
+                  type="number"
+                  required
+                  min="1"
+                  step="any"
+                  placeholder="e.g. 45000"
+                  value={txFormData.amount}
+                  onChange={(e) => setTxFormData({ ...txFormData, amount: e.target.value })}
+                  className="h-9 text-sm font-mono font-bold border-rose-300 focus-visible:ring-rose-500 mt-1"
+                />
               </div>
-            ) : deletedBooks.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-500 border border-dashed rounded-xl border-slate-200 dark:border-slate-800">
-                <p className="font-semibold">No deleted cash books</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">All created cash books are currently active.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Category *</Label>
+                <select
+                  value={txFormData.category}
+                  onChange={(e) => setTxFormData({ ...txFormData, category: e.target.value })}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1"
+                >
+                  {CASH_OUT_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
-            ) : (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                <Table>
-                  <TableHeader className="bg-slate-50 dark:bg-slate-800/50">
-                    <TableRow>
-                      <TableHead className="text-xs font-bold">Cash Book Name</TableHead>
-                      <TableHead className="text-xs font-bold">Office / Location</TableHead>
-                      <TableHead className="text-xs font-bold">Deleted Date</TableHead>
-                      <TableHead className="text-xs font-bold text-right">Balance</TableHead>
-                      <TableHead className="text-xs font-bold text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {deletedBooks.map((cb) => (
-                      <TableRow key={cb.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                        <TableCell className="font-bold text-xs text-slate-900 dark:text-white">
-                          {cb.name}
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-600 dark:text-slate-400">
-                          {cb.city} Station
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-500">
-                          {cb.updatedAt ? formatDate(cb.updatedAt) : "Recently"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-bold text-slate-800 dark:text-slate-200">
-                          {formatCurrency(cb.currentBalance || 0)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            disabled={restoringId === cb.id}
-                            onClick={() => handleRestoreBook(cb.id)}
-                            className="bg-spd-blue hover:bg-spd-blueHover text-white rounded-lg text-xs font-bold h-8 px-3 gap-1.5 shadow-sm"
-                          >
-                            {restoringId === cb.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <RotateCcw className="w-3.5 h-3.5" />
-                            )}
-                            <span>Restore</span>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+
+              <div>
+                <Label className="text-xs font-bold">Payment Mode</Label>
+                <select
+                  value={txFormData.paymentMethod}
+                  onChange={(e) => setTxFormData({ ...txFormData, paymentMethod: e.target.value })}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1"
+                >
+                  <option value="CASH">CASH (نقدی)</option>
+                  <option value="BANK">BANK TRANSFER</option>
+                  <option value="CHEQUE">CHEQUE</option>
+                  <option value="ONLINE">ONLINE / PETROL CARD</option>
+                </select>
+              </div>
+            </div>
+
+            {/* TRANSPORT LINKING SECTION */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
+                <Truck className="w-3.5 h-3.5 text-spd-blue" />
+                <span>Transport-Specific Linking (Fleet & Trips)</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Vehicle Selection */}
+                <div>
+                  <Label className="text-[11px] font-bold">Vehicle / Truck #</Label>
+                  <select
+                    value={txFormData.vehicleId}
+                    onChange={(e) => {
+                      const veh = vehicles.find((v) => v.id === e.target.value);
+                      setTxFormData({
+                        ...txFormData,
+                        vehicleId: e.target.value,
+                        vehicleNumber: veh ? veh.vehicleNumber : "",
+                      });
+                    }}
+                    className="w-full h-8.5 rounded-md border border-input bg-background px-2.5 text-xs mt-1"
+                  >
+                    <option value="">-- None / General Expense --</option>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.vehicleNumber} ({v.ownerName || "Vehicle"})
+                      </option>
                     ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
+                  </select>
+                </div>
 
-          <DialogFooter className="mt-4">
+                {/* Driver Selection */}
+                <div>
+                  <Label className="text-[11px] font-bold">Driver</Label>
+                  <select
+                    value={txFormData.driverId}
+                    onChange={(e) => {
+                      const d = drivers.find((drv) => drv.id === e.target.value);
+                      setTxFormData({
+                        ...txFormData,
+                        driverId: e.target.value,
+                        driverName: d ? d.name : "",
+                        party: d && !txFormData.party ? d.name : txFormData.party,
+                      });
+                    }}
+                    className="w-full h-8.5 rounded-md border border-input bg-background px-2.5 text-xs mt-1"
+                  >
+                    <option value="">-- Select Driver --</option>
+                    {drivers.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} {d.phone ? `(${d.phone})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Challan Selection */}
+                <div>
+                  <Label className="text-[11px] font-bold">Link Challan # (Auto syncs expense)</Label>
+                  <select
+                    value={txFormData.challanId}
+                    onChange={(e) => {
+                      const ch = challans.find((c) => c.id === e.target.value);
+                      setTxFormData({
+                        ...txFormData,
+                        challanId: e.target.value,
+                        challanNumber: ch ? ch.challanNumber : "",
+                        route: ch ? `${ch.origin} → ${ch.destination}` : txFormData.route,
+                        vehicleNumber: ch && ch.truckNumber ? ch.truckNumber : txFormData.vehicleNumber,
+                        driverName: ch && ch.driverName ? ch.driverName : txFormData.driverName,
+                      });
+                    }}
+                    className="w-full h-8.5 rounded-md border border-input bg-background px-2.5 text-xs mt-1"
+                  >
+                    <option value="">-- Select Challan --</option>
+                    {challans.slice(0, 30).map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        {ch.challanNumber} ({ch.truckNumber} • {ch.origin} → {ch.destination})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Route */}
+                <div>
+                  <Label className="text-[11px] font-bold">Route</Label>
+                  <Input
+                    placeholder="e.g. Lahore → Karachi"
+                    value={txFormData.route}
+                    onChange={(e) => setTxFormData({ ...txFormData, route: e.target.value })}
+                    className="h-8.5 text-xs mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Vendor / Recipient & Voucher # */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Party / Vendor Name</Label>
+                <Input
+                  placeholder="e.g. Attock Petroleum / Mechanic"
+                  value={txFormData.party}
+                  onChange={(e) => setTxFormData({ ...txFormData, party: e.target.value })}
+                  className="h-9 text-xs mt-1"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold">Voucher / Slip #</Label>
+                <Input
+                  placeholder="e.g. DSL-9921"
+                  value={txFormData.voucherNumber}
+                  onChange={(e) => setTxFormData({ ...txFormData, voucherNumber: e.target.value })}
+                  className="h-9 text-xs mt-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-bold">Description / Details</Label>
+              <Input
+                placeholder="e.g. 150 Litres Diesel at National Highway pump"
+                value={txFormData.description}
+                onChange={(e) => setTxFormData({ ...txFormData, description: e.target.value })}
+                className="h-9 text-xs mt-1"
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCashOutModalOpen(false)}
+                className="rounded-xl text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold"
+              >
+                {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                Confirm Cash OUT (- خرچہ)
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ======================================================== */}
+      {/* MODAL 3: CREATE NEW CASH BOOK */}
+      {/* ======================================================== */}
+      <Dialog open={createBookOpen} onOpenChange={setCreateBookOpen}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-spd-blue" />
+              <span>Create New Cash Book</span>
+            </DialogTitle>
+            <DialogDescription>
+              Create a dedicated cash ledger for a branch, office, or terminal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateBook} className="space-y-4">
+            <div>
+              <Label className="text-xs font-bold">Cash Book Name *</Label>
+              <Input
+                required
+                placeholder="e.g. Hammad Cash Book — Islamabad"
+                value={newBookData.name}
+                onChange={(e) => setNewBookData({ ...newBookData, name: e.target.value })}
+                className="h-9 text-xs mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">City / Station *</Label>
+                <Input
+                  required
+                  placeholder="e.g. Rawalpindi"
+                  value={newBookData.city}
+                  onChange={(e) => setNewBookData({ ...newBookData, city: e.target.value })}
+                  className="h-9 text-xs mt-1"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold">Opening Balance (PKR)</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={newBookData.openingBalance}
+                  onChange={(e) => setNewBookData({ ...newBookData, openingBalance: e.target.value })}
+                  className="h-9 text-xs mt-1 font-mono"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-bold">Description / Purpose</Label>
+              <Input
+                placeholder="Operating cash book for regional freight operations"
+                value={newBookData.description}
+                onChange={(e) => setNewBookData({ ...newBookData, description: e.target.value })}
+                className="h-9 text-xs mt-1"
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateBookOpen(false)}
+                className="rounded-xl text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="bg-spd-blue hover:bg-spd-blueHover text-white rounded-xl text-xs font-bold"
+              >
+                {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                Create Book
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ======================================================== */}
+      {/* MODAL 4: DELETE TRANSACTION CONFIRMATION */}
+      {/* ======================================================== */}
+      <Dialog open={!!deleteTx} onOpenChange={(open) => !open && setDeleteTx(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-600">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Delete Cash Transaction</span>
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove this transaction from the cash book?
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteTx && (
+            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs space-y-1 font-mono">
+              <p className="font-bold text-slate-900 dark:text-white">{deleteTx.description}</p>
+              <p className="text-muted-foreground">Voucher: {deleteTx.voucherNumber || deleteTx.id.slice(0, 8)}</p>
+              <p className="text-rose-600 font-bold">
+                Amount: Rs {(deleteTx.debit > 0 ? deleteTx.debit : deleteTx.credit).toLocaleString()}
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="pt-2">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setDeletedBooksModalOpen(false)}
-              className="rounded-xl text-xs font-semibold"
+              onClick={() => setDeleteTx(null)}
+              className="rounded-xl text-xs"
             >
-              Close
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDeleteTransaction}
+              disabled={deletingTx}
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold"
+            >
+              {deletingTx && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              Yes, Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ======================================================== */}
+      {/* MODAL 5: ARCHIVE CASH BOOK */}
+      {/* ======================================================== */}
+      <Dialog open={archiveBookOpen} onOpenChange={setArchiveBookOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-600">
+              <Archive className="w-5 h-5" />
+              <span>Archive Cash Book</span>
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to archive &quot;{selectedBook?.name}&quot;? Existing transactions will be preserved in the archive.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setArchiveBookOpen(false)}
+              className="rounded-xl text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleArchiveBook}
+              disabled={archivingBook}
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold"
+            >
+              {archivingBook && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              Archive Book
             </Button>
           </DialogFooter>
         </DialogContent>

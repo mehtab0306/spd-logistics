@@ -81,6 +81,7 @@ model Customer {
   payments               Payment[]
   receivables            Receivable[]
   payables               Payable[]
+  cashTransactions       CashBookTransaction[]
 
   @@index([name])
   @@index([phone])
@@ -158,22 +159,44 @@ model CashBookTransaction {
   voucherNumber String?
   description   String
   accountPerson String?
+  category      String?
+  party         String?
   debit         Float    @default(0)
   credit        Float    @default(0)
   balance       Float    @default(0)
   paymentMethod String?
   notes         String?
+  customerId    String?
+  vehicleId     String?
+  vehicleNumber String?
+  driverId      String?
+  driverName    String?
+  biltyId       String?
+  biltyNumber   String?
+  challanId     String?
+  challanNumber String?
+  route         String?
+  attachment    String?
   createdById   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  cashBook  CashBook @relation(fields: [cashBookId], references: [id], onDelete: Cascade)
-  createdBy User?    @relation("CreatedBy", fields: [createdById], references: [id])
+  cashBook  CashBook     @relation(fields: [cashBookId], references: [id], onDelete: Cascade)
+  createdBy User?        @relation("CreatedBy", fields: [createdById], references: [id])
+  customer  Customer?    @relation(fields: [customerId], references: [id])
+  vehicle   Vehicle?     @relation(fields: [vehicleId], references: [id])
+  driver    Driver?      @relation(fields: [driverId], references: [id])
+  bilty     Consignment? @relation(fields: [biltyId], references: [id])
+  challan   Challan?     @relation(fields: [challanId], references: [id])
 
   @@index([cashBookId])
   @@index([date])
   @@index([voucherNumber])
   @@index([accountPerson])
+  @@index([category])
+  @@index([vehicleNumber])
+  @@index([biltyNumber])
+  @@index([challanNumber])
 }
 
 // ============================================
@@ -231,8 +254,9 @@ model Consignment {
   vehicle        Vehicle?        @relation(fields: [vehicleId], references: [id])
   driver         Driver?         @relation(fields: [driverId], references: [id])
   createdBy      User?           @relation("CreatedBy", fields: [createdById], references: [id])
-  trackingEvents TrackingEvent[]
-  payments       Payment[]
+  trackingEvents   TrackingEvent[]
+  payments         Payment[]
+  cashTransactions CashBookTransaction[]
 
   @@index([biltyNumber])
   @@index([trackingId])
@@ -287,10 +311,11 @@ model Vehicle {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  driverId     String?
-  driver       Driver?       @relation(fields: [driverId], references: [id])
-  consignments Consignment[]
-  challans     Challan[]
+  driverId         String?
+  driver           Driver?       @relation(fields: [driverId], references: [id])
+  consignments     Consignment[]
+  challans         Challan[]
+  cashTransactions CashBookTransaction[]
 
   @@index([vehicleNumber])
   @@index([vehicleType])
@@ -318,9 +343,10 @@ model Driver {
 
   userId       String?   @unique
   user         User?     @relation("DriverUser", fields: [userId], references: [id])
-  vehicles     Vehicle[]
-  consignments Consignment[]
-  challans     Challan[]
+  vehicles         Vehicle[]
+  consignments     Consignment[]
+  challans         Challan[]
+  cashTransactions CashBookTransaction[]
 
   @@index([name])
   @@index([phone])
@@ -368,6 +394,7 @@ model Challan {
   vehicle                    Vehicle?  @relation(fields: [vehicleId], references: [id])
   driver                     Driver?   @relation(fields: [driverId], references: [id])
   consignments               Consignment[]
+  cashTransactions           CashBookTransaction[]
 
   @@index([challanNumber])
   @@index([status])

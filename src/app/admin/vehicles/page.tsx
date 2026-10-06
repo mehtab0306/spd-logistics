@@ -32,11 +32,13 @@ import {
   Phone,
   Edit,
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 
 export default function VehiclesPage() {
   const router = useRouter();
   const [vehicles, setVehicles] = useState<any[]>([]);
+  const { highlightClass } = useSmartHighlight(vehicles);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -452,7 +454,15 @@ export default function VehiclesPage() {
             </TableHeader>
             <TableBody>
               {vehicles.map((v) => (
-                <TableRow key={v.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                <TableRow
+                  key={v.id}
+                  id={`record-${v.id}`}
+                  data-record-id={v.id}
+                  className={cn(
+                    "hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all",
+                    highlightClass(v.id) || highlightClass(v.vehicleNumber)
+                  )}
+                >
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-spd-blue flex items-center justify-center font-bold text-xs">

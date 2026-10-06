@@ -63,6 +63,28 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (id) {
+      const single = await prisma.consignment.findUnique({
+        where: { id },
+        include: {
+          customer: true,
+          sender: true,
+          receiver: true,
+          driver: true,
+          vehicle: true,
+          challan: true,
+          trackingEvents: { orderBy: { timestamp: 'desc' } },
+          payments: { orderBy: { date: 'desc' } },
+        },
+      });
+      if (single) {
+        return NextResponse.json({ success: true, data: single });
+      }
+      return NextResponse.json({ success: false, error: 'Bilty not found' }, { status: 404 });
+    }
+
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const warehouse = searchParams.get('warehouse') || '';
