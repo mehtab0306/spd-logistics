@@ -52,10 +52,14 @@ export function AiSupportModal() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isOpen || aiStatus !== "checking") return;
+
+    let isMounted = true;
     async function checkAiStatus() {
       try {
         const res = await fetch("/api/ai/chat");
         const data = await res.json();
+        if (!isMounted) return;
         if (data.status === "ready") {
           setAiStatus("ready");
         } else if (data.status === "unconfigured") {
@@ -64,11 +68,15 @@ export function AiSupportModal() {
           setAiStatus("unavailable");
         }
       } catch {
-        setAiStatus("unavailable");
+        if (isMounted) setAiStatus("unavailable");
       }
     }
     checkAiStatus();
-  }, []);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, aiStatus]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
