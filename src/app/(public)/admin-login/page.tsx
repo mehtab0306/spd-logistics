@@ -35,7 +35,7 @@ export default function AdminLoginPage() {
     const submitIdentifier = (identifier.trim() || formEmail.trim()).toLowerCase();
     const submitPassword = (password || formPassword).trim();
 
-    // Direct Hardcoded Admin Authentication: admin@gmail.com / admin
+    // Direct Admin Authentication shortcut: admin@gmail.com / admin
     const isMatchingAdmin = (submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') && submitPassword === 'admin';
 
     if (isMatchingAdmin) {
@@ -64,7 +64,7 @@ export default function AdminLoginPage() {
         console.warn('Cookie set error:', cookieErr);
       }
 
-      // 3. Fire-and-forget sync to API route without blocking or exposing errors
+      // 3. Sync to API route
       try {
         fetch('/api/auth/login', {
           method: 'POST',
@@ -86,9 +86,58 @@ export default function AdminLoginPage() {
       return;
     }
 
-    // Invalid credentials handled directly on frontend without 500 network error
-    setStatus('ERROR');
-    setError('Invalid credentials. Please use admin@gmail.com and password admin.');
+    // Try API authentication against database for other admin/staff accounts
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: submitIdentifier,
+          email: submitIdentifier,
+          password: submitPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const userRole = data.user?.role || data.data?.role;
+        if (!['SUPER_ADMIN', 'ADMIN', 'STAFF'].includes(userRole)) {
+          setStatus('ERROR');
+          setError('Access denied: Admin privileges required to enter this portal.');
+          return;
+        }
+
+        const userSession = {
+          id: data.user?.id || data.data?.id,
+          name: data.user?.name || data.data?.name || 'Administrator',
+          email: data.user?.email || data.data?.email || submitIdentifier,
+          username: data.user?.username || data.data?.username || 'admin',
+          role: userRole,
+          redirectUrl: '/admin',
+          token: data.data?.token || 'spd-admin-session-token',
+        };
+
+        try {
+          localStorage.setItem('spd_user', JSON.stringify(userSession));
+          sessionStorage.setItem('spd_auth_token', userSession.token);
+          document.cookie = `spd-auth-token=${userSession.token}; path=/; max-age=604800; SameSite=Lax`;
+        } catch (storageErr) {
+          console.warn('Storage error:', storageErr);
+        }
+
+        setStatus('SUCCESS');
+        setTimeout(() => {
+          window.location.replace('/admin');
+        }, 200);
+        return;
+      }
+
+      setStatus('ERROR');
+      setError(data.error || 'Invalid credentials. Please verify your email and password.');
+    } catch (apiErr: any) {
+      setStatus('ERROR');
+      setError(apiErr.message || 'Unable to connect to login server. Please try again.');
+    }
   };
 
   return (

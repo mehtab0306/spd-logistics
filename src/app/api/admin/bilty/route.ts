@@ -4,6 +4,8 @@ import { getCurrentUser, getAuthCookie } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { sendEventEmail } from '@/lib/mailer';
 
+export const dynamic = 'force-dynamic';
+
 // Generate unique sequential Bilty number
 async function generateBiltyNumber(warehouse: string = 'LHR'): Promise<string> {
   const prefixSetting = await prisma.setting.findUnique({ where: { key: 'biltyPrefix' } });
@@ -633,22 +635,54 @@ export async function POST(request: Request) {
         },
       });
 
-      // Update customer ledger if linked customer has an account
+      // Update customer ledger if linked customer has an account (avoid duplicate financial entries)
       const targetCustId = resolvedCustomerId || resolvedSenderId;
       if (targetCustId) {
         const customerAccount = await tx.account.findFirst({
           where: { customerId: targetCustId },
         });
         if (customerAccount) {
-          await tx.accountTransaction.create({
-            data: {
+          const existingAccTx = await tx.accountTransaction.findFirst({
+            where: {
               accountId: customerAccount.id,
               voucherNumber: biltyNumber,
-              description: `Bilty #${biltyNumber} — ${origin} to ${destination}`,
-              debit: totalAmount,
-              credit: paidNum,
-              balance: totalAmount - paidNum,
-              paymentMethod: paidNum > 0 ? 'CASH/DIRECT' : undefined,
+            },
+          });
+          if (!existingAccTx) {
+            await tx.accountTransaction.create({
+              data: {
+                accountId: customerAccount.id,
+                voucherNumber: biltyNumber,
+                description: `Bilty #${biltyNumber} — ${origin} to ${destination}`,
+                debit: totalAmount,
+                credit: paidNum,
+                balance: totalAmount - paidNum,
+                paymentMethod: paidNum > 0 ? 'CASH/DIRECT' : undefined,
+              },
+            });
+          }
+        }
+      }
+
+      // Record Payment record if advance/paidAmount > 0
+      if (paidNum > 0) {
+        const existingPayment = await tx.payment.findFirst({
+          where: {
+            consignmentId: item.id,
+            reference: biltyNumber,
+          },
+        });
+        if (!existingPayment) {
+          await tx.payment.create({
+            data: {
+              type: 'FREIGHT',
+              consignmentId: item.id,
+              customerId: resolvedCustomerId,
+              amount: paidNum,
+              paymentMethod: 'CASH',
+              reference: biltyNumber,
+              notes: `Advance freight payment for Bilty #${biltyNumber}`,
+              status: 'COMPLETED',
             },
           });
         }
@@ -734,70 +768,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data: consignment });
   } catch (error: any) {
-    console.error('Error creating consignment (using virtual fallback):', error);
-    try {
-      const body = await request.json().catch(() => ({}));
-      const fallbackConsignment = {
-        id: `bilty_${Date.now()}`,
-        biltyNumber: body.biltyNumber || `SPD-LHR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        trackingId: body.trackingId || `SPD-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
-        date: body.date ? new Date(body.date).toISOString() : new Date().toISOString(),
-        senderName: body.senderName || 'Valued Shipper',
-        senderPhone: body.senderPhone || '',
-        senderAddress: body.senderAddress || '',
-        receiverName: body.receiverName || 'Consignee',
-        receiverPhone: body.receiverPhone || '',
-        receiverAddress: body.receiverAddress || '',
-        origin: body.origin || 'Lahore',
-        destination: body.destination || 'Karachi',
-        warehouse: body.warehouse || 'LAHORE',
-        vehicleId: body.vehicleId || null,
-        vehicleNumber: body.vehicleNumber || 'LES-8921',
-        driverId: body.driverId || null,
-        driverName: body.driverName || 'Muhammad Khan',
-        packageDetails: body.packageDetails || 'General Merchandise Cargo',
-        quantity: parseInt(body.quantity) || 1,
-        weight: body.weight ? parseFloat(body.weight) : null,
-        cpm: body.cpm ? parseFloat(body.cpm) : null,
-        freight: parseFloat(body.freight) || 5000,
-        additionalCharges: parseFloat(body.additionalCharges) || 0,
-        discount: parseFloat(body.discount) || 0,
-        totalAmount: (parseFloat(body.freight) || 5000) + (parseFloat(body.additionalCharges) || 0) - (parseFloat(body.discount) || 0),
-        paidAmount: parseFloat(body.paidAmount) || 0,
-        remainingBalance: Math.max(0, ((parseFloat(body.freight) || 5000) + (parseFloat(body.additionalCharges) || 0) - (parseFloat(body.discount) || 0)) - (parseFloat(body.paidAmount) || 0)),
-        paymentStatus: (parseFloat(body.paidAmount) || 0) > 0 ? 'PARTIAL' : 'PENDING',
-        shipmentStatus: body.shipmentStatus || 'BOOKED',
-        notes: body.notes || null,
-        createdAt: new Date().toISOString(),
-        trackingEvents: [
-          {
-            id: `te_${Date.now()}`,
-            status: body.shipmentStatus || 'BOOKED',
-            location: `${body.origin || 'Lahore'} Station`,
-            description: `Consignment booked for transit to ${body.destination || 'Karachi'}`,
-            timestamp: new Date().toISOString(),
-          }
-        ],
-        payments: [],
-      };
-      return NextResponse.json({ success: true, data: fallbackConsignment });
-    } catch {
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: `bilty_${Date.now()}`,
-          biltyNumber: `SPD-LHR-${new Date().getFullYear()}-0099`,
-          trackingId: `SPD-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
-          date: new Date().toISOString(),
-          origin: 'Lahore',
-          destination: 'Karachi',
-          totalAmount: 5000,
-          paidAmount: 0,
-          remainingBalance: 5000,
-          shipmentStatus: 'BOOKED',
-        }
-      });
-    }
+    console.error('Error creating consignment:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message || 'Failed to create consignment bilty',
+      },
+      { status: 400 }
+    );
   }
 }
 

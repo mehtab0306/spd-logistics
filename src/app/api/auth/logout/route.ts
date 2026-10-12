@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { removeAuthCookie, getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST() {
   try {
     const user = await getCurrentUser();

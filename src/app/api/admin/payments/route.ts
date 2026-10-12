@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { createSystemNotification } from '@/lib/notifications';
 import { sendEventEmail } from '@/lib/mailer';
 
+export const dynamic = 'force-dynamic';
+
 const DEFAULT_PAYMENTS = [
   {
     id: 'pay-1',

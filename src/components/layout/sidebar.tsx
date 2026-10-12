@@ -32,6 +32,7 @@ import {
   X,
   Navigation,
   CheckCircle2,
+  Mic,
 } from "lucide-react";
 
 const iconMap: Record<string, React.ElementType> = {
@@ -55,6 +56,7 @@ const iconMap: Record<string, React.ElementType> = {
   ClipboardList,
   Navigation,
   CheckCircle2,
+  Mic,
 };
 
 interface SidebarProps {

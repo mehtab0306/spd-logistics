@@ -108,13 +108,25 @@ export default function NewBiltyPage() {
         fetch("/api/admin/vehicles"),
       ]);
 
-      const custData = await custRes.json();
-      const drvData = await drvRes.json();
-      const vehData = await vehRes.json();
+      const parseJsonSafe = async (res: Response) => {
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          return res.json();
+        }
+        return { data: [] };
+      };
 
-      if (custData.customers) setCustomers(custData.customers);
-      if (drvData.drivers) setDrivers(drvData.drivers);
-      if (vehData.vehicles) setVehicles(vehData.vehicles);
+      const custData = await parseJsonSafe(custRes);
+      const drvData = await parseJsonSafe(drvRes);
+      const vehData = await parseJsonSafe(vehRes);
+
+      const custArr = Array.isArray(custData.data) ? custData.data : Array.isArray(custData.customers) ? custData.customers : [];
+      const drvArr = Array.isArray(drvData.data) ? drvData.data : Array.isArray(drvData.drivers) ? drvData.drivers : [];
+      const vehArr = Array.isArray(vehData.data) ? vehData.data : Array.isArray(vehData.vehicles) ? vehData.vehicles : [];
+
+      if (custArr.length > 0) setCustomers(custArr);
+      if (drvArr.length > 0) setDrivers(drvArr);
+      if (vehArr.length > 0) setVehicles(vehArr);
     } catch (err) {
       console.error("Error loading bilty prerequisites:", err);
     }
@@ -215,8 +227,21 @@ export default function NewBiltyPage() {
         body: JSON.stringify(payload),
       });
 
-      const result = await res.json();
-      if (!res.ok || result.error) {
+      const contentType = res.headers.get("content-type") || "";
+      let result: any = null;
+
+      if (contentType.includes("application/json")) {
+        result = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(
+          res.ok
+            ? "Server returned unexpected response format"
+            : `Server returned HTTP ${res.status}: ${text.slice(0, 100)}`
+        );
+      }
+
+      if (!res.ok || !result.success) {
         throw new Error(result.error || "Failed to create Bilty consignment");
       }
 

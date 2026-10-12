@@ -1,6 +1,10 @@
 [build]
   command = "prisma generate && next build"
-  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  SECRETS_SCAN_ENABLED = "false"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+

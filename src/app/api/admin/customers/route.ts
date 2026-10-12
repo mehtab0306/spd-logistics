@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 
+export const dynamic = 'force-dynamic';
+
 const DEFAULT_CUSTOMERS = [
   {
     id: 'c-1',

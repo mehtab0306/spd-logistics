@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 const DEMO_MAP: Record<string, any> = {
       'SPD-2026-00101': {
         id: "bilty-cust-101",
@@ -269,16 +271,13 @@ export async function GET(
 
     const cleanUpper = trackingQuery.toUpperCase();
 
-    // 1. Instant check in pre-seeded DEMO_MAP
-    if (DEMO_MAP[cleanUpper]) {
-      return NextResponse.json(DEMO_MAP[cleanUpper]);
-    }
-
     const consignment = await prisma.consignment.findFirst({
       where: {
         OR: [
           { trackingId: trackingQuery },
           { biltyNumber: trackingQuery },
+          { trackingId: cleanUpper },
+          { biltyNumber: cleanUpper },
         ],
       },
       include: {
@@ -290,30 +289,35 @@ export async function GET(
       },
     });
 
-    if (!consignment || consignment.shipmentStatus === 'DELETED') {
-      return NextResponse.json(getVirtualConsignment(cleanUpper));
+    if (consignment && consignment.shipmentStatus !== 'DELETED') {
+      // Return sanitized public tracking info
+      return NextResponse.json({
+        id: consignment.id,
+        trackingId: consignment.trackingId,
+        biltyNumber: consignment.biltyNumber,
+        status: consignment.shipmentStatus,
+        origin: consignment.origin,
+        destination: consignment.destination,
+        warehouse: consignment.warehouse,
+        packageDetails: consignment.packageDetails,
+        quantity: consignment.quantity,
+        weight: consignment.weight,
+        senderName: consignment.senderName,
+        receiverName: consignment.receiverName,
+        receiverPhone: consignment.receiverPhone,
+        deliveryDate: consignment.deliveryDate,
+        deliveryTime: consignment.deliveryTime,
+        createdAt: consignment.createdAt,
+        events: consignment.trackingEvents,
+      });
     }
 
-    // Return sanitized public tracking info
-    return NextResponse.json({
-      id: consignment.id,
-      trackingId: consignment.trackingId,
-      biltyNumber: consignment.biltyNumber,
-      status: consignment.shipmentStatus,
-      origin: consignment.origin,
-      destination: consignment.destination,
-      warehouse: consignment.warehouse,
-      packageDetails: consignment.packageDetails,
-      quantity: consignment.quantity,
-      weight: consignment.weight,
-      senderName: consignment.senderName,
-      receiverName: consignment.receiverName,
-      receiverPhone: consignment.receiverPhone,
-      deliveryDate: consignment.deliveryDate,
-      deliveryTime: consignment.deliveryTime,
-      createdAt: consignment.createdAt,
-      events: consignment.trackingEvents,
-    });
+    // Fall back to pre-seeded DEMO_MAP
+    if (DEMO_MAP[cleanUpper]) {
+      return NextResponse.json(DEMO_MAP[cleanUpper]);
+    }
+
+    return NextResponse.json(getVirtualConsignment(cleanUpper));
   } catch (error) {
     console.warn('Tracking query fallback:', error);
     const trackingQuery = (params?.id || '').trim().toUpperCase();

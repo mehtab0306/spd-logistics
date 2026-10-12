@@ -4,6 +4,8 @@ import { generateNewContactEmailHtml, generateNewContactEmailText } from "@/lib/
 import { sendContactEmail } from "@/lib/mailer";
 import prisma from "@/lib/prisma";
 
+export const dynamic = 'force-dynamic';
+
 const contactSchema = z.object({
   name: z.string().optional().default("Valued Customer"),
   phone: z.string().optional().default("Not specified"),

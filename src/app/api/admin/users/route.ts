@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { hashPassword, getAuthCookie, verifyToken } from "@/lib/auth";
 
+export const dynamic = 'force-dynamic';
+
 const PROTECTED_EMAILS = ["admin.com", "admin@spdlogistics.com"];
 
 export async function GET(request: Request) {

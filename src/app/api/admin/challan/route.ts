@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { getCurrentUser, getAuthCookie } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 
+export const dynamic = 'force-dynamic';
+
 // Generate unique sequential Challan number (e.g. CHL-2026-0001)
 async function generateChallanNumber(): Promise<string> {
   const count = await prisma.challan.count();

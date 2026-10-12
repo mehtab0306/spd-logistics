@@ -226,6 +226,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { title: 'Reports', href: '/admin/reports', icon: 'BarChart3' },
       { title: 'Notifications', href: '/admin/notifications', icon: 'Bell' },
       { title: 'AI Assistant', href: '/admin/ai-assistant', icon: 'Bot' },
+      { title: 'Audio Log', href: '/admin/audio-log', icon: 'Mic' },
       { title: 'Users', href: '/admin/users', icon: 'Shield' },
       { title: 'Settings', href: '/admin/settings', icon: 'Settings' },
       { title: 'Audit Logs', href: '/admin/audit-logs', icon: 'ClipboardList' },

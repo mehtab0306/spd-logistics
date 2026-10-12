@@ -66,16 +66,22 @@ export default function SettingsPage() {
     try {
       setLoading(true);
       const res = await fetch("/api/admin/settings");
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Received non-JSON response from settings server.");
+      }
       const data = await res.json();
       if (data.success && data.data) {
         setSettings(data.data);
         if (data.data.companyLogo) {
           setLogoPreview(data.data.companyLogo);
         }
+      } else {
+        throw new Error(data.error || "Could not load settings from server.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load settings:", err);
-      setFeedback({ type: "error", message: "Could not load settings from server." });
+      setFeedback({ type: "error", message: err.message || "Could not load settings from server." });
     } finally {
       setLoading(false);
     }

@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
+export const dynamic = 'force-dynamic';
+
 // Max allowed file size: 5 MB
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 

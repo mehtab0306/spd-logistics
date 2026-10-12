@@ -567,3 +567,31 @@ model ExcelImport {
   @@index([module])
   @@index([status])
 }
+
+// ============================================
+// AUDIO LOGS & VOICE DISPATCH MEMOS
+// ============================================
+
+model AudioLog {
+  id            String   @id @default(cuid())
+  title         String
+  category      String   @default("DISPATCH") // DISPATCH, DRIVER, INCIDENT, TERMINAL, DELIVERY
+  audioUrl      String
+  duration      Int      @default(0) // seconds
+  fileSize      Int      @default(0) // bytes
+  mimeType      String   @default("audio/webm")
+  biltyNumber   String?
+  driverName    String?
+  vehicleNumber String?
+  warehouse     String   @default("LAHORE")
+  transcription String?
+  notes         String?
+  recordedBy    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([biltyNumber])
+  @@index([category])
+  @@index([warehouse])
+  @@index([createdAt])
+}

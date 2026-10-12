@@ -140,7 +140,14 @@ export function AiSupportModal() {
         body: JSON.stringify({ messages: chatHistory }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+      let data: any = {};
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const textErr = await response.text();
+        throw new Error(`Server returned status ${response.status}: ${textErr.slice(0, 100)}`);
+      }
 
       if (response.ok && data.success !== false && data.reply) {
         const replyText = data.reply;

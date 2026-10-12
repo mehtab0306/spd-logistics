@@ -101,7 +101,14 @@ export default function AiAssistantPage() {
         body: JSON.stringify({ messages: chatHistory }),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      let data: any = {};
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const textErr = await res.text();
+        throw new Error(`Server returned status ${res.status}: ${textErr.slice(0, 100)}`);
+      }
 
       if (res.ok && data.success !== false && data.reply) {
         const botMsg: ChatMessage = {

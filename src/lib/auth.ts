@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import bcrypt from 'bcryptjs';
 
 const JWT_SECRET = new TextEncoder().encode(
@@ -115,10 +115,30 @@ export async function removeAuthCookie(): Promise<void> {
 }
 
 /**
- * Get current authenticated user from cookie
+ * Get current authenticated user from cookie or Authorization header
  */
-export async function getCurrentUser(): Promise<JWTPayload | null> {
-  const token = await getAuthCookie();
+export async function getCurrentUser(req?: Request): Promise<JWTPayload | null> {
+  // 1. Check cookies first
+  let token = await getAuthCookie();
+
+  // 2. Check Authorization header if cookie not present
+  if (!token) {
+    try {
+      let authHeader: string | null = null;
+      if (req && typeof req.headers?.get === 'function') {
+        authHeader = req.headers.get('authorization');
+      } else {
+        const headerStore = await headers();
+        authHeader = headerStore.get('authorization');
+      }
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.slice(7).trim();
+      }
+    } catch {
+      // Headers not accessible in this context
+    }
+  }
+
   if (!token) return null;
   return verifyToken(token);
 }
