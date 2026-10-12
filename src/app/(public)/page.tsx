@@ -571,7 +571,7 @@ export default function HomePage() {
               Karachi & Lahore Warehouse Network
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-              Integrated dual commercial terminal operations connecting Pakistan's prime maritime port with northern industrial distribution hubs.
+              Integrated dual commercial terminal operations connecting Pakistan&apos;s prime maritime port with northern industrial distribution hubs.
             </p>
           </div>
 

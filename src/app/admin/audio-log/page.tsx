@@ -846,7 +846,7 @@ export default function AudioLogPage() {
                         <Sparkles className="w-3 h-3" />
                         <span>Transcription</span>
                       </p>
-                      <p className="italic">"{log.transcription}"</p>
+                      <p className="italic">&ldquo;{log.transcription}&rdquo;</p>
                     </div>
                   )}
 
