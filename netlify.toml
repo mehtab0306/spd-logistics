@@ -1,5 +1,5 @@
 [build]
-  command = "prisma generate && next build"
+  command = "node prisma/prepare-db.js && prisma generate && next build"
 
 [build.environment]
   NODE_VERSION = "20"
