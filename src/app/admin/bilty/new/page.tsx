@@ -781,11 +781,11 @@ export default function NewBiltyPage() {
           </div>
         </FormSectionCard>
 
-        {/* Section: Attachment & Proof Documents (Triple Image Attachment) */}
+        {/* Section: Attachments & Photos */}
         <FormSectionCard
-          title="Attachment & Proof Documents"
+          title="Attachments & Photos (Up to 3 images)"
           badge="Proofs"
-          description="Upload cargo photos, physical consignment bilty stamp copy, and weighbridge slips"
+          description="Compact photo attachments for cargo, physical bilty copies, or weight receipts"
         >
           <div className="col-span-1 sm:col-span-2">
             <TripleImageAttachment

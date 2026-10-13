@@ -288,10 +288,12 @@ export default function ChallanPage() {
       "Origin": b.origin || "",
       "Destination": b.destination || "",
       "Warehouse": b.warehouse || "Lahore",
+      "Goods / Item": b.packageDetails || b.description || "General Cargo",
       "Sender": b.senderName || "",
       "Receiver": b.receiverName || "",
       "Packages": b.quantity || 1,
       "Weight (kg)": b.weight || 0,
+      "Weight & CBM": b.weight ? `${b.weight} kg | ${b.cbm || b.volume || (Math.round((Number(b.weight) / 330) * 10) / 10).toFixed(1)} CBM` : "—",
       "Freight (PKR)": b.freight || 0,
       "Total (PKR)": b.totalAmount || b.freight || 0,
       "Payment Status": b.remainingBalance <= 0 ? "PAID" : "TO-PAY",
@@ -572,8 +574,9 @@ export default function ChallanPage() {
                     </th>
                     <th className="p-3">Bilty #</th>
                     <th className="p-3">Route</th>
+                    <th className="p-3">Goods / Item</th>
                     <th className="p-3">Shipper / Receiver</th>
-                    <th className="p-3 text-right">Weight</th>
+                    <th className="p-3 text-right">Weight & CBM</th>
                     <th className="p-3 text-right">Freight</th>
                     <th className="p-3 text-center">Pay Status</th>
                   </tr>
@@ -581,7 +584,7 @@ export default function ChallanPage() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredBilties.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-400">
+                      <td colSpan={8} className="p-8 text-center text-slate-400">
                         No consignments waiting in warehouse.
                       </td>
                     </tr>
@@ -599,7 +602,7 @@ export default function ChallanPage() {
                           }`}
                         >
                           <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                            <input
+                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleSelectBilty(b.id)}
@@ -622,14 +625,26 @@ export default function ChallanPage() {
                           </td>
                           <td className="p-3">
                             <span className="font-semibold block text-slate-800 dark:text-slate-200">
+                              {b.packageDetails || b.description || "General Cargo"}
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">
+                              {b.quantity ? `${b.quantity} Pkg${b.quantity > 1 ? "s" : ""}` : "1 Pkg"}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <span className="font-semibold block text-slate-800 dark:text-slate-200">
                               {b.senderName}
                             </span>
                             <span className="text-[10px] text-slate-500 block">
                               To: {b.receiverName}
                             </span>
                           </td>
-                          <td className="p-3 text-right font-mono font-semibold">
-                            {b.weight ? `${b.weight} kg` : "—"}
+                          <td className="p-3 text-right font-mono font-semibold whitespace-nowrap">
+                            <span className="block text-slate-900 dark:text-white">
+                              {b.weight
+                                ? `${b.weight} kg | ${b.cbm || b.volume || (Math.round((Number(b.weight) / 330) * 10) / 10).toFixed(1)} CBM`
+                                : "—"}
+                            </span>
                           </td>
                           <td className="p-3 text-right font-mono font-black text-slate-900 dark:text-white">
                             {formatCurrency(b.freight || 0)}

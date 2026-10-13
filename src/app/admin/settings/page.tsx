@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -43,6 +44,8 @@ import {
   Mail,
   Globe,
   Truck,
+  KeyRound,
+  Lock,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -60,6 +63,67 @@ export default function SettingsPage() {
   // Safeguard Reset Modal state
   const [resetModalCategory, setResetModalCategory] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordFeedback(null);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordFeedback({ type: "error", message: "All password fields are required." });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordFeedback({ type: "error", message: "New passwords do not match." });
+      return;
+    }
+    if (newPassword.length < 4) {
+      setPasswordFeedback({ type: "error", message: "New password must be at least 4 characters long." });
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      const res = await fetch("/api/admin/profile/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update password.");
+      }
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("spd_admin_password", newPassword);
+      }
+
+      setPasswordFeedback({
+        type: "success",
+        message: "System Admin password updated successfully! Your new password is now active.",
+      });
+      setFeedback({
+        type: "success",
+        message: "System Admin password updated successfully!",
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      setPasswordFeedback({
+        type: "error",
+        message: err.message || "Failed to update password.",
+      });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
 
   // Fetch Settings from API
   const fetchSettings = async () => {
@@ -304,7 +368,7 @@ export default function SettingsPage() {
 
       {/* Tabs Layout */}
       <Tabs defaultValue="general" className="w-full space-y-6">
-        <TabsList className="grid grid-cols-3 sm:grid-cols-6 h-auto p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 h-auto p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 gap-1">
           <TabsTrigger
             value="general"
             className="rounded-xl py-2.5 text-xs font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-spd-red shadow-none data-[state=active]:shadow-sm"
@@ -351,6 +415,14 @@ export default function SettingsPage() {
           >
             <Palette className="w-3.5 h-3.5" />
             <span>Theme</span>
+          </TabsTrigger>
+
+          <TabsTrigger
+            value="security"
+            className="rounded-xl py-2.5 text-xs font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-rose-600 shadow-none data-[state=active]:shadow-sm"
+          >
+            <Shield className="w-3.5 h-3.5 text-rose-600" />
+            <span>Security & Password</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1289,6 +1361,124 @@ export default function SettingsPage() {
                 <span>Save Theme Preference</span>
               </Button>
             </CardFooter>
+          </Card>
+        </TabsContent>
+
+        {/* 7. SECURITY & PASSWORD SETTINGS */}
+        <TabsContent value="security" className="space-y-4">
+          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 shadow-sm">
+            <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-800/80">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-rose-600" />
+                    System Admin Security & Password
+                  </CardTitle>
+                  <CardDescription className="text-xs text-slate-500 mt-0.5">
+                    Update administrative login credentials. Changes sync immediately to active authentication sessions.
+                  </CardDescription>
+                </div>
+                <Badge className="bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800 text-[10px] font-bold">
+                  Authentication Security
+                </Badge>
+              </div>
+            </CardHeader>
+
+            <form onSubmit={handlePasswordSubmit}>
+              <CardContent className="p-6 space-y-6">
+                {passwordFeedback && (
+                  <div
+                    className={cn(
+                      "p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 border shadow-sm",
+                      passwordFeedback.type === "success"
+                        ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                        : "bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300 border-red-300 dark:border-red-800"
+                    )}
+                  >
+                    {passwordFeedback.type === "success" ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                    )}
+                    <span>{passwordFeedback.message}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Current Password *</span>
+                    </Label>
+                    <Input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="rounded-xl h-10 text-xs bg-slate-50 dark:bg-slate-800/60"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Standard default for demo is <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded font-mono">admin123</code>
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-rose-500" />
+                      <span>New Password *</span>
+                    </Label>
+                    <Input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="rounded-xl h-10 text-xs bg-slate-50 dark:bg-slate-800/60"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Minimum 4 characters required
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Confirm New Password *</span>
+                    </Label>
+                    <Input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="rounded-xl h-10 text-xs bg-slate-50 dark:bg-slate-800/60"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Re-type your new password to verify
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+
+              <CardFooter className="p-6 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">
+                  Password changes take effect immediately on next login.
+                </span>
+                <Button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md gap-2 px-5 h-9"
+                >
+                  {passwordLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>Update Password</span>
+                </Button>
+              </CardFooter>
+            </form>
           </Card>
         </TabsContent>
       </Tabs>

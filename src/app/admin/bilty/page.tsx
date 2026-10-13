@@ -542,8 +542,8 @@ export default function BiltyPage() {
     }
   };
 
-  const removeLocalBilty = (id: string) => {
-    removeStoredBilty(id);
+  const removeLocalBilty = (id: string, recordToTrash?: any) => {
+    removeStoredBilty(id, recordToTrash);
   };
 
   const getDeletedBiltyIds = (): string[] => {
@@ -638,8 +638,8 @@ export default function BiltyPage() {
     if (!deletingBilty?.id) return;
     setDeleteLoading(true);
     try {
-      // Remove locally immediately
-      removeLocalBilty(deletingBilty.id);
+      // Remove locally immediately & move to Recycle Bin
+      removeLocalBilty(deletingBilty.id, deletingBilty);
       setConsignments((prev) => prev.filter((b) => b.id !== deletingBilty.id));
 
       // Background API call

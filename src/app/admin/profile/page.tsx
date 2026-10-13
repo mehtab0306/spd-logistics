@@ -418,6 +418,10 @@ function AdminProfileContent() {
         throw new Error(data.error || "Failed to change password.");
       }
 
+      if (typeof window !== "undefined") {
+        localStorage.setItem("spd_admin_password", newPassword);
+      }
+
       setPasswordFeedback({
         type: "success",
         message: data.message || "Password changed successfully.",

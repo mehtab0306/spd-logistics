@@ -77,6 +77,14 @@ function addDeletedId(deletedKey: string, id: string) {
   } catch {}
 }
 
+function removeDeletedId(deletedKey: string, id: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const current = getDeletedIds(deletedKey).filter((i) => String(i) !== String(id));
+    localStorage.setItem(deletedKey, JSON.stringify(current));
+  } catch {}
+}
+
 /**
  * Merges local records (placed at the top in order) with API/seed records,
  * deduplicating by `id` (and optional secondary unique key like `biltyNumber` or `challanNumber`).
@@ -169,8 +177,13 @@ export function saveStoredCustomer(customer: any): any[] {
   return list;
 }
 
-export function removeStoredCustomer(id: string): any[] {
-  const list = getStoredCustomers().filter((c) => String(c.id) !== String(id));
+export function removeStoredCustomer(id: string, recordToTrash?: any): any[] {
+  const current = getStoredCustomers();
+  const target = recordToTrash || current.find((c) => String(c.id) === String(id));
+  if (target) {
+    moveToTrash("customer", target);
+  }
+  const list = current.filter((c) => String(c.id) !== String(id));
   writeDualStorage(CUSTOMERS_KEY, LOCAL_CUSTOMERS_KEY, list);
   addDeletedId(DELETED_CUSTOMERS_KEY, id);
   return list;
@@ -231,8 +244,13 @@ export function saveStoredBilty(bilty: any): any[] {
   return list;
 }
 
-export function removeStoredBilty(id: string): any[] {
-  const list = getStoredBilties().filter((b) => String(b.id) !== String(id));
+export function removeStoredBilty(id: string, recordToTrash?: any): any[] {
+  const current = getStoredBilties();
+  const target = recordToTrash || current.find((b) => String(b.id) === String(id));
+  if (target) {
+    moveToTrash("bilty", target);
+  }
+  const list = current.filter((b) => String(b.id) !== String(id));
   writeDualStorage(BILTIES_KEY, LOCAL_BILTIES_KEY, list);
   addDeletedId(DELETED_BILTIES_KEY, id);
   return list;
@@ -360,8 +378,13 @@ export function saveStoredChallan(challan: any): any[] {
   return list;
 }
 
-export function removeStoredChallan(id: string): any[] {
-  const list = getStoredChallans().filter((c) => String(c.id) !== String(id));
+export function removeStoredChallan(id: string, recordToTrash?: any): any[] {
+  const current = getStoredChallans();
+  const target = recordToTrash || current.find((c) => String(c.id) === String(id));
+  if (target) {
+    moveToTrash("challan", target);
+  }
+  const list = current.filter((c) => String(c.id) !== String(id));
   writeDualStorage(CHALLANS_KEY, LOCAL_CHALLANS_KEY, list);
   addDeletedId(DELETED_CHALLANS_KEY, id);
   return list;
@@ -471,5 +494,198 @@ export async function syncWithServer(): Promise<void> {
   } finally {
     isSyncing = false;
   }
+}
+
+// ==========================================
+// 8. RECYCLE BIN / RECOVERY STORE (`spd_trash_items`)
+// ==========================================
+export const TRASH_KEY = "spd_trash_items";
+
+export interface TrashItem {
+  id: string;
+  type: "bilty" | "challan" | "customer";
+  title: string;
+  party: string;
+  deletedAt: string;
+  amount?: number;
+  data: any;
+}
+
+const DEFAULT_TRASH_SEEDS: TrashItem[] = [
+  {
+    id: "seed-del-bilty-1",
+    type: "bilty",
+    title: "Bilty # SPD-LHR-2026-0099",
+    party: "Lahore → Karachi (Mehran Auto Spares)",
+    deletedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    amount: 14500,
+    data: {
+      id: "seed-del-bilty-1",
+      biltyNumber: "SPD-LHR-2026-0099",
+      trackingId: "SPD-2026-00099",
+      origin: "Lahore",
+      destination: "Karachi",
+      senderName: "Mehran Auto Spares",
+      senderPhone: "0300-4411223",
+      receiverName: "Karachi Engine House",
+      receiverPhone: "0321-9988776",
+      packageDetails: "Auto Engine Parts & Gears",
+      quantity: 12,
+      weight: 420,
+      freight: 14500,
+      totalAmount: 14500,
+      remainingBalance: 0,
+      date: new Date(Date.now() - 3600000 * 24).toISOString(),
+    },
+  },
+  {
+    id: "seed-del-cust-1",
+    type: "customer",
+    title: "Bismillah Fabrics Pvt Ltd",
+    party: "Faisalabad • 0301-7788990",
+    deletedAt: new Date(Date.now() - 3600000 * 18).toISOString(),
+    amount: 0,
+    data: {
+      id: "seed-del-cust-1",
+      name: "Bismillah Fabrics Pvt Ltd",
+      companyName: "Bismillah Fabrics",
+      phone: "0301-7788990",
+      city: "Faisalabad",
+      address: "Cloth Market, Faisalabad",
+      balance: 0,
+    },
+  },
+];
+
+export function getTrashItems(): TrashItem[] {
+  if (typeof window === "undefined") return DEFAULT_TRASH_SEEDS;
+  const raw = localStorage.getItem(TRASH_KEY);
+  if (!raw) {
+    localStorage.setItem(TRASH_KEY, JSON.stringify(DEFAULT_TRASH_SEEDS));
+    return DEFAULT_TRASH_SEEDS;
+  }
+  const parsed = safeParseArray(raw);
+  return parsed.length > 0 ? parsed : [];
+}
+
+export function moveToTrash(type: "bilty" | "challan" | "customer", item: any): TrashItem[] {
+  if (!item || !item.id) return getTrashItems();
+  const trash = getTrashItems();
+  const id = String(item.id);
+
+  let title = "";
+  let party = "";
+  let amount = 0;
+
+  if (type === "bilty") {
+    title = `Bilty #${item.biltyNumber || item.trackingId || id}`;
+    party = `${item.origin || "Origin"} → ${item.destination || "Destination"} (${item.senderName || "Sender"})`;
+    amount = Number(item.freight || item.totalAmount || 0);
+  } else if (type === "challan") {
+    title = `Challan #${item.challanNumber || id}`;
+    party = `Truck: ${item.truckNumber || "N/A"} • Driver: ${item.driverName || "N/A"}`;
+    amount = Number(item.totalAmount || item.truckFreight || 0);
+  } else if (type === "customer") {
+    title = item.name || item.companyName || `Customer #${id}`;
+    party = `${item.city || "Pakistan"} • ${item.phone || item.mobile || "No phone"}`;
+    amount = Number(item.balance || item.outstandingBalance || 0);
+  }
+
+  const trashRecord: TrashItem = {
+    id,
+    type,
+    title,
+    party,
+    deletedAt: new Date().toISOString(),
+    amount,
+    data: {
+      ...item,
+      isDeleted: true,
+      deletedAt: new Date().toISOString(),
+    },
+  };
+
+  const existingIdx = trash.findIndex((t) => String(t.id) === id);
+  if (existingIdx >= 0) {
+    trash[existingIdx] = trashRecord;
+  } else {
+    trash.unshift(trashRecord);
+  }
+
+  if (typeof window === "undefined") return trash;
+  try {
+    localStorage.setItem(TRASH_KEY, JSON.stringify(trash));
+    window.dispatchEvent(new CustomEvent("spd-trash-updated", { detail: { action: "trash", item: trashRecord } }));
+  } catch {}
+
+  return trash;
+}
+
+export function restoreFromTrash(id: string): { success: boolean; item?: TrashItem; message: string } {
+  const trash = getTrashItems();
+  const found = trash.find((t) => String(t.id) === String(id));
+  if (!found) {
+    return { success: false, message: "Record not found in recycle bin." };
+  }
+
+  const cleanData = { ...found.data };
+  delete cleanData.isDeleted;
+  delete cleanData.deletedAt;
+
+  if (found.type === "bilty") {
+    removeDeletedId(DELETED_BILTIES_KEY, found.id);
+    saveStoredBilty(cleanData);
+  } else if (found.type === "customer") {
+    removeDeletedId(DELETED_CUSTOMERS_KEY, found.id);
+    saveStoredCustomer(cleanData);
+  } else if (found.type === "challan") {
+    removeDeletedId(DELETED_CHALLANS_KEY, found.id);
+    saveStoredChallan(cleanData);
+  }
+
+  const updatedTrash = trash.filter((t) => String(t.id) !== String(id));
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(TRASH_KEY, JSON.stringify(updatedTrash));
+      window.dispatchEvent(new CustomEvent("spd-trash-updated", { detail: { action: "restore", id } }));
+    } catch {}
+  }
+
+  return { success: true, item: found, message: `Successfully restored ${found.title} to active records.` };
+}
+
+export function permanentlyDeleteFromTrash(id: string): TrashItem[] {
+  const trash = getTrashItems();
+  const target = trash.find((t) => String(t.id) === String(id));
+  const updated = trash.filter((t) => String(t.id) !== String(id));
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(TRASH_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("spd-trash-updated", { detail: { action: "purge", id } }));
+    } catch {}
+
+    if (target) {
+      try {
+        if (target.type === "bilty") {
+          fetch(`/api/admin/bilty?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
+        } else if (target.type === "customer") {
+          fetch(`/api/admin/customers?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
+        } else if (target.type === "challan") {
+          fetch(`/api/admin/challan?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
+        }
+      } catch {}
+    }
+  }
+
+  return updated;
+}
+
+export function emptyTrash(): TrashItem[] {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(TRASH_KEY, JSON.stringify([]));
+    window.dispatchEvent(new CustomEvent("spd-trash-updated", { detail: { action: "empty" } }));
+  }
+  return [];
 }
 

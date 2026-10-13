@@ -193,20 +193,19 @@ export interface NavSection {
   items: NavItem[];
 }
 
-// Admin Sidebar Navigation
+// Admin Sidebar Navigation (Organized according to standard transport operations)
 export const ADMIN_NAV_SECTIONS: NavSection[] = [
   {
     title: 'OPERATIONS',
     items: [
       { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
-      { title: 'Customers', href: '/admin/customers', icon: 'Users' },
-      { title: 'Brokers', href: '/admin/brokers', icon: 'Handshake' },
-      { title: 'Accounts', href: '/admin/accounts', icon: 'BookOpen' },
-      { title: 'Cash Books', href: '/admin/cash-books', icon: 'Wallet' },
-      { title: 'Bilty / Consignments', href: '/admin/bilty', icon: 'Package' },
-      { title: 'Tracking', href: '/admin/tracking', icon: 'MapPin' },
-      { title: 'Vehicles', href: '/admin/vehicles', icon: 'Truck' },
-      { title: 'Drivers', href: '/admin/drivers', icon: 'UserCog' },
+    ],
+  },
+  {
+    title: 'BILTY / CONSIGNMENTS',
+    items: [
+      { title: 'New Booking', href: '/admin/bilty/new', icon: 'FilePlus2' },
+      { title: 'All Bookings', href: '/admin/bilty', icon: 'Package' },
     ],
   },
   {
@@ -219,18 +218,48 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'FINANCE & SYSTEM',
+    title: 'CASH BOOKS',
+    items: [
+      { title: 'Cash Books & Day Ledgers', href: '/admin/cash-books', icon: 'Wallet' },
+    ],
+  },
+  {
+    title: 'MASTER ACCOUNTS',
+    items: [
+      { title: 'Customers', href: '/admin/customers', icon: 'Users' },
+      { title: 'Brokers', href: '/admin/brokers', icon: 'Handshake' },
+      { title: 'Accounts Ledger', href: '/admin/accounts', icon: 'BookOpen' },
+    ],
+  },
+  {
+    title: 'FLEET MANAGEMENT',
+    items: [
+      { title: 'Vehicles', href: '/admin/vehicles', icon: 'Truck' },
+      { title: 'Drivers', href: '/admin/drivers', icon: 'UserCog' },
+    ],
+  },
+  {
+    title: 'TRACKING & RECOVERY',
+    items: [
+      { title: 'Tracking', href: '/admin/tracking', icon: 'MapPin' },
+      { title: 'Recycle Bin', href: '/admin/trash', icon: 'Trash2' },
+    ],
+  },
+  {
+    title: 'SETTINGS',
+    items: [
+      { title: 'Settings', href: '/admin/settings', icon: 'Settings' },
+    ],
+  },
+  {
+    title: 'FINANCE & REPORTS',
     items: [
       { title: 'Payments', href: '/admin/payments', icon: 'CreditCard' },
       { title: 'Receivables', href: '/admin/receivables', icon: 'ArrowDownLeft' },
       { title: 'Payables', href: '/admin/payables', icon: 'ArrowUpRight' },
       { title: 'Reports', href: '/admin/reports', icon: 'BarChart3' },
       { title: 'Notifications', href: '/admin/notifications', icon: 'Bell' },
-      { title: 'AI Assistant', href: '/admin/ai-assistant', icon: 'Bot' },
-      { title: 'Audio Log', href: '/admin/audio-log', icon: 'Mic' },
       { title: 'Users', href: '/admin/users', icon: 'Shield' },
-      { title: 'Settings', href: '/admin/settings', icon: 'Settings' },
-      { title: 'Audit Logs', href: '/admin/audit-logs', icon: 'ClipboardList' },
     ],
   },
 ];

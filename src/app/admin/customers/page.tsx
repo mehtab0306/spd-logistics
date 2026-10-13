@@ -174,8 +174,8 @@ export default function CustomersPage() {
     saveStoredCustomer(c);
   };
 
-  const removeLocalCustomer = (id: string) => {
-    removeStoredCustomer(id);
+  const removeLocalCustomer = (id: string, recordToTrash?: any) => {
+    removeStoredCustomer(id, recordToTrash);
   };
 
   const fetchCustomers = async () => {
@@ -449,8 +449,8 @@ export default function CustomersPage() {
     if (!deleteCustomer) return;
     setDeleting(true);
     try {
-      // Remove locally immediately
-      removeLocalCustomer(deleteCustomer.id);
+      // Remove locally immediately & move to Recycle Bin
+      removeLocalCustomer(deleteCustomer.id, deleteCustomer);
       setCustomers((prev) => prev.filter((c) => c.id !== deleteCustomer.id));
 
       if (viewCustomer?.id === deleteCustomer.id) {

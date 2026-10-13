@@ -127,9 +127,9 @@ export function PrintableChallan({ challan, onClose }: PrintableChallanProps) {
                   <th className="p-2 border-r border-slate-700">Bilty #</th>
                   <th className="p-2 border-r border-slate-700">Shipper / Sender</th>
                   <th className="p-2 border-r border-slate-700">Consignee / Receiver</th>
-                  <th className="p-2 border-r border-slate-700">Description</th>
+                  <th className="p-2 border-r border-slate-700">Goods / Description</th>
                   <th className="p-2 border-r border-slate-700 text-center">Qty</th>
-                  <th className="p-2 border-r border-slate-700 text-right">Weight</th>
+                  <th className="p-2 border-r border-slate-700 text-right">Weight & CBM</th>
                   <th className="p-2 border-r border-slate-700 text-right">Freight</th>
                   <th className="p-2 text-center">Status</th>
                 </tr>
@@ -149,12 +149,14 @@ export function PrintableChallan({ challan, onClose }: PrintableChallanProps) {
                       <span className="font-semibold block">{b.receiverName}</span>
                       <span className="text-[9px] text-slate-500 font-mono">{b.receiverPhone}</span>
                     </td>
-                    <td className="p-2 border-r border-slate-200 text-slate-700">
-                      {b.packageDetails || "General Cargo"}
+                    <td className="p-2 border-r border-slate-200 text-slate-700 font-medium">
+                      {b.packageDetails || b.description || "General Cargo"}
                     </td>
                     <td className="p-2 border-r border-slate-200 text-center font-bold">{b.quantity || 1}</td>
-                    <td className="p-2 border-r border-slate-200 text-right font-mono">
-                      {b.weight ? `${b.weight} kg` : "—"}
+                    <td className="p-2 border-r border-slate-200 text-right font-mono whitespace-nowrap">
+                      {b.weight
+                        ? `${b.weight} kg | ${b.cbm || b.volume || (Math.round((Number(b.weight) / 330) * 10) / 10).toFixed(1)} CBM`
+                        : "—"}
                     </td>
                     <td className="p-2 border-r border-slate-200 text-right font-bold font-mono">
                       {formatCurrency(b.freight || 0)}

@@ -28,11 +28,13 @@ import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import {
   getStoredChallans,
   saveStoredChallan,
+  removeStoredChallan,
   getDeletedChallanIds,
   saveStoredBilty,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
+import { Trash2 } from "lucide-react";
 
 export default function ChallanInTransitPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -128,6 +130,18 @@ export default function ChallanInTransitPage() {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleDeleteTrip = (c: any) => {
+    if (typeof window !== "undefined" && !window.confirm(`Are you sure you want to move Challan #${c.challanNumber || c.id} to Recycle Bin?`)) {
+      return;
+    }
+    removeStoredChallan(c.id, c);
+    setChallans((prev) => prev.filter((item) => item.id !== c.id));
+    setFeedback({
+      type: "success",
+      text: `Challan #${c.challanNumber || c.id} was moved to Recycle Bin (/admin/trash).`,
+    });
   };
 
   const filteredChallans = challans.filter((c) => {
@@ -451,6 +465,17 @@ export default function ChallanInTransitPage() {
                       <CheckCircle2 className="w-3.5 h-3.5" />
                     )}
                     <span>Record Arrival</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleDeleteTrip(c)}
+                    className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-slate-200 dark:border-slate-700 shrink-0"
+                    title="Move Trip to Recycle Bin"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </div>
