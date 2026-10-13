@@ -39,6 +39,7 @@ import {
 import { formatDateTime, formatDate, cn } from "@/lib/utils";
 import { SHIPMENT_STATUS_LABELS, SHIPMENT_STATUS_COLORS } from "@/lib/constants";
 import { buildWhatsAppUrl, getBiltyTrackingWhatsAppMessage } from "@/lib/whatsapp";
+import { getStoredBilties, saveStoredBilty } from "@/lib/local-persistence";
 
 const LOCAL_BILTIES_KEY = "spd_local_bilties";
 const LOCAL_TRACKING_KEY = "spd_local_tracking";
@@ -392,18 +393,15 @@ export default function TrackingPage() {
     // 2. Read and merge local bilties & tracking store (ensures newly created bilties and updated statuses show immediately)
     if (typeof window !== "undefined") {
       try {
-        const rawLocal = localStorage.getItem(LOCAL_BILTIES_KEY);
-        if (rawLocal) {
-          const localItems: any[] = JSON.parse(rawLocal);
-          for (const lb of localItems) {
-            const idx = items.findIndex(
-              (b) => b.id === lb.id || (lb.biltyNumber && b.biltyNumber === lb.biltyNumber)
-            );
-            if (idx >= 0) {
-              items[idx] = { ...items[idx], ...lb };
-            } else {
-              items.unshift(lb);
-            }
+        const localItems = getStoredBilties();
+        for (const lb of localItems) {
+          const idx = items.findIndex(
+            (b) => b.id === lb.id || (lb.biltyNumber && b.biltyNumber === lb.biltyNumber)
+          );
+          if (idx >= 0) {
+            items[idx] = { ...items[idx], ...lb };
+          } else {
+            items.unshift(lb);
           }
         }
 
@@ -475,38 +473,10 @@ export default function TrackingPage() {
       )
     );
 
-    // Save to spd_local_bilties & spd_local_tracking
+    // Save to spd_bilties, spd_local_bilties & spd_local_tracking
     if (typeof window !== "undefined") {
       try {
-        const rawBilties = localStorage.getItem(LOCAL_BILTIES_KEY);
-        const biltiesList: any[] = rawBilties ? JSON.parse(rawBilties) : [];
-        const bIdx = biltiesList.findIndex(
-          (b) =>
-            b.id === updatedConsignment.id ||
-            (b.biltyNumber && b.biltyNumber === updatedConsignment.biltyNumber) ||
-            (updatedConsignment.trackingId && b.trackingId === updatedConsignment.trackingId)
-        );
-        if (bIdx >= 0) {
-          biltiesList[bIdx] = { ...biltiesList[bIdx], ...updatedConsignment };
-        } else {
-          biltiesList.unshift(updatedConsignment);
-        }
-        localStorage.setItem(LOCAL_BILTIES_KEY, JSON.stringify(biltiesList));
-
-        const rawTracking = localStorage.getItem(LOCAL_TRACKING_KEY);
-        const trackingList: any[] = rawTracking ? JSON.parse(rawTracking) : [];
-        const tIdx = trackingList.findIndex(
-          (t) =>
-            t.id === updatedConsignment.id ||
-            (t.biltyNumber && t.biltyNumber === updatedConsignment.biltyNumber) ||
-            (updatedConsignment.trackingId && t.trackingId === updatedConsignment.trackingId)
-        );
-        if (tIdx >= 0) {
-          trackingList[tIdx] = { ...trackingList[tIdx], ...updatedConsignment };
-        } else {
-          trackingList.unshift(updatedConsignment);
-        }
-        localStorage.setItem(LOCAL_TRACKING_KEY, JSON.stringify(trackingList));
+        saveStoredBilty(updatedConsignment);
 
         // Auto update driver status to ON_TRIP if in transit
         if (updateStatus === "IN_TRANSIT" || updateStatus === "DISPATCHED") {
@@ -525,6 +495,7 @@ export default function TrackingPage() {
             });
             if (dUpdated) {
               localStorage.setItem("spd_local_drivers", JSON.stringify(drivers));
+              localStorage.setItem("spd_drivers", JSON.stringify(drivers));
             }
           }
         }

@@ -21,6 +21,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect, SearchableOption } from "@/components/shared/searchable-select";
+import {
+  getStoredDrivers,
+  saveStoredDriver,
+  getStoredVehicles,
+  getDeletedVehicleIds,
+  mergeLocalWithApi,
+} from "@/lib/local-persistence";
 
 export default function EditDriverPage() {
   const router = useRouter();
@@ -59,36 +66,27 @@ export default function EditDriverPage() {
         setLoading(true);
 
         // Fetch vehicles
+        let apiVehicles: any[] = [];
         try {
           const vRes = await fetch("/api/admin/vehicles");
           const vData = await vRes.json();
           if (vData.success && Array.isArray(vData.data)) {
-            setVehicles(vData.data);
-          } else {
-            const rawV = localStorage.getItem("spd_local_vehicles");
-            if (rawV) setVehicles(JSON.parse(rawV));
-          }
-        } catch {
-          const rawV = localStorage.getItem("spd_local_vehicles");
-          if (rawV) setVehicles(JSON.parse(rawV));
-        }
-
-        // Fetch driver
-        let found: any = null;
-        try {
-          const res = await fetch(`/api/admin/drivers?id=${driverId}`);
-          const data = await res.json();
-          if (data.success && data.data) {
-            found = data.data;
+            apiVehicles = vData.data;
           }
         } catch {}
+        setVehicles(mergeLocalWithApi(getStoredVehicles(), apiVehicles, getDeletedVehicleIds(), "registrationNumber"));
+
+        // Fetch driver from local storage first, then API
+        let found: any = getStoredDrivers().find((d: any) => String(d.id) === String(driverId));
 
         if (!found) {
-          const raw = localStorage.getItem("spd_local_drivers");
-          if (raw) {
-            const list = JSON.parse(raw);
-            found = list.find((d: any) => d.id === driverId);
-          }
+          try {
+            const res = await fetch(`/api/admin/drivers?id=${driverId}`);
+            const data = await res.json();
+            if (data.success && data.data) {
+              found = data.data;
+            }
+          } catch {}
         }
 
         if (found) {
@@ -146,8 +144,8 @@ export default function EditDriverPage() {
 
   const vehicleOptions: SearchableOption[] = vehicles.map((v) => ({
     value: v.id,
-    label: v.vehicleNumber,
-    subLabel: `${v.vehicleType || "Truck"} • ${v.make || ""} ${v.model || ""}`.trim(),
+    label: v.vehicleNumber || v.registrationNumber || "Truck",
+    subLabel: `${v.vehicleType || v.type || "Truck"} • ${v.make || ""} ${v.model || ""}`.trim(),
     meta: v,
   }));
 
@@ -158,11 +156,13 @@ export default function EditDriverPage() {
     setSuccessMessage("");
 
     if (!formData.name.trim()) {
+      console.log("[EditDriver] Validation warning: Driver name missing");
       setFormError("Driver name is required.");
       setSubmitting(false);
       return;
     }
     if (!formData.phone.trim()) {
+      console.log("[EditDriver] Validation warning: Contact phone missing");
       setFormError("Contact phone number is required.");
       setSubmitting(false);
       return;
@@ -178,8 +178,12 @@ export default function EditDriverPage() {
 
       const payload = {
         ...formData,
+        id: driverId,
         photo: finalPhotoUrl || null,
       };
+
+      // Immediately update localStorage
+      saveStoredDriver(payload);
 
       try {
         await fetch("/api/admin/drivers", {
@@ -189,22 +193,10 @@ export default function EditDriverPage() {
         });
       } catch {}
 
-      try {
-        const raw = localStorage.getItem("spd_local_drivers");
-        if (raw) {
-          const list = JSON.parse(raw);
-          const idx = list.findIndex((d: any) => d.id === driverId);
-          if (idx >= 0) {
-            list[idx] = { ...list[idx], ...payload };
-            localStorage.setItem("spd_local_drivers", JSON.stringify(list));
-          }
-        }
-      } catch {}
-
-      setSuccessMessage(`Driver ${formData.name} updated successfully!`);
+      setSuccessMessage(`Record updated successfully! Driver ${formData.name} saved.`);
       setTimeout(() => {
-        router.push("/admin/drivers");
-      }, 1000);
+        router.push(`/admin/drivers?highlight=${driverId}`);
+      }, 900);
     } catch (err: any) {
       setFormError(err.message || "Failed to update driver.");
     } finally {

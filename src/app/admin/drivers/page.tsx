@@ -41,6 +41,16 @@ import {
 import { formatDate, cn } from "@/lib/utils";
 import { buildWhatsAppUrl, getAdminToDriverWhatsAppMessage } from "@/lib/whatsapp";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
+import {
+  getStoredDrivers,
+  saveStoredDriver,
+  removeStoredDriver,
+  getDeletedDriverIds,
+  getStoredVehicles,
+  getDeletedVehicleIds,
+  getStoredBilties,
+  mergeLocalWithApi,
+} from "@/lib/local-persistence";
 
 export default function DriversPage() {
   const router = useRouter();
@@ -121,49 +131,12 @@ export default function DriversPage() {
     notes: "",
   });
 
-  const LOCAL_DRIVERS_KEY = "spd_local_drivers";
-  const LOCAL_DELETED_DRIVERS_KEY = "spd_local_deleted_drivers";
-
-  const getLocalDrivers = (): any[] => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(LOCAL_DRIVERS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  };
-
   const saveLocalDriver = (d: any) => {
-    if (typeof window === "undefined") return;
-    try {
-      const list = getLocalDrivers();
-      const idx = list.findIndex((x) => x.id === d.id);
-      if (idx >= 0) {
-        list[idx] = { ...list[idx], ...d };
-      } else {
-        list.unshift(d);
-      }
-      localStorage.setItem(LOCAL_DRIVERS_KEY, JSON.stringify(list));
-    } catch (err) {
-      console.warn("Save local driver error:", err);
-    }
+    saveStoredDriver(d);
   };
 
   const removeLocalDriver = (id: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      const list = getLocalDrivers().filter((x) => x.id !== id);
-      localStorage.setItem(LOCAL_DRIVERS_KEY, JSON.stringify(list));
-      const delRaw = localStorage.getItem(LOCAL_DELETED_DRIVERS_KEY);
-      const del = delRaw ? JSON.parse(delRaw) : [];
-      if (!del.includes(id)) {
-        del.push(id);
-        localStorage.setItem(LOCAL_DELETED_DRIVERS_KEY, JSON.stringify(del));
-      }
-    } catch (err) {
-      console.warn("Remove local driver error:", err);
-    }
+    removeStoredDriver(id);
   };
 
   const fetchDrivers = async () => {
@@ -173,46 +146,46 @@ export default function DriversPage() {
       if (search) params.append("search", search);
       if (statusFilter) params.append("status", statusFilter);
 
-      let list: any[] = [];
+      let apiList: any[] = [];
       try {
         const res = await fetch(`/api/admin/drivers?${params.toString()}`);
         const data = await res.json();
         if (data.success && Array.isArray(data.data)) {
-          list = data.data;
+          apiList = data.data;
         }
       } catch (err) {
         console.warn("API driver fetch error:", err);
       }
 
-      // Merge local drivers
-      const localList = getLocalDrivers();
-      for (const ld of localList) {
-        const idx = list.findIndex((x) => x.id === ld.id);
-        if (idx >= 0) {
-          list[idx] = { ...list[idx], ...ld };
-        } else {
-          list.unshift(ld);
-        }
+      // Merge local drivers (kept at top) with API seed drivers
+      const localList = getStoredDrivers();
+      const deletedIds = getDeletedDriverIds();
+      let list = mergeLocalWithApi(localList, apiList, deletedIds);
+
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        list = list.filter(
+          (d) =>
+            d.name?.toLowerCase().includes(q) ||
+            d.phone?.toLowerCase().includes(q) ||
+            d.cnic?.toLowerCase().includes(q) ||
+            d.licenseNumber?.toLowerCase().includes(q) ||
+            d.vehicleNumber?.toLowerCase().includes(q)
+        );
+      }
+      if (statusFilter) {
+        list = list.filter((d) => d.status === statusFilter);
       }
 
-      // Filter out deleted
-      const delRaw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_DELETED_DRIVERS_KEY) : null;
-      const deletedIds: string[] = delRaw ? JSON.parse(delRaw) : [];
-      list = list.filter((d) => !deletedIds.includes(d.id) && d.status !== "DELETED");
-
       // Dynamically link created and local bilties to drivers
-      let allBilties: any[] = [];
-      try {
-        const rawBilties = localStorage.getItem("spd_local_bilties");
-        if (rawBilties) allBilties = JSON.parse(rawBilties);
-      } catch {}
+      const allBilties = getStoredBilties();
 
       for (const d of list) {
         const dNameNorm = (d.name || "").toLowerCase().trim();
         const dVehNorm = (d.vehicleNumber || d.vehicles?.[0]?.vehicleNumber || "").toLowerCase().replace(/[\s-]/g, "");
 
         const matched = allBilties.filter((b: any) => {
-          const bDIdMatch = b.driverId && b.driverId === d.id;
+          const bDIdMatch = b.driverId && String(b.driverId) === String(d.id);
           const bDNameMatch = b.driverName && b.driverName.toLowerCase().trim() === dNameNorm;
           const bVNumNorm = (b.vehicleNumber || b.vehicle?.vehicleNumber || "").toLowerCase().replace(/[\s-]/g, "");
           const bVehMatch = dVehNorm && bVNumNorm && (bVNumNorm === dVehNorm || bVNumNorm.includes(dVehNorm));
@@ -234,49 +207,6 @@ export default function DriversPage() {
           }
         }
 
-        if (combined.length === 0) {
-          combined.push(
-            {
-              id: `bilty-d-${d.id || d.name}-1`,
-              biltyNumber: "SPD-LHR-2026-0092",
-              trackingId: "SPD-2026-100234",
-              date: new Date(Date.now() - 86400000 * 3).toISOString(),
-              senderName: "Premier Textiles Faisalabad",
-              receiverName: "Karachi Export Goods Hub",
-              origin: "Lahore Terminal",
-              destination: "Karachi Port",
-              weight: 18500,
-              quantity: 90,
-              totalAmount: 165000,
-              paidAmount: 165000,
-              remainingBalance: 0,
-              paymentStatus: "PAID",
-              shipmentStatus: "DELIVERED",
-              driverName: d.name,
-              vehicleNumber: d.vehicleNumber || "LES-8899",
-            },
-            {
-              id: `bilty-d-${d.id || d.name}-2`,
-              biltyNumber: "SPD-LHR-2026-0105",
-              trackingId: "SPD-2026-100235",
-              date: new Date(Date.now() - 86400000 * 1).toISOString(),
-              senderName: "National Cargo Traders",
-              receiverName: "Multan Dry Port Hub",
-              origin: "Lahore Terminal",
-              destination: "Multan Station",
-              weight: 14000,
-              quantity: 65,
-              totalAmount: 120000,
-              paidAmount: 60000,
-              remainingBalance: 60000,
-              paymentStatus: "PARTIAL",
-              shipmentStatus: "IN_TRANSIT",
-              driverName: d.name,
-              vehicleNumber: d.vehicleNumber || "LES-8899",
-            }
-          );
-        }
-
         d.consignments = combined;
         d._count = { consignments: combined.length };
       }
@@ -291,13 +221,18 @@ export default function DriversPage() {
 
   const fetchVehicles = async () => {
     try {
-      const res = await fetch("/api/admin/vehicles");
-      const data = await res.json();
-      if (data.success) {
-        setVehicles(data.data);
-      }
+      let apiList: any[] = [];
+      try {
+        const res = await fetch("/api/admin/vehicles");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          apiList = data.data;
+        }
+      } catch {}
+      setVehicles(mergeLocalWithApi(getStoredVehicles(), apiList, getDeletedVehicleIds(), "registrationNumber"));
     } catch (err) {
       console.error("Error fetching vehicles:", err);
+      setVehicles(getStoredVehicles());
     }
   };
 
@@ -509,23 +444,9 @@ export default function DriversPage() {
       );
 
       // 2. Persist in localStorage
-      if (typeof window !== "undefined") {
-        try {
-          const raw = localStorage.getItem(LOCAL_DRIVERS_KEY);
-          let localDrivers: any[] = raw ? JSON.parse(raw) : [];
-          const idx = localDrivers.findIndex((d) => d.id === driverId);
-          if (idx >= 0) {
-            localDrivers[idx] = { ...localDrivers[idx], status: newStatus };
-          } else {
-            const current = drivers.find((d) => d.id === driverId);
-            if (current) {
-              localDrivers.unshift({ ...current, status: newStatus });
-            }
-          }
-          localStorage.setItem(LOCAL_DRIVERS_KEY, JSON.stringify(localDrivers));
-        } catch (e) {
-          console.warn("Error updating local drivers:", e);
-        }
+      const current = drivers.find((d) => d.id === driverId);
+      if (current) {
+        saveStoredDriver({ ...current, status: newStatus });
       }
 
       // 3. Background API sync

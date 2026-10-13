@@ -11,6 +11,7 @@ import { Search, Package, Calendar, MapPin, Loader2, MessageSquare } from 'lucid
 import { formatDateTime, formatDate, cn } from '@/lib/utils';
 import { SHIPMENT_STATUS_LABELS } from '@/lib/constants';
 import { buildWhatsAppUrl, getBiltyTrackingWhatsAppMessage } from '@/lib/whatsapp';
+import { getStoredBilties } from '@/lib/local-persistence';
 
 function TrackingContent() {
   const searchParams = useSearchParams();
@@ -26,7 +27,17 @@ function TrackingContent() {
     if (typeof window === "undefined" || !searchQuery) return null;
     const clean = searchQuery.trim().toUpperCase();
     try {
-      // 1. Check spd_local_tracking
+      // 1. Check unified localStorage bilties (spd_bilties + spd_local_bilties)
+      const storedBilties = getStoredBilties();
+      const storedMatch = storedBilties.find(
+        (b: any) =>
+          b.trackingId?.trim().toUpperCase() === clean ||
+          b.biltyNumber?.trim().toUpperCase() === clean ||
+          b.id?.toString().trim().toUpperCase() === clean
+      );
+      if (storedMatch) return storedMatch;
+
+      // 2. Check spd_local_tracking
       const rawTracking = localStorage.getItem("spd_local_tracking");
       if (rawTracking) {
         const trackingList: any[] = JSON.parse(rawTracking);
@@ -35,22 +46,7 @@ function TrackingContent() {
               (b: any) =>
                 b.trackingId?.trim().toUpperCase() === clean ||
                 b.biltyNumber?.trim().toUpperCase() === clean ||
-                b.id?.trim().toUpperCase() === clean
-            )
-          : null;
-        if (match) return match;
-      }
-
-      // 2. Check spd_local_bilties
-      const rawBilties = localStorage.getItem("spd_local_bilties");
-      if (rawBilties) {
-        const biltiesList: any[] = JSON.parse(rawBilties);
-        const match = Array.isArray(biltiesList)
-          ? biltiesList.find(
-              (b: any) =>
-                b.trackingId?.trim().toUpperCase() === clean ||
-                b.biltyNumber?.trim().toUpperCase() === clean ||
-                b.id?.trim().toUpperCase() === clean
+                b.id?.toString().trim().toUpperCase() === clean
             )
           : null;
         if (match) return match;
@@ -252,9 +248,13 @@ function TrackingContent() {
       const res = await fetch(`/api/tracking/${encodeURIComponent(searchTerm)}`);
       if (res.ok) {
         const data = await res.json();
-        // If local match exists, merge or prioritize any updated local status
+        const isVirtualFallback = typeof data.id === "string" && data.id.startsWith("bilty-virt-");
         if (localMatch) {
-          setResult(formatConsignmentForDisplay({ ...data, ...localMatch }));
+          setResult(
+            formatConsignmentForDisplay(
+              isVirtualFallback ? localMatch : { ...data, ...localMatch }
+            )
+          );
         } else {
           setResult(data);
         }

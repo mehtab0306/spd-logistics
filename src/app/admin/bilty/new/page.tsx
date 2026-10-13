@@ -23,6 +23,16 @@ import {
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { formatCurrency } from "@/lib/utils";
+import {
+  getStoredCustomers,
+  getDeletedCustomerIds,
+  getStoredDrivers,
+  getDeletedDriverIds,
+  getStoredVehicles,
+  getDeletedVehicleIds,
+  saveStoredBilty,
+  mergeLocalWithApi,
+} from "@/lib/local-persistence";
 
 const PAKISTAN_CITIES = [
   "Lahore",
@@ -55,6 +65,7 @@ export default function NewBiltyPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
@@ -103,15 +114,16 @@ export default function NewBiltyPage() {
   const fetchPrerequisites = async () => {
     try {
       const [custRes, drvRes, vehRes] = await Promise.all([
-        fetch("/api/admin/customers"),
-        fetch("/api/admin/drivers"),
-        fetch("/api/admin/vehicles"),
+        fetch("/api/admin/customers").catch(() => null),
+        fetch("/api/admin/drivers").catch(() => null),
+        fetch("/api/admin/vehicles").catch(() => null),
       ]);
 
-      const parseJsonSafe = async (res: Response) => {
+      const parseJsonSafe = async (res: Response | null) => {
+        if (!res) return { data: [] };
         const ct = res.headers.get("content-type") || "";
         if (ct.includes("application/json")) {
-          return res.json();
+          return res.json().catch(() => ({ data: [] }));
         }
         return { data: [] };
       };
@@ -124,17 +136,24 @@ export default function NewBiltyPage() {
       const drvArr = Array.isArray(drvData.data) ? drvData.data : Array.isArray(drvData.drivers) ? drvData.drivers : [];
       const vehArr = Array.isArray(vehData.data) ? vehData.data : Array.isArray(vehData.vehicles) ? vehData.vehicles : [];
 
-      if (custArr.length > 0) setCustomers(custArr);
-      if (drvArr.length > 0) setDrivers(drvArr);
-      if (vehArr.length > 0) setVehicles(vehArr);
+      const mergedCustomers = mergeLocalWithApi(getStoredCustomers(), custArr, getDeletedCustomerIds());
+      const mergedDrivers = mergeLocalWithApi(getStoredDrivers(), drvArr, getDeletedDriverIds());
+      const mergedVehicles = mergeLocalWithApi(getStoredVehicles(), vehArr, getDeletedVehicleIds(), "registrationNumber");
+
+      setCustomers(mergedCustomers);
+      setDrivers(mergedDrivers);
+      setVehicles(mergedVehicles);
     } catch (err) {
       console.error("Error loading bilty prerequisites:", err);
+      setCustomers(getStoredCustomers());
+      setDrivers(getStoredDrivers());
+      setVehicles(getStoredVehicles());
     }
   };
 
   const handleCustomerSelect = (customerId: string, meta?: any) => {
     setFormData((prev) => {
-      const cust = meta || customers.find((c) => c.id === customerId);
+      const cust = meta || customers.find((c) => String(c.id) === String(customerId));
       if (cust) {
         return {
           ...prev,
@@ -150,19 +169,20 @@ export default function NewBiltyPage() {
 
   const handleVehicleSelect = (vehicleId: string, meta?: any) => {
     setFormData((prev) => {
-      const veh = meta || vehicles.find((v) => v.id === vehicleId);
+      const veh = meta || vehicles.find((v) => String(v.id) === String(vehicleId));
       if (veh) {
         let matchedDriverId = prev.driverId;
         let matchedDriverName = prev.driverName;
-        if (veh.driverId) {
-          matchedDriverId = veh.driverId;
-          const drv = drivers.find((d) => d.id === veh.driverId);
+        const assignedDrvId = veh.driverId || veh.assignedDriverId;
+        if (assignedDrvId) {
+          matchedDriverId = assignedDrvId;
+          const drv = drivers.find((d) => String(d.id) === String(assignedDrvId));
           if (drv) matchedDriverName = drv.name;
         }
         return {
           ...prev,
           vehicleId,
-          vehicleNumber: veh.vehicleNumber,
+          vehicleNumber: veh.vehicleNumber || veh.registrationNumber || "",
           driverId: matchedDriverId,
           driverName: matchedDriverName,
         };
@@ -173,7 +193,7 @@ export default function NewBiltyPage() {
 
   const handleDriverSelect = (driverId: string, meta?: any) => {
     setFormData((prev) => {
-      const drv = meta || drivers.find((d) => d.id === driverId);
+      const drv = meta || drivers.find((d) => String(d.id) === String(driverId));
       return {
         ...prev,
         driverId,
@@ -194,59 +214,130 @@ export default function NewBiltyPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
+    setSuccessMessage("");
 
     if (!formData.senderName.trim()) {
+      console.log("[NewBilty] Validation warning: Sender name is missing");
       setFormError("Sender name or registered customer selection is required.");
       return;
     }
     if (!formData.receiverName.trim()) {
+      console.log("[NewBilty] Validation warning: Receiver name is missing");
       setFormError("Receiver / Consignee name is required.");
       return;
     }
     if (!formData.receiverPhone.trim()) {
+      console.log("[NewBilty] Validation warning: Receiver phone is missing");
       setFormError("Receiver mobile phone number is required.");
       return;
     }
 
     setSubmitting(true);
     try {
-      const payload = {
-        ...formData,
+      const uniqueId = Date.now().toString();
+      const timestamp = new Date().toISOString();
+      const year = new Date().getFullYear();
+      const hubCode = formData.warehouse === "KARACHI" ? "KHI" : "LHR";
+
+      const finalBiltyNumber =
+        formData.biltyNumber.trim().toUpperCase() ||
+        `SPD-${hubCode}-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const finalTrackingId =
+        formData.trackingId.trim().toUpperCase() ||
+        `SPD-${year}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      const paymentStatus =
+        remainingBalance <= 0 && totalAmount > 0
+          ? "PAID"
+          : paidNum > 0
+          ? "PARTIAL"
+          : "UNPAID";
+
+      const selectedCust = customers.find((c) => String(c.id) === String(formData.customerId));
+      const selectedDrv = drivers.find((d) => String(d.id) === String(formData.driverId));
+      const selectedVeh = vehicles.find((v) => String(v.id) === String(formData.vehicleId));
+
+      const newBiltyRecord = {
+        id: uniqueId,
+        biltyNumber: finalBiltyNumber,
+        trackingId: finalTrackingId,
+        date: formData.date ? new Date(formData.date).toISOString() : timestamp,
+        warehouse: formData.warehouse || "LAHORE",
+        origin: formData.origin || "Lahore",
+        destination: formData.destination || "Karachi",
+        customerId: formData.customerId || null,
+        customer: selectedCust ? { id: selectedCust.id, name: selectedCust.name, companyName: selectedCust.companyName } : null,
+        senderName: formData.senderName.trim(),
+        senderPhone: formData.senderPhone.trim() || "0300-0000000",
+        senderAddress: formData.senderAddress.trim() || `${formData.origin}, Pakistan`,
+        receiverName: formData.receiverName.trim(),
+        receiverPhone: formData.receiverPhone.trim(),
+        receiverAddress: formData.receiverAddress.trim() || `${formData.destination}, Pakistan`,
+        vehicleId: formData.vehicleId || null,
+        vehicleNumber: formData.vehicleNumber || selectedVeh?.registrationNumber || selectedVeh?.vehicleNumber || null,
+        vehicle: selectedVeh
+          ? {
+              id: selectedVeh.id,
+              registrationNumber: selectedVeh.registrationNumber || selectedVeh.vehicleNumber,
+              vehicleNumber: selectedVeh.vehicleNumber || selectedVeh.registrationNumber,
+              type: selectedVeh.type || selectedVeh.make,
+            }
+          : null,
+        driverId: formData.driverId || null,
+        driverName: formData.driverName || selectedDrv?.name || null,
+        driver: selectedDrv ? { id: selectedDrv.id, name: selectedDrv.name, phone: selectedDrv.phone } : null,
+        packageDetails: formData.packageDetails.trim() || "General Commercial Cargo",
         quantity: parseInt(formData.quantity) || 1,
-        weight: formData.weight ? parseFloat(formData.weight) : null,
+        weight: formData.weight ? parseFloat(formData.weight) : 100,
         cpm: formData.cpm ? parseFloat(formData.cpm) : null,
         freight: freightNum,
         additionalCharges: addlNum,
         discount: discountNum,
+        totalAmount,
         paidAmount: paidNum,
+        remainingBalance,
+        paymentStatus,
+        shipmentStatus: formData.shipmentStatus || "BOOKED",
+        challanId: null,
+        notes: formData.notes.trim() || null,
+        isLocal: true,
+        trackingEvents: [
+          {
+            id: `evt-${uniqueId}`,
+            status: formData.shipmentStatus || "BOOKED",
+            location: `${formData.origin} Hub`,
+            notes: `Consignment booked at ${formData.origin} Terminal (${finalBiltyNumber}).`,
+            timestamp,
+          },
+        ],
+        createdAt: timestamp,
+        updatedAt: timestamp,
       };
 
-      const res = await fetch("/api/admin/bilty", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      // 1. Immediately persist to localStorage (spd_bilties, spd_local_bilties, spd_local_tracking)
+      saveStoredBilty(newBiltyRecord);
 
-      const contentType = res.headers.get("content-type") || "";
-      let result: any = null;
-
-      if (contentType.includes("application/json")) {
-        result = await res.json();
-      } else {
-        const text = await res.text();
-        throw new Error(
-          res.ok
-            ? "Server returned unexpected response format"
-            : `Server returned HTTP ${res.status}: ${text.slice(0, 100)}`
-        );
+      // 2. Try sending to backend API wrapped in try/catch (do NOT rollback or throw on serverless failure)
+      try {
+        await fetch("/api/admin/bilty", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...newBiltyRecord,
+            biltyNumber: finalBiltyNumber,
+            trackingId: finalTrackingId,
+          }),
+        });
+      } catch (apiErr) {
+        console.warn("Serverless API fallback active — bilty saved in localStorage:", apiErr);
       }
 
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to create Bilty consignment");
-      }
-
-      router.push("/admin/bilty");
+      setSuccessMessage(`Record created successfully! Bilty #${finalBiltyNumber} booked.`);
+      setTimeout(() => {
+        router.push(`/admin/bilty?highlight=${uniqueId}`);
+      }, 900);
     } catch (err: any) {
+      console.error("[NewBilty] Error:", err);
       setFormError(err.message || "Failed to create Bilty");
     } finally {
       setSubmitting(false);
@@ -262,15 +353,15 @@ export default function NewBiltyPage() {
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
-    label: `${v.vehicleNumber} (${v.type || "Truck"})`,
-    subLabel: `Capacity: ${v.capacity || "N/A"} Tons • Status: ${v.status}`,
+    label: `${v.vehicleNumber || v.registrationNumber} (${v.type || v.make || "Truck"})`,
+    subLabel: `Capacity: ${v.capacity || "N/A"} Tons • Status: ${v.status || "AVAILABLE"}`,
     meta: v,
   }));
 
   const driverOptions = drivers.map((d) => ({
     value: d.id,
     label: `${d.name} (${d.phone || d.contact || "No phone"})`,
-    subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status}`,
+    subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status || "AVAILABLE"}`,
     meta: d,
   }));
 
@@ -328,7 +419,14 @@ export default function NewBiltyPage() {
         </div>
       )}
 
-      <form id="new-bilty-form" onSubmit={handleSubmit} className="space-y-6">
+      {successMessage && (
+        <div className="p-4 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3 animate-in fade-in">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      <form id="new-bilty-form" onSubmit={handleSubmit} noValidate className="space-y-6">
         {/* Section 1: Route & Warehouse Identification */}
         <FormSectionCard
           title="Consignment Route & Origin Warehouse"

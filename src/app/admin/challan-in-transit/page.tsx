@@ -25,6 +25,13 @@ import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { PrintableChallan } from "@/components/challan/printable-challan";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
+import {
+  getStoredChallans,
+  saveStoredChallan,
+  getDeletedChallanIds,
+  saveStoredBilty,
+  mergeLocalWithApi,
+} from "@/lib/local-persistence";
 
 export default function ChallanInTransitPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -44,17 +51,33 @@ export default function ChallanInTransitPage() {
   const fetchChallans = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/challan");
-      const data = await res.json();
-      if (data.challans) {
-        // Filter in transit or dispatched
-        const active = data.challans.filter(
-          (c: any) => c.status === "IN_TRANSIT" || c.status === "DISPATCHED"
-        );
-        setChallans(active);
-      }
+      let apiChallans: any[] = [];
+      try {
+        const res = await fetch("/api/admin/challan");
+        const data = await res.json();
+        apiChallans = Array.isArray(data.data)
+          ? data.data
+          : Array.isArray(data.challans)
+          ? data.challans
+          : [];
+      } catch {}
+
+      const merged = mergeLocalWithApi(
+        getStoredChallans(),
+        apiChallans,
+        getDeletedChallanIds(),
+        "challanNumber"
+      );
+      const active = merged.filter(
+        (c: any) => c.status === "IN_TRANSIT" || c.status === "DISPATCHED"
+      );
+      setChallans(active);
     } catch (err) {
       console.error("Error fetching challans in transit:", err);
+      const active = getStoredChallans().filter(
+        (c: any) => c.status === "IN_TRANSIT" || c.status === "DISPATCHED"
+      );
+      setChallans(active);
     } finally {
       setLoading(false);
     }
@@ -63,26 +86,42 @@ export default function ChallanInTransitPage() {
   const handleMarkArrived = async (challan: any) => {
     setActionLoading(challan.id);
     try {
-      const res = await fetch("/api/admin/challan", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: challan.id,
-          status: "ARRIVED",
-          arrivalDate: new Date().toISOString(),
-        }),
-      });
+      const arrivalDate = new Date().toISOString();
+      const updatedChallan = {
+        ...challan,
+        status: "ARRIVED",
+        arrivalDate,
+      };
 
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to update arrival");
+      // Immediately update in localStorage
+      saveStoredChallan(updatedChallan);
+      if (Array.isArray(challan.consignments)) {
+        for (const b of challan.consignments) {
+          saveStoredBilty({
+            ...b,
+            shipmentStatus: "ARRIVED_AT_DESTINATION",
+          });
+        }
       }
+
+      setChallans((prev) => prev.filter((c) => String(c.id) !== String(challan.id)));
+
+      try {
+        await fetch("/api/admin/challan", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: challan.id,
+            status: "ARRIVED",
+            arrivalDate,
+          }),
+        });
+      } catch {}
 
       setFeedback({
         type: "success",
         text: `Challan ${challan.challanNumber} marked as Arrived at ${challan.destination}!`,
       });
-      fetchChallans();
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Failed to update arrival status" });
     } finally {

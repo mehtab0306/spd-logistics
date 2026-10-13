@@ -34,6 +34,16 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
+import {
+  getStoredVehicles,
+  saveStoredVehicle,
+  removeStoredVehicle,
+  getDeletedVehicleIds as getStoredDeletedVehicleIds,
+  getStoredDrivers,
+  getDeletedDriverIds,
+  getStoredBilties,
+  mergeLocalWithApi,
+} from "@/lib/local-persistence";
 
 export default function VehiclesPage() {
   const router = useRouter();
@@ -72,57 +82,21 @@ export default function VehiclesPage() {
     notes: "",
   });
 
-  const LOCAL_VEHICLES_KEY = "spd_local_vehicles";
-  const LOCAL_DELETED_VEHICLES_KEY = "spd_local_deleted_vehicles";
-
   const getLocalVehicles = (): any[] => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(LOCAL_VEHICLES_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
+    return getStoredVehicles();
   };
 
   const getDeletedVehicleIds = (): string[] => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(LOCAL_DELETED_VEHICLES_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
+    return getStoredDeletedVehicleIds();
   };
 
   const saveLocalVehicle = (v: any) => {
-    if (typeof window === "undefined") return;
-    try {
-      const list = getLocalVehicles();
-      const idx = list.findIndex((x) => x.id === v.id || x.vehicleNumber === v.vehicleNumber);
-      if (idx >= 0) {
-        list[idx] = { ...list[idx], ...v };
-      } else {
-        list.unshift(v);
-      }
-      localStorage.setItem(LOCAL_VEHICLES_KEY, JSON.stringify(list));
-    } catch (err) {
-      console.warn("Save local vehicle error:", err);
-    }
+    saveStoredVehicle(v);
   };
 
   const removeLocalVehicle = (id: string, vehicleNumber?: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      const list = getLocalVehicles().filter((x) => x.id !== id && (!vehicleNumber || x.vehicleNumber !== vehicleNumber));
-      localStorage.setItem(LOCAL_VEHICLES_KEY, JSON.stringify(list));
-      const del = getDeletedVehicleIds();
-      if (id && !del.includes(id)) del.push(id);
-      if (vehicleNumber && !del.includes(vehicleNumber)) del.push(vehicleNumber);
-      localStorage.setItem(LOCAL_DELETED_VEHICLES_KEY, JSON.stringify(del));
-    } catch (err) {
-      console.warn("Remove local vehicle error:", err);
-    }
+    removeStoredVehicle(id);
+    if (vehicleNumber) removeStoredVehicle(vehicleNumber);
   };
 
   const fetchVehicles = async () => {
@@ -132,46 +106,50 @@ export default function VehiclesPage() {
       if (search) params.append("search", search);
       if (statusFilter) params.append("status", statusFilter);
 
-      let list: any[] = [];
+      let apiList: any[] = [];
       try {
         const res = await fetch(`/api/admin/vehicles?${params.toString()}`);
         const data = await res.json();
         if (data.success && Array.isArray(data.data)) {
-          list = data.data;
+          apiList = data.data;
         }
       } catch (err) {
         console.warn("API vehicle fetch error:", err);
       }
 
-      // Merge local vehicles
+      // Merge local vehicles (kept at top) with API seed vehicles
       const localList = getLocalVehicles();
-      for (const lv of localList) {
-        const idx = list.findIndex((x) => x.id === lv.id || x.vehicleNumber === lv.vehicleNumber);
-        if (idx >= 0) {
-          list[idx] = { ...list[idx], ...lv };
-        } else {
-          list.unshift(lv);
-        }
+      const deletedIds = getDeletedVehicleIds();
+      let list = mergeLocalWithApi(localList, apiList, deletedIds, "vehicleNumber").filter(
+        (v) => !deletedIds.includes(v.vehicleNumber)
+      );
+
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        list = list.filter(
+          (v) =>
+            v.vehicleNumber?.toLowerCase().includes(q) ||
+            v.registrationNumber?.toLowerCase().includes(q) ||
+            v.make?.toLowerCase().includes(q) ||
+            v.model?.toLowerCase().includes(q) ||
+            v.ownerName?.toLowerCase().includes(q) ||
+            v.driver?.name?.toLowerCase().includes(q)
+        );
+      }
+      if (statusFilter) {
+        list = list.filter((v) => v.status === statusFilter);
       }
 
-      // Filter out deleted vehicles
-      const deletedIds = getDeletedVehicleIds();
-      list = list.filter((v) => !deletedIds.includes(v.id) && !deletedIds.includes(v.vehicleNumber));
-
       // Dynamically link created and local bilties to vehicles
-      let allBilties: any[] = [];
-      try {
-        const rawBilties = localStorage.getItem("spd_local_bilties");
-        if (rawBilties) allBilties = JSON.parse(rawBilties);
-      } catch {}
+      const allBilties = getStoredBilties();
 
       for (const v of list) {
-        const vNumNorm = (v.vehicleNumber || "").toLowerCase().replace(/[\s-]/g, "");
+        const vNumNorm = (v.vehicleNumber || v.registrationNumber || "").toLowerCase().replace(/[\s-]/g, "");
         const matched = allBilties.filter((b: any) => {
           const bVNumNorm = (b.vehicleNumber || b.vehicle?.vehicleNumber || "").toLowerCase().replace(/[\s-]/g, "");
-          const matchVNum = bVNumNorm && (bVNumNorm === vNumNorm || bVNumNorm.includes(vNumNorm) || vNumNorm.includes(bVNumNorm));
-          const matchVId = b.vehicleId && b.vehicleId === v.id;
-          const matchDriver = (v.driverId && b.driverId === v.driverId) || (v.driver?.name && b.driverName?.toLowerCase() === v.driver.name.toLowerCase());
+          const matchVNum = bVNumNorm && vNumNorm && (bVNumNorm === vNumNorm || bVNumNorm.includes(vNumNorm) || vNumNorm.includes(bVNumNorm));
+          const matchVId = b.vehicleId && String(b.vehicleId) === String(v.id);
+          const matchDriver = (v.driverId && String(b.driverId) === String(v.driverId)) || (v.driver?.name && b.driverName?.toLowerCase() === v.driver.name.toLowerCase());
           return matchVNum || matchVId || matchDriver;
         });
 
@@ -181,50 +159,6 @@ export default function VehiclesPage() {
           if (!combined.some((c: any) => c.id === m.id || c.biltyNumber === m.biltyNumber)) {
             combined.unshift(m);
           }
-        }
-
-        // If no consignments exist yet, provide realistic active consignments for the vehicle
-        if (combined.length === 0) {
-          combined.push(
-            {
-              id: `bilty-${v.vehicleNumber}-1`,
-              biltyNumber: `SPD-${v.currentLocation?.toUpperCase().includes("KARACHI") ? "KHI" : "LHR"}-2026-0045`,
-              trackingId: `SPD-2026-100234`,
-              date: new Date(Date.now() - 86400000 * 2).toISOString(),
-              senderName: "Al-Rahman Textiles Ltd",
-              receiverName: "National Logistics Terminal",
-              origin: v.route?.split("-")[0]?.trim() || "Lahore Hub",
-              destination: v.route?.split("-")[1]?.trim() || "Karachi Hub",
-              weight: (parseInt(v.capacity || "20") * 750) || 15000,
-              quantity: 85,
-              totalAmount: 185000,
-              paidAmount: 185000,
-              remainingBalance: 0,
-              paymentStatus: "PAID",
-              shipmentStatus: "DELIVERED",
-              driverName: v.driver?.name || "Assigned Fleet Driver",
-              vehicleNumber: v.vehicleNumber,
-            },
-            {
-              id: `bilty-${v.vehicleNumber}-2`,
-              biltyNumber: `SPD-${v.currentLocation?.toUpperCase().includes("KARACHI") ? "KHI" : "LHR"}-2026-0078`,
-              trackingId: `SPD-2026-100235`,
-              date: new Date(Date.now() - 86400000 * 4).toISOString(),
-              senderName: "Gourmet Foods Distribution",
-              receiverName: "Metro Commercial Center",
-              origin: v.route?.split("-")[0]?.trim() || "Lahore Hub",
-              destination: v.route?.split("-")[1]?.trim() || "Karachi Hub",
-              weight: (parseInt(v.capacity || "20") * 600) || 12000,
-              quantity: 120,
-              totalAmount: 145000,
-              paidAmount: 80000,
-              remainingBalance: 65000,
-              paymentStatus: "PARTIAL",
-              shipmentStatus: "IN_TRANSIT",
-              driverName: v.driver?.name || "Assigned Fleet Driver",
-              vehicleNumber: v.vehicleNumber,
-            }
-          );
         }
 
         v.consignments = combined;
@@ -270,13 +204,18 @@ export default function VehiclesPage() {
 
   const fetchDrivers = async () => {
     try {
-      const res = await fetch("/api/admin/drivers");
-      const data = await res.json();
-      if (data.success) {
-        setDrivers(data.data);
-      }
+      let apiDrivers: any[] = [];
+      try {
+        const res = await fetch("/api/admin/drivers");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          apiDrivers = data.data;
+        }
+      } catch {}
+      setDrivers(mergeLocalWithApi(getStoredDrivers(), apiDrivers, getDeletedDriverIds()));
     } catch (err) {
       console.error("Error fetching drivers:", err);
+      setDrivers(getStoredDrivers());
     }
   };
 

@@ -16,6 +16,17 @@ import {
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { formatCurrency } from "@/lib/utils";
+import {
+  getStoredBilties,
+  saveStoredBilty,
+  getStoredCustomers,
+  getDeletedCustomerIds,
+  getStoredDrivers,
+  getDeletedDriverIds,
+  getStoredVehicles,
+  getDeletedVehicleIds,
+  mergeLocalWithApi,
+} from "@/lib/local-persistence";
 
 const PAKISTAN_CITIES = [
   "Lahore",
@@ -103,67 +114,76 @@ export default function EditBiltyPage() {
   const fetchPrerequisites = async () => {
     try {
       const [custRes, drvRes, vehRes] = await Promise.all([
-        fetch("/api/admin/customers"),
-        fetch("/api/admin/drivers"),
-        fetch("/api/admin/vehicles"),
+        fetch("/api/admin/customers").catch(() => null),
+        fetch("/api/admin/drivers").catch(() => null),
+        fetch("/api/admin/vehicles").catch(() => null),
       ]);
 
-      const custData = await custRes.json();
-      const drvData = await drvRes.json();
-      const vehData = await vehRes.json();
+      const custData = custRes ? await custRes.json().catch(() => ({})) : {};
+      const drvData = drvRes ? await drvRes.json().catch(() => ({})) : {};
+      const vehData = vehRes ? await vehRes.json().catch(() => ({})) : {};
 
-      if (custData.customers) setCustomers(custData.customers);
-      if (drvData.drivers) setDrivers(drvData.drivers);
-      if (vehData.vehicles) setVehicles(vehData.vehicles);
+      const custArr = Array.isArray(custData.data) ? custData.data : Array.isArray(custData.customers) ? custData.customers : [];
+      const drvArr = Array.isArray(drvData.data) ? drvData.data : Array.isArray(drvData.drivers) ? drvData.drivers : [];
+      const vehArr = Array.isArray(vehData.data) ? vehData.data : Array.isArray(vehData.vehicles) ? vehData.vehicles : [];
+
+      setCustomers(mergeLocalWithApi(getStoredCustomers(), custArr, getDeletedCustomerIds()));
+      setDrivers(mergeLocalWithApi(getStoredDrivers(), drvArr, getDeletedDriverIds()));
+      setVehicles(mergeLocalWithApi(getStoredVehicles(), vehArr, getDeletedVehicleIds(), "registrationNumber"));
     } catch (err) {
       console.error("Error loading prerequisites:", err);
+      setCustomers(getStoredCustomers());
+      setDrivers(getStoredDrivers());
+      setVehicles(getStoredVehicles());
     }
   };
 
   const fetchBilty = async () => {
     try {
-      const res = await fetch("/api/admin/bilty");
-      const data = await res.json();
-      if (data.consignments) {
-        const found = data.consignments.find((b: any) => b.id === biltyId);
-        if (found) {
-          setFormData({
-            id: found.id,
-            biltyNumber: found.biltyNumber || "",
-            trackingId: found.trackingId || "",
-            date: found.date ? found.date.split("T")[0] : new Date().toISOString().slice(0, 10),
-            warehouse: found.warehouse || "LAHORE",
-            origin: found.origin || "Lahore",
-            destination: found.destination || "Karachi",
+      let found: any = getStoredBilties().find((b: any) => String(b.id) === String(biltyId));
+      if (!found) {
+        const res = await fetch("/api/admin/bilty");
+        const data = await res.json();
+        const arr = Array.isArray(data.data) ? data.data : Array.isArray(data.consignments) ? data.consignments : [];
+        found = arr.find((b: any) => String(b.id) === String(biltyId));
+      }
+      if (found) {
+        setFormData({
+          id: found.id,
+          biltyNumber: found.biltyNumber || "",
+          trackingId: found.trackingId || "",
+          date: found.date ? found.date.split("T")[0] : new Date().toISOString().slice(0, 10),
+          warehouse: found.warehouse || "LAHORE",
+          origin: found.origin || "Lahore",
+          destination: found.destination || "Karachi",
 
-            customerId: found.customerId || "",
-            senderName: found.senderName || "",
-            senderPhone: found.senderPhone || "",
-            senderAddress: found.senderAddress || "",
+          customerId: found.customerId || "",
+          senderName: found.senderName || "",
+          senderPhone: found.senderPhone || "",
+          senderAddress: found.senderAddress || "",
 
-            receiverName: found.receiverName || "",
-            receiverPhone: found.receiverPhone || "",
-            receiverAddress: found.receiverAddress || "",
+          receiverName: found.receiverName || "",
+          receiverPhone: found.receiverPhone || "",
+          receiverAddress: found.receiverAddress || "",
 
-            vehicleId: found.vehicleId || "",
-            vehicleNumber: found.vehicleNumber || (found.vehicle ? found.vehicle.vehicleNumber : ""),
-            driverId: found.driverId || "",
-            driverName: found.driverName || (found.driver ? found.driver.name : ""),
+          vehicleId: found.vehicleId || "",
+          vehicleNumber: found.vehicleNumber || (found.vehicle ? found.vehicle.vehicleNumber || found.vehicle.registrationNumber : ""),
+          driverId: found.driverId || "",
+          driverName: found.driverName || (found.driver ? found.driver.name : ""),
 
-            packageDetails: found.packageDetails || "",
-            quantity: found.quantity ? String(found.quantity) : "1",
-            weight: found.weight ? String(found.weight) : "",
-            cpm: found.cpm ? String(found.cpm) : "",
+          packageDetails: found.packageDetails || "",
+          quantity: found.quantity ? String(found.quantity) : "1",
+          weight: found.weight ? String(found.weight) : "",
+          cpm: found.cpm ? String(found.cpm) : "",
 
-            freight: found.freight ? String(found.freight) : "0",
-            additionalCharges: found.additionalCharges ? String(found.additionalCharges) : "0",
-            discount: found.discount ? String(found.discount) : "0",
-            paidAmount: found.paidAmount ? String(found.paidAmount) : "0",
+          freight: found.freight ? String(found.freight) : "0",
+          additionalCharges: found.additionalCharges ? String(found.additionalCharges) : "0",
+          discount: found.discount ? String(found.discount) : "0",
+          paidAmount: found.paidAmount ? String(found.paidAmount) : "0",
 
-            shipmentStatus: found.shipmentStatus || "BOOKED",
-            notes: found.notes || "",
-          });
-        }
+          shipmentStatus: found.shipmentStatus || "BOOKED",
+          notes: found.notes || "",
+        });
       }
     } catch (err) {
       console.error("Error fetching bilty:", err);
@@ -173,7 +193,7 @@ export default function EditBiltyPage() {
 
   const handleCustomerSelect = (customerId: string, meta?: any) => {
     setFormData((prev) => {
-      const cust = meta || customers.find((c) => c.id === customerId);
+      const cust = meta || customers.find((c) => String(c.id) === String(customerId));
       if (cust) {
         return {
           ...prev,
@@ -189,19 +209,20 @@ export default function EditBiltyPage() {
 
   const handleVehicleSelect = (vehicleId: string, meta?: any) => {
     setFormData((prev) => {
-      const veh = meta || vehicles.find((v) => v.id === vehicleId);
+      const veh = meta || vehicles.find((v) => String(v.id) === String(vehicleId));
       if (veh) {
         let matchedDriverId = prev.driverId;
         let matchedDriverName = prev.driverName;
-        if (veh.driverId) {
-          matchedDriverId = veh.driverId;
-          const drv = drivers.find((d) => d.id === veh.driverId);
+        const assignedDrvId = veh.driverId || veh.assignedDriverId;
+        if (assignedDrvId) {
+          matchedDriverId = assignedDrvId;
+          const drv = drivers.find((d) => String(d.id) === String(assignedDrvId));
           if (drv) matchedDriverName = drv.name;
         }
         return {
           ...prev,
           vehicleId,
-          vehicleNumber: veh.vehicleNumber,
+          vehicleNumber: veh.vehicleNumber || veh.registrationNumber || "",
           driverId: matchedDriverId,
           driverName: matchedDriverName,
         };
@@ -212,7 +233,7 @@ export default function EditBiltyPage() {
 
   const handleDriverSelect = (driverId: string, meta?: any) => {
     setFormData((prev) => {
-      const drv = meta || drivers.find((d) => d.id === driverId);
+      const drv = meta || drivers.find((d) => String(d.id) === String(driverId));
       return {
         ...prev,
         driverId,
@@ -235,20 +256,30 @@ export default function EditBiltyPage() {
     setFormError("");
 
     if (!formData.senderName.trim()) {
+      console.log("[EditBilty] Validation warning: Sender name is missing");
       setFormError("Sender name is required.");
       return;
     }
     if (!formData.receiverName.trim()) {
+      console.log("[EditBilty] Validation warning: Receiver name is missing");
       setFormError("Receiver name is required.");
       return;
     }
     if (!formData.receiverPhone.trim()) {
+      console.log("[EditBilty] Validation warning: Receiver phone is missing");
       setFormError("Receiver phone is required.");
       return;
     }
 
     setSubmitting(true);
     try {
+      const paymentStatus =
+        remainingBalance <= 0 && totalAmount > 0
+          ? "PAID"
+          : paidNum > 0
+          ? "PARTIAL"
+          : "UNPAID";
+
       const payload = {
         ...formData,
         id: biltyId,
@@ -258,21 +289,27 @@ export default function EditBiltyPage() {
         freight: freightNum,
         additionalCharges: addlNum,
         discount: discountNum,
+        totalAmount,
         paidAmount: paidNum,
+        remainingBalance,
+        paymentStatus,
+        updatedAt: new Date().toISOString(),
       };
 
-      const res = await fetch("/api/admin/bilty", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      // Immediately save to localStorage
+      saveStoredBilty(payload);
 
-      const result = await res.json();
-      if (!res.ok || result.error) {
-        throw new Error(result.error || "Failed to update Bilty");
+      try {
+        await fetch("/api/admin/bilty", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch (apiErr) {
+        console.warn("Serverless API fallback active — bilty update saved in localStorage:", apiErr);
       }
 
-      router.push("/admin/bilty");
+      router.push(`/admin/bilty?highlight=${biltyId}`);
     } catch (err: any) {
       setFormError(err.message || "Failed to update Bilty");
     } finally {
@@ -289,15 +326,15 @@ export default function EditBiltyPage() {
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
-    label: `${v.vehicleNumber} (${v.type || "Truck"})`,
-    subLabel: `Capacity: ${v.capacity || "N/A"} Tons • Status: ${v.status}`,
+    label: `${v.vehicleNumber || v.registrationNumber} (${v.type || v.make || "Truck"})`,
+    subLabel: `Capacity: ${v.capacity || "N/A"} Tons • Status: ${v.status || "AVAILABLE"}`,
     meta: v,
   }));
 
   const driverOptions = drivers.map((d) => ({
     value: d.id,
     label: `${d.name} (${d.phone || d.contact || "No phone"})`,
-    subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status}`,
+    subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status || "AVAILABLE"}`,
     meta: d,
   }));
 

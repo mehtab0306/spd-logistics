@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormSectionCard } from "@/components/shared/form-section-card";
+import { getStoredCustomers, saveStoredCustomer } from "@/lib/local-persistence";
 
 export default function EditCustomerPage() {
   const router = useRouter();
@@ -61,22 +62,19 @@ export default function EditCustomerPage() {
         setLoading(true);
         let found: any = null;
 
-        // Try API
-        try {
-          const res = await fetch(`/api/admin/customers?id=${customerId}`);
-          const data = await res.json();
-          if (data.success && data.data) {
-            found = data.data;
-          }
-        } catch {}
+        // Check local storage first so local edits/creations take precedence
+        const localList = getStoredCustomers();
+        found = localList.find((c: any) => String(c.id) === String(customerId));
 
-        // Fallback to local storage
+        // Try API if not found locally
         if (!found) {
-          const raw = localStorage.getItem("spd_local_customers");
-          if (raw) {
-            const list = JSON.parse(raw);
-            found = list.find((c: any) => c.id === customerId);
-          }
+          try {
+            const res = await fetch(`/api/admin/customers?id=${customerId}`);
+            const data = await res.json();
+            if (data.success && data.data) {
+              found = data.data;
+            }
+          } catch {}
         }
 
         if (found) {
@@ -141,11 +139,13 @@ export default function EditCustomerPage() {
     setSuccessMessage("");
 
     if (!formData.name.trim()) {
+      console.log("[EditCustomer] Validation warning: Customer name is missing");
       setFormError("Customer name is required.");
       setSubmitting(false);
       return;
     }
     if (!formData.phone.trim()) {
+      console.log("[EditCustomer] Validation warning: Phone number is missing");
       setFormError("Phone number is required.");
       setSubmitting(false);
       return;
@@ -162,11 +162,15 @@ export default function EditCustomerPage() {
       const credLim = parseFloat(formData.creditLimit) || 0;
       const payload = {
         ...formData,
+        id: customerId,
         creditLimit: credLim,
         photo: finalPhotoUrl || null,
       };
 
-      // API call
+      // Immediately update local storage
+      saveStoredCustomer(payload);
+
+      // API call wrapped in try/catch
       try {
         await fetch("/api/admin/customers", {
           method: "PUT",
@@ -175,23 +179,10 @@ export default function EditCustomerPage() {
         });
       } catch {}
 
-      // Update local storage
-      try {
-        const raw = localStorage.getItem("spd_local_customers");
-        if (raw) {
-          const list = JSON.parse(raw);
-          const idx = list.findIndex((c: any) => c.id === customerId);
-          if (idx >= 0) {
-            list[idx] = { ...list[idx], ...payload };
-            localStorage.setItem("spd_local_customers", JSON.stringify(list));
-          }
-        }
-      } catch {}
-
-      setSuccessMessage(`Customer ${formData.name} updated successfully!`);
+      setSuccessMessage(`Record updated successfully! Customer ${formData.name} saved.`);
       setTimeout(() => {
-        router.push("/admin/customers");
-      }, 1000);
+        router.push(`/admin/customers?highlight=${customerId}`);
+      }, 900);
     } catch (err: any) {
       setFormError(err.message || "Failed to update customer.");
     } finally {

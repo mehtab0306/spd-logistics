@@ -46,6 +46,15 @@ import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { buildWhatsAppUrl, getAdminToCustomerWhatsAppMessage } from "@/lib/whatsapp";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 
+import {
+  getStoredCustomers,
+  saveStoredCustomer,
+  removeStoredCustomer,
+  getDeletedCustomerIds,
+  mergeLocalWithApi,
+  getStoredBilties,
+} from "@/lib/local-persistence";
+
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<any[]>([]);
@@ -160,49 +169,12 @@ export default function CustomersPage() {
     if (customerFileInputRef.current) customerFileInputRef.current.value = "";
   };
 
-  const LOCAL_CUSTOMERS_KEY = "spd_local_customers";
-  const LOCAL_DELETED_CUSTOMERS_KEY = "spd_local_deleted_customers";
-
-  const getLocalCustomers = (): any[] => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(LOCAL_CUSTOMERS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  };
-
   const saveLocalCustomer = (c: any) => {
-    if (typeof window === "undefined") return;
-    try {
-      const list = getLocalCustomers();
-      const idx = list.findIndex((x) => x.id === c.id);
-      if (idx >= 0) {
-        list[idx] = { ...list[idx], ...c };
-      } else {
-        list.unshift(c);
-      }
-      localStorage.setItem(LOCAL_CUSTOMERS_KEY, JSON.stringify(list));
-    } catch (err) {
-      console.warn("Save local customer error:", err);
-    }
+    saveStoredCustomer(c);
   };
 
   const removeLocalCustomer = (id: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      const list = getLocalCustomers().filter((x) => x.id !== id);
-      localStorage.setItem(LOCAL_CUSTOMERS_KEY, JSON.stringify(list));
-      const delRaw = localStorage.getItem(LOCAL_DELETED_CUSTOMERS_KEY);
-      const del = delRaw ? JSON.parse(delRaw) : [];
-      if (!del.includes(id)) {
-        del.push(id);
-        localStorage.setItem(LOCAL_DELETED_CUSTOMERS_KEY, JSON.stringify(del));
-      }
-    } catch (err) {
-      console.warn("Remove local customer error:", err);
-    }
+    removeStoredCustomer(id);
   };
 
   const fetchCustomers = async () => {
@@ -213,39 +185,43 @@ export default function CustomersPage() {
       if (warehouseFilter) params.append("warehouse", warehouseFilter);
       if (statusFilter) params.append("status", statusFilter);
 
-      let list: any[] = [];
+      let apiList: any[] = [];
       try {
         const res = await fetch(`/api/admin/customers?${params.toString()}`);
         const data = await res.json();
         if (data.success && Array.isArray(data.data)) {
-          list = data.data;
+          apiList = data.data;
         }
       } catch (err) {
         console.warn("API customer fetch error:", err);
       }
 
-      // Merge local customers
-      const localList = getLocalCustomers();
-      for (const lc of localList) {
-        const idx = list.findIndex((x) => x.id === lc.id);
-        if (idx >= 0) {
-          list[idx] = { ...list[idx], ...lc };
-        } else {
-          list.unshift(lc);
-        }
+      // Merge local customers (kept at top) with API seed customers
+      const localList = getStoredCustomers();
+      const deletedIds = getDeletedCustomerIds();
+      let list = mergeLocalWithApi(localList, apiList, deletedIds);
+
+      // Apply search & filters across merged list
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        list = list.filter(
+          (c) =>
+            c.name?.toLowerCase().includes(q) ||
+            c.companyName?.toLowerCase().includes(q) ||
+            c.phone?.toLowerCase().includes(q) ||
+            c.email?.toLowerCase().includes(q) ||
+            c.accountId?.toLowerCase().includes(q)
+        );
+      }
+      if (warehouseFilter) {
+        list = list.filter((c) => c.warehouse === warehouseFilter);
+      }
+      if (statusFilter) {
+        list = list.filter((c) => c.status === statusFilter);
       }
 
-      // Filter out deleted
-      const delRaw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_DELETED_CUSTOMERS_KEY) : null;
-      const deletedIds: string[] = delRaw ? JSON.parse(delRaw) : [];
-      list = list.filter((c) => !deletedIds.includes(c.id) && c.status !== "DELETED");
-
       // Dynamically link created and local bilties + payments to customer ledger
-      let allBilties: any[] = [];
-      try {
-        const rawBilties = localStorage.getItem("spd_local_bilties");
-        if (rawBilties) allBilties = JSON.parse(rawBilties);
-      } catch {}
+      const allBilties = getStoredBilties();
 
       let allPayments: any[] = [];
       try {
@@ -258,85 +234,67 @@ export default function CustomersPage() {
         const cCompNorm = (c.companyName || "").toLowerCase().trim();
 
         const matchedBilties = allBilties.filter((b: any) => {
-          const bCIdMatch = b.customerId && b.customerId === c.id;
-          const bSenderMatch = (cNameNorm && b.senderName?.toLowerCase().includes(cNameNorm)) || (cCompNorm && b.senderName?.toLowerCase().includes(cCompNorm));
-          const bReceiverMatch = (cNameNorm && b.receiverName?.toLowerCase().includes(cNameNorm)) || (cCompNorm && b.receiverName?.toLowerCase().includes(cCompNorm));
+          const bCIdMatch = b.customerId && String(b.customerId) === String(c.id);
+          const bSenderMatch =
+            (cNameNorm && b.senderName?.toLowerCase().includes(cNameNorm)) ||
+            (cCompNorm && b.senderName?.toLowerCase().includes(cCompNorm));
+          const bReceiverMatch =
+            (cNameNorm && b.receiverName?.toLowerCase().includes(cNameNorm)) ||
+            (cCompNorm && b.receiverName?.toLowerCase().includes(cCompNorm));
           return bCIdMatch || bSenderMatch || bReceiverMatch;
         });
 
         // Generate dynamic ledger transactions
         const transactions: any[] = [];
-        let runningBalance = c.openingBalance || 0;
+        let runningBalance = Number(c.openingBalance) || 0;
 
         if (c.openingBalance) {
           transactions.push({
             id: `tx-open-${c.id}`,
-            date: "2026-01-01T00:00:00.000Z",
+            date: c.createdAt || "2026-01-01T00:00:00.000Z",
             description: "Opening Balance Brought Forward",
-            debit: c.openingBalance > 0 ? c.openingBalance : 0,
-            credit: c.openingBalance < 0 ? Math.abs(c.openingBalance) : 0,
+            debit: runningBalance > 0 ? runningBalance : 0,
+            credit: runningBalance < 0 ? Math.abs(runningBalance) : 0,
             balance: runningBalance,
           });
         }
 
         for (const b of matchedBilties) {
-          runningBalance += (b.totalAmount || 0);
+          runningBalance += Number(b.totalAmount) || 0;
           transactions.push({
             id: `tx-bilty-${b.id}`,
             date: b.date || new Date().toISOString(),
             description: `Consignment Bilty #${b.biltyNumber} (${b.origin} to ${b.destination})`,
-            debit: b.totalAmount || 0,
+            debit: Number(b.totalAmount) || 0,
             credit: 0,
             balance: runningBalance,
           });
 
-          if (b.paidAmount && b.paidAmount > 0) {
-            runningBalance -= b.paidAmount;
+          if (b.paidAmount && Number(b.paidAmount) > 0) {
+            runningBalance -= Number(b.paidAmount);
             transactions.push({
               id: `tx-pay-${b.id}`,
               date: b.date || new Date().toISOString(),
               description: `Payment / Advance Received for Bilty #${b.biltyNumber}`,
               debit: 0,
-              credit: b.paidAmount,
+              credit: Number(b.paidAmount),
               balance: runningBalance,
             });
           }
         }
 
         // Match manual payments
-        const matchedPayments = allPayments.filter((p: any) => p.customerId === c.id);
+        const matchedPayments = allPayments.filter((p: any) => String(p.customerId) === String(c.id));
         for (const p of matchedPayments) {
-          runningBalance -= (p.amount || 0);
+          runningBalance -= Number(p.amount) || 0;
           transactions.push({
             id: `tx-manual-pay-${p.id}`,
             date: p.date || new Date().toISOString(),
             description: `Payment Received via ${p.paymentMethod || "Cash"} (Ref: ${p.reference || "REC"})`,
             debit: 0,
-            credit: p.amount || 0,
+            credit: Number(p.amount) || 0,
             balance: runningBalance,
           });
-        }
-
-        if (transactions.length === 0) {
-          transactions.push(
-            {
-              id: `tx-demo-${c.id}-1`,
-              date: new Date(Date.now() - 86400000 * 7).toISOString(),
-              description: `Consignment Freight Invoice #${c.accountId || "INV-001"} (Lahore to Karachi)`,
-              debit: 145000,
-              credit: 0,
-              balance: 145000,
-            },
-            {
-              id: `tx-demo-${c.id}-2`,
-              date: new Date(Date.now() - 86400000 * 3).toISOString(),
-              description: "Customer Bank Transfer Payment (Ref: HBL-98214)",
-              debit: 0,
-              credit: 95000,
-              balance: 50000,
-            }
-          );
-          runningBalance = 50000;
         }
 
         c.account = {

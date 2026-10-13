@@ -45,6 +45,19 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import {
+  getStoredBilties,
+  saveStoredBilty,
+  removeStoredBilty,
+  getDeletedBiltyIds as getStoredDeletedBiltyIds,
+  getStoredCustomers,
+  getDeletedCustomerIds,
+  getStoredDrivers,
+  getDeletedDriverIds,
+  getStoredVehicles,
+  getDeletedVehicleIds,
+  mergeLocalWithApi,
+} from "@/lib/local-persistence";
+import {
   buildWhatsAppUrl,
   getBiltyTrackingWhatsAppMessage,
   getAdminToDriverWhatsAppMessage,
@@ -489,46 +502,14 @@ export default function BiltyPage() {
   ];
 
   // LocalStorage helpers for 100% offline & serverless resilience
-  const LOCAL_BILTIES_KEY = "spd_local_bilties";
-  const LOCAL_DELETED_BILTIES_KEY = "spd_local_deleted_bilties";
-  const LOCAL_TRACKING_KEY = "spd_local_tracking";
-
   const getLocalBilties = (): any[] => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(LOCAL_BILTIES_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
+    return getStoredBilties();
   };
 
   const saveLocalBilty = (bilty: any) => {
     if (typeof window === "undefined") return;
     try {
-      const items = getLocalBilties();
-      const idx = items.findIndex((b) => b.id === bilty.id || b.biltyNumber === bilty.biltyNumber || (bilty.trackingId && b.trackingId === bilty.trackingId));
-      if (idx >= 0) {
-        items[idx] = { ...items[idx], ...bilty };
-      } else {
-        items.unshift(bilty);
-      }
-      localStorage.setItem(LOCAL_BILTIES_KEY, JSON.stringify(items));
-
-      // Also register into tracking store for instant sync
-      try {
-        const rawTracking = localStorage.getItem(LOCAL_TRACKING_KEY);
-        const trackingList: any[] = rawTracking ? JSON.parse(rawTracking) : [];
-        const tIdx = trackingList.findIndex((t: any) => t.id === bilty.id || (bilty.trackingId && t.trackingId === bilty.trackingId) || (bilty.biltyNumber && t.biltyNumber === bilty.biltyNumber));
-        if (tIdx >= 0) {
-          trackingList[tIdx] = { ...trackingList[tIdx], ...bilty };
-        } else {
-          trackingList.unshift(bilty);
-        }
-        localStorage.setItem(LOCAL_TRACKING_KEY, JSON.stringify(trackingList));
-      } catch (tErr) {
-        console.warn("Save local tracking store error:", tErr);
-      }
+      saveStoredBilty(bilty);
 
       // Auto-set driver status to ON_TRIP when assigned to an active Bilty that is dispatched/In-Transit
       if (bilty.shipmentStatus === "IN_TRANSIT" || bilty.shipmentStatus === "DISPATCHED") {
@@ -536,18 +517,18 @@ export default function BiltyPage() {
         const driverName = bilty.driverName || bilty.driver?.name;
         if (driverId || driverName) {
           try {
-            const rawDrivers = localStorage.getItem("spd_local_drivers");
-            let drivers: any[] = rawDrivers ? JSON.parse(rawDrivers) : [];
+            const drivers = getStoredDrivers();
             let updated = false;
-            drivers = drivers.map((d: any) => {
-              if ((driverId && d.id === driverId) || (driverName && d.name?.toLowerCase().trim() === driverName.toLowerCase().trim())) {
+            const nextDrivers = drivers.map((d: any) => {
+              if ((driverId && String(d.id) === String(driverId)) || (driverName && d.name?.toLowerCase().trim() === driverName.toLowerCase().trim())) {
                 updated = true;
                 return { ...d, status: "ON_TRIP" };
               }
               return d;
             });
             if (updated) {
-              localStorage.setItem("spd_local_drivers", JSON.stringify(drivers));
+              localStorage.setItem("spd_drivers", JSON.stringify(nextDrivers));
+              localStorage.setItem("spd_local_drivers", JSON.stringify(nextDrivers));
             }
           } catch (dErr) {
             console.warn("Auto update driver status error:", dErr);
@@ -560,36 +541,11 @@ export default function BiltyPage() {
   };
 
   const removeLocalBilty = (id: string) => {
-    if (typeof window === "undefined") return;
-    try {
-      const items = getLocalBilties().filter((b) => b.id !== id);
-      localStorage.setItem(LOCAL_BILTIES_KEY, JSON.stringify(items));
-      const delRaw = localStorage.getItem(LOCAL_DELETED_BILTIES_KEY);
-      const del = delRaw ? JSON.parse(delRaw) : [];
-      if (!del.includes(id)) {
-        del.push(id);
-        localStorage.setItem(LOCAL_DELETED_BILTIES_KEY, JSON.stringify(del));
-      }
-      try {
-        const rawTracking = localStorage.getItem(LOCAL_TRACKING_KEY);
-        if (rawTracking) {
-          const trackingList = JSON.parse(rawTracking).filter((t: any) => t.id !== id);
-          localStorage.setItem(LOCAL_TRACKING_KEY, JSON.stringify(trackingList));
-        }
-      } catch {}
-    } catch (err) {
-      console.warn("Remove local bilty error:", err);
-    }
+    removeStoredBilty(id);
   };
 
   const getDeletedBiltyIds = (): string[] => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(LOCAL_DELETED_BILTIES_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
+    return getStoredDeletedBiltyIds();
   };
 
   const fetchConsignments = async () => {
@@ -600,38 +556,50 @@ export default function BiltyPage() {
       if (warehouseFilter) params.append("warehouse", warehouseFilter);
       if (statusFilter) params.append("status", statusFilter);
 
-      let items: any[] = [];
+      let apiItems: any[] = [];
       try {
         const res = await fetch(`/api/admin/bilty?${params.toString()}`);
         const data = await res.json();
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          items = data.data;
+          apiItems = data.data;
         } else {
-          items = [...DEFAULT_CLIENT_CONSIGNMENTS];
+          apiItems = [...DEFAULT_CLIENT_CONSIGNMENTS];
         }
       } catch (err) {
-        items = [...DEFAULT_CLIENT_CONSIGNMENTS];
+        apiItems = [...DEFAULT_CLIENT_CONSIGNMENTS];
       }
 
-      // Merge locally stored bilties
+      // Merge locally stored bilties (kept at top) with API seed bilties
       const localBilties = getLocalBilties();
-      for (const lb of localBilties) {
-        const idx = items.findIndex((b) => b.id === lb.id || b.biltyNumber === lb.biltyNumber);
-        if (idx >= 0) {
-          items[idx] = { ...items[idx], ...lb };
-        } else {
-          items.unshift(lb);
-        }
-      }
-
-      // Filter out deleted
       const deletedIds = getDeletedBiltyIds();
-      items = items.filter((b) => !deletedIds.includes(b.id) && b.shipmentStatus !== "DELETED");
+      let items = mergeLocalWithApi(localBilties, apiItems, deletedIds, "biltyNumber").filter(
+        (b) => b.shipmentStatus !== "DELETED"
+      );
+
+      // Apply search and filter to merged list
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        items = items.filter(
+          (b) =>
+            b.biltyNumber?.toLowerCase().includes(q) ||
+            b.trackingId?.toLowerCase().includes(q) ||
+            b.senderName?.toLowerCase().includes(q) ||
+            b.receiverName?.toLowerCase().includes(q) ||
+            b.origin?.toLowerCase().includes(q) ||
+            b.destination?.toLowerCase().includes(q)
+        );
+      }
+      if (warehouseFilter) {
+        items = items.filter((b) => b.warehouse === warehouseFilter);
+      }
+      if (statusFilter) {
+        items = items.filter((b) => b.shipmentStatus === statusFilter);
+      }
 
       setConsignments(items);
     } catch (err) {
       console.warn("Error fetching consignments, using demo list:", err);
-      setConsignments(DEFAULT_CLIENT_CONSIGNMENTS);
+      setConsignments(mergeLocalWithApi(getLocalBilties(), DEFAULT_CLIENT_CONSIGNMENTS, getDeletedBiltyIds(), "biltyNumber"));
     } finally {
       setLoading(false);
     }
@@ -640,23 +608,27 @@ export default function BiltyPage() {
   const fetchDependencies = async () => {
     try {
       const [custRes, drivRes, vehRes] = await Promise.all([
-        fetch("/api/admin/customers"),
-        fetch("/api/admin/drivers"),
-        fetch("/api/admin/vehicles"),
+        fetch("/api/admin/customers").catch(() => null),
+        fetch("/api/admin/drivers").catch(() => null),
+        fetch("/api/admin/vehicles").catch(() => null),
       ]);
       const [custData, drivData, vehData] = await Promise.all([
-        custRes.json().catch(() => ({})),
-        drivRes.json().catch(() => ({})),
-        vehRes.json().catch(() => ({})),
+        custRes ? custRes.json().catch(() => ({})) : Promise.resolve({}),
+        drivRes ? drivRes.json().catch(() => ({})) : Promise.resolve({}),
+        vehRes ? vehRes.json().catch(() => ({})) : Promise.resolve({}),
       ]);
-      setCustomers(custData.success && custData.data?.length ? custData.data : DEFAULT_CUSTOMERS);
-      setDrivers(drivData.success && drivData.data?.length ? drivData.data : DEFAULT_DRIVERS);
-      setVehicles(vehData.success && vehData.data?.length ? vehData.data : DEFAULT_VEHICLES);
+      const apiCustomers = custData.success && custData.data?.length ? custData.data : DEFAULT_CUSTOMERS;
+      const apiDrivers = drivData.success && drivData.data?.length ? drivData.data : DEFAULT_DRIVERS;
+      const apiVehicles = vehData.success && vehData.data?.length ? vehData.data : DEFAULT_VEHICLES;
+
+      setCustomers(mergeLocalWithApi(getStoredCustomers(), apiCustomers, getDeletedCustomerIds()));
+      setDrivers(mergeLocalWithApi(getStoredDrivers(), apiDrivers, getDeletedDriverIds()));
+      setVehicles(mergeLocalWithApi(getStoredVehicles(), apiVehicles, getDeletedVehicleIds(), "registrationNumber"));
     } catch (err) {
       console.warn("Error fetching dependencies, using fallbacks:", err);
-      setCustomers(DEFAULT_CUSTOMERS);
-      setDrivers(DEFAULT_DRIVERS);
-      setVehicles(DEFAULT_VEHICLES);
+      setCustomers(mergeLocalWithApi(getStoredCustomers(), DEFAULT_CUSTOMERS, getDeletedCustomerIds()));
+      setDrivers(mergeLocalWithApi(getStoredDrivers(), DEFAULT_DRIVERS, getDeletedDriverIds()));
+      setVehicles(mergeLocalWithApi(getStoredVehicles(), DEFAULT_VEHICLES, getDeletedVehicleIds(), "registrationNumber"));
     }
   };
 

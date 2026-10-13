@@ -22,6 +22,12 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { PrintableChallan } from "@/components/challan/printable-challan";
+import {
+  getStoredChallans,
+  saveStoredChallan,
+  getDeletedChallanIds,
+  mergeLocalWithApi,
+} from "@/lib/local-persistence";
 
 export default function ArrivalsPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -38,17 +44,33 @@ export default function ArrivalsPage() {
   const fetchArrivedChallans = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/challan");
-      const data = await res.json();
-      if (data.challans) {
-        // Show arrived or completed trips
-        const arrived = data.challans.filter(
-          (c: any) => c.status === "ARRIVED" || c.status === "COMPLETED"
-        );
-        setChallans(arrived);
-      }
+      let apiChallans: any[] = [];
+      try {
+        const res = await fetch("/api/admin/challan");
+        const data = await res.json();
+        apiChallans = Array.isArray(data.data)
+          ? data.data
+          : Array.isArray(data.challans)
+          ? data.challans
+          : [];
+      } catch {}
+
+      const merged = mergeLocalWithApi(
+        getStoredChallans(),
+        apiChallans,
+        getDeletedChallanIds(),
+        "challanNumber"
+      );
+      const arrived = merged.filter(
+        (c: any) => c.status === "ARRIVED" || c.status === "COMPLETED"
+      );
+      setChallans(arrived);
     } catch (err) {
       console.error("Error fetching arrivals:", err);
+      const arrived = getStoredChallans().filter(
+        (c: any) => c.status === "ARRIVED" || c.status === "COMPLETED"
+      );
+      setChallans(arrived);
     } finally {
       setLoading(false);
     }
@@ -57,26 +79,30 @@ export default function ArrivalsPage() {
   const handleMarkReadyForDelivery = async (challan: any) => {
     setActionLoading(challan.id);
     try {
-      const res = await fetch("/api/admin/challan", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: challan.id,
-          status: "COMPLETED",
-          notes: `Inspected and un-loaded at ${challan.destination} warehouse. Consignments released for delivery.`,
-        }),
-      });
+      const updated = {
+        ...challan,
+        status: "COMPLETED",
+        notes: `Inspected and un-loaded at ${challan.destination} warehouse. Consignments released for delivery.`,
+      };
+      saveStoredChallan(updated);
+      setChallans((prev) => prev.map((c) => (String(c.id) === String(challan.id) ? updated : c)));
 
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to update arrival");
-      }
+      try {
+        await fetch("/api/admin/challan", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: challan.id,
+            status: "COMPLETED",
+            notes: updated.notes,
+          }),
+        });
+      } catch {}
 
       setFeedback({
         type: "success",
         text: `Challan ${challan.challanNumber} cargo un-loaded & moved to Delivery queue!`,
       });
-      fetchArrivedChallans();
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Failed to update" });
     } finally {

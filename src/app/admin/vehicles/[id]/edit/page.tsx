@@ -16,6 +16,13 @@ import {
 } from "lucide-react";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
+import {
+  getStoredVehicles,
+  saveStoredVehicle,
+  getStoredDrivers,
+  getDeletedDriverIds,
+  mergeLocalWithApi,
+} from "@/lib/local-persistence";
 
 export default function EditVehiclePage() {
   const router = useRouter();
@@ -25,6 +32,7 @@ export default function EditVehiclePage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [formSuccess, setFormSuccess] = useState("");
   const [drivers, setDrivers] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
@@ -51,11 +59,16 @@ export default function EditVehiclePage() {
   }, [vehicleId]);
 
   const fetchDrivers = async () => {
+    const localDrv = getStoredDrivers();
+    const deletedDrv = getDeletedDriverIds();
+    if (localDrv.length > 0) setDrivers(localDrv);
     try {
       const res = await fetch("/api/admin/drivers");
       const data = await res.json();
       if (data.drivers) {
-        setDrivers(data.drivers);
+        setDrivers(
+          mergeLocalWithApi(localDrv, data.drivers, deletedDrv, "cnic")
+        );
       }
     } catch (err) {
       console.error("Error fetching drivers:", err);
@@ -63,15 +76,36 @@ export default function EditVehiclePage() {
   };
 
   const fetchVehicle = async () => {
+    const localVeh = getStoredVehicles();
+    const localFound = localVeh.find((v: any) => v.id === vehicleId);
+    if (localFound) {
+      setFormData({
+        id: localFound.id,
+        vehicleNumber: localFound.vehicleNumber || localFound.registrationNumber || "",
+        registrationNumber: localFound.registrationNumber || "",
+        vehicleType: localFound.type || localFound.vehicleType || "Heavy Truck (22-Wheeler)",
+        make: localFound.make || "",
+        model: localFound.model || "",
+        year: localFound.year ? String(localFound.year) : "",
+        capacity: localFound.capacity ? String(localFound.capacity) : "",
+        ownerName: localFound.ownerName || "",
+        currentLocation: localFound.currentLocation || "",
+        route: localFound.route || "",
+        driverId: localFound.driverId || "",
+        status: localFound.status || "AVAILABLE",
+        notes: localFound.notes || "",
+      });
+    }
+
     try {
       const res = await fetch("/api/admin/vehicles");
       const data = await res.json();
-      if (data.vehicles) {
+      if (data.vehicles && !localFound) {
         const found = data.vehicles.find((v: any) => v.id === vehicleId);
         if (found) {
           setFormData({
             id: found.id,
-            vehicleNumber: found.vehicleNumber || "",
+            vehicleNumber: found.vehicleNumber || found.registrationNumber || "",
             registrationNumber: found.registrationNumber || "",
             vehicleType: found.type || found.vehicleType || "Heavy Truck (22-Wheeler)",
             make: found.make || "",
@@ -89,13 +123,14 @@ export default function EditVehiclePage() {
       }
     } catch (err) {
       console.error("Error fetching vehicle:", err);
-      setFormError("Failed to load vehicle details.");
+      if (!localFound) setFormError("Failed to load vehicle details.");
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
+    setFormSuccess("");
 
     if (!formData.vehicleNumber.trim()) {
       setFormError("Vehicle number (plate) is required.");
@@ -104,11 +139,13 @@ export default function EditVehiclePage() {
 
     setSubmitting(true);
     try {
+      const selectedDriver = drivers.find((d: any) => d.id === formData.driverId) || null;
       const payload = {
         id: vehicleId,
         vehicleNumber: formData.vehicleNumber.trim().toUpperCase(),
-        registrationNumber: formData.registrationNumber.trim(),
+        registrationNumber: formData.registrationNumber.trim() || formData.vehicleNumber.trim().toUpperCase(),
         vehicleType: formData.vehicleType,
+        type: formData.vehicleType,
         make: formData.make.trim(),
         model: formData.model.trim(),
         year: formData.year ? parseInt(formData.year) : null,
@@ -117,22 +154,28 @@ export default function EditVehiclePage() {
         currentLocation: formData.currentLocation.trim(),
         route: formData.route.trim(),
         driverId: formData.driverId || null,
+        driver: selectedDriver,
         status: formData.status,
         notes: formData.notes.trim(),
       };
 
-      const res = await fetch("/api/admin/vehicles", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      // Save immediately to localStorage
+      saveStoredVehicle(payload);
 
-      const result = await res.json();
-      if (!res.ok || result.error) {
-        throw new Error(result.error || "Failed to update vehicle");
+      try {
+        await fetch("/api/admin/vehicles", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch (apiErr) {
+        console.warn("Serverless PUT vehicle fallback to localStorage:", apiErr);
       }
 
-      router.push("/admin/vehicles");
+      setFormSuccess("Record created successfully!");
+      setTimeout(() => {
+        router.push("/admin/vehicles");
+      }, 500);
     } catch (err: any) {
       setFormError(err.message || "Failed to update vehicle");
     } finally {
@@ -207,6 +250,13 @@ export default function EditVehiclePage() {
         <div className="p-4 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 shrink-0" />
           <span>{formError}</span>
+        </div>
+      )}
+
+      {formSuccess && (
+        <div className="p-4 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 shrink-0 text-emerald-600" />
+          <span>{formSuccess}</span>
         </div>
       )}
 
