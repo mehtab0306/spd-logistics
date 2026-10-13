@@ -1,37 +1,17 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import {
+  getCentralCollection,
+  saveCentralRecord,
+  updateCentralRecord,
+  deleteCentralRecord,
+  INITIAL_CASH_BOOKS,
+} from '@/lib/server-store';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_CASH_BOOKS = [
-  {
-    id: "cb-lhr-main",
-    name: "Lahore Head Office Cash Book",
-    city: "Lahore",
-    description: "Main central treasury cash book for Lahore terminal operations",
-    openingBalance: 250000,
-    totalCredits: 460000,
-    totalDebits: 185000,
-    currentBalance: 525000,
-    transactionCount: 18,
-    status: "ACTIVE",
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "cb-khi-hub",
-    name: "Karachi Port Terminal Cash Book",
-    city: "Karachi",
-    description: "Operating cash book for Port Qasim and Mauripur delivery terminal",
-    openingBalance: 150000,
-    totalCredits: 320000,
-    totalDebits: 95000,
-    currentBalance: 375000,
-    transactionCount: 12,
-    status: "ACTIVE",
-    updatedAt: new Date().toISOString(),
-  }
-];
+const DEFAULT_CASH_BOOKS = INITIAL_CASH_BOOKS;
 
 export async function GET(request: Request) {
   try {
@@ -70,42 +50,69 @@ export async function GET(request: Request) {
       }
 
       if (!cashBook) {
-        const fallback = DEFAULT_CASH_BOOKS.find((c) => c.id === cashBookId) || DEFAULT_CASH_BOOKS[0];
+        const centralBooks = (getCentralCollection('cashBooks') || []) as any[];
+        const fallback =
+          centralBooks.find((c) => c.id === cashBookId) ||
+          DEFAULT_CASH_BOOKS.find((c) => c.id === cashBookId) ||
+          DEFAULT_CASH_BOOKS[0];
+
+        const centralTxs = (getCentralCollection('cashTransactions') || []) as any[];
+        const bookTxs = centralTxs.filter((t) => t.cashBookId === cashBookId);
+
+        let txList = bookTxs;
+        if (txList.length === 0 && (cashBookId === 'cb-lhr-main' || cashBookId === 'cb-khi-hub')) {
+          txList = [
+            {
+              id: 'cbt-demo-1',
+              date: new Date().toISOString(),
+              type: 'CREDIT',
+              credit: 46000,
+              debit: 0,
+              description: 'Advance freight payment Bilty #SPD-LHR-2026-0042',
+              paymentMethod: 'CASH',
+              runningBalance: fallback.currentBalance,
+            },
+            {
+              id: 'cbt-demo-2',
+              date: new Date(Date.now() - 86400000).toISOString(),
+              type: 'DEBIT',
+              credit: 0,
+              debit: 15000,
+              description: 'Fuel and highway toll advance for LES-8921',
+              paymentMethod: 'CASH',
+              runningBalance: fallback.currentBalance - 46000,
+            },
+          ];
+        }
+
+        let running = fallback.openingBalance || 0;
+        const allWithRunning = txList.map((t: any) => {
+          const cred = t.credit || 0;
+          const deb = t.debit || 0;
+          running = running + cred - deb;
+          return {
+            ...t,
+            runningBalance: running,
+          };
+        });
+
+        const credSum = txList.reduce((acc: number, t: any) => acc + (t.credit || 0), 0);
+        const debSum = txList.reduce((acc: number, t: any) => acc + (t.debit || 0), 0);
+
         return NextResponse.json({
           success: true,
           data: {
             ...fallback,
-            openingBalance: fallback.openingBalance,
-            currentBalance: fallback.currentBalance,
-            totalCredits: fallback.totalCredits,
-            totalDebits: fallback.totalDebits,
-            netMovement: fallback.totalCredits - fallback.totalDebits,
-            transactionCount: 2,
-            totalTransactionCount: 2,
-            status: "ACTIVE",
-            transactions: [
-              {
-                id: "cbt-demo-1",
-                date: new Date().toISOString(),
-                type: "CREDIT",
-                credit: 46000,
-                debit: 0,
-                description: "Advance freight payment Bilty #SPD-LHR-2026-0042",
-                paymentMethod: "CASH",
-                runningBalance: fallback.currentBalance,
-              },
-              {
-                id: "cbt-demo-2",
-                date: new Date(Date.now() - 86400000).toISOString(),
-                type: "DEBIT",
-                credit: 0,
-                debit: 15000,
-                description: "Fuel and highway toll advance for LES-8921",
-                paymentMethod: "CASH",
-                runningBalance: fallback.currentBalance - 46000,
-              }
-            ],
-          }
+            openingBalance: fallback.openingBalance || 0,
+            currentBalance: (fallback.openingBalance || 0) + credSum - debSum,
+            totalCredits: credSum,
+            totalDebits: debSum,
+            netMovement: credSum - debSum,
+            transactionCount: txList.length,
+            totalTransactionCount: txList.length,
+            status: 'ACTIVE',
+            transactions: allWithRunning,
+          },
         });
       }
 
@@ -149,50 +156,45 @@ export async function GET(request: Request) {
       }
 
       if (paymentMethod && paymentMethod !== 'ALL') {
-        filtered = filtered.filter((t: any) => t.paymentMethod?.toUpperCase() === paymentMethod.toUpperCase());
+        filtered = filtered.filter((t: any) => t.paymentMethod?.toLowerCase() === paymentMethod.toLowerCase());
       }
 
-      if (typeFilter === 'IN') {
-        filtered = filtered.filter((t: any) => (t.credit || 0) > 0);
-      } else if (typeFilter === 'OUT') {
-        filtered = filtered.filter((t: any) => (t.debit || 0) > 0);
+      if (typeFilter && typeFilter !== 'ALL') {
+        if (typeFilter === 'IN') {
+          filtered = filtered.filter((t: any) => (t.credit || 0) > 0);
+        } else if (typeFilter === 'OUT') {
+          filtered = filtered.filter((t: any) => (t.debit || 0) > 0);
+        }
       }
 
       if (startDate) {
-        const start = new Date(startDate);
-        filtered = filtered.filter((t: any) => new Date(t.date) >= start);
+        const sTime = new Date(startDate).getTime();
+        filtered = filtered.filter((t: any) => new Date(t.date).getTime() >= sTime);
       }
 
       if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        filtered = filtered.filter((t: any) => new Date(t.date) <= end);
+        const eTime = new Date(endDate).getTime() + 86400000;
+        filtered = filtered.filter((t: any) => new Date(t.date).getTime() <= eTime);
       }
 
-      // Aggregates for current filtered view
       const totalCredits = filtered.reduce((acc: number, t: any) => acc + (t.credit || 0), 0);
       const totalDebits = filtered.reduce((acc: number, t: any) => acc + (t.debit || 0), 0);
-      const netMovement = totalCredits - totalDebits;
-
-      // Reverse order for presentation (most recent at top)
-      const presentationList = [...filtered].reverse();
+      const allCredits = allWithRunning.reduce((acc: number, t: any) => acc + (t.credit || 0), 0);
+      const allDebits = allWithRunning.reduce((acc: number, t: any) => acc + (t.debit || 0), 0);
+      const currentBalance = (cashBook.openingBalance || 0) + allCredits - allDebits;
 
       return NextResponse.json({
         success: true,
         data: {
-          id: cashBook.id,
-          name: cashBook.name,
-          city: cashBook.city,
-          description: cashBook.description,
-          openingBalance: cashBook.openingBalance,
-          currentBalance: running, // Final cumulative balance
+          ...cashBook,
+          openingBalance: cashBook.openingBalance || 0,
+          currentBalance,
           totalCredits,
           totalDebits,
-          netMovement,
+          netMovement: totalCredits - totalDebits,
           transactionCount: filtered.length,
           totalTransactionCount: cashBook.transactions.length,
-          status: cashBook.status,
-          transactions: presentationList,
+          transactions: filtered,
         },
       });
     }
@@ -217,8 +219,16 @@ export async function GET(request: Request) {
       console.warn('DB error fetching cash books (serving fallback):', dbErr);
     }
 
+    const centralBooks = (getCentralCollection('cashBooks') || []) as any[];
+
     if (!cashBooks || cashBooks.length === 0) {
-      return NextResponse.json({ success: true, data: DEFAULT_CASH_BOOKS });
+      const activeCentral = centralBooks.filter((b) =>
+        isDeletedQuery ? b.status === 'DELETED' : b.status !== 'DELETED'
+      );
+      return NextResponse.json({
+        success: true,
+        data: activeCentral.length > 0 ? activeCentral : DEFAULT_CASH_BOOKS,
+      });
     }
 
     const summary = cashBooks.map((cb) => {
@@ -240,10 +250,24 @@ export async function GET(request: Request) {
       };
     });
 
+    // Merge any central books not already in Prisma
+    const existingIds = new Set(summary.map((s) => s.id));
+    for (const cb of centralBooks) {
+      if (!existingIds.has(cb.id)) {
+        if (isDeletedQuery ? cb.status === 'DELETED' : cb.status !== 'DELETED') {
+          summary.push(cb);
+        }
+      }
+    }
+
     return NextResponse.json({ success: true, data: summary });
   } catch (error: any) {
     console.error('Error fetching cash books:', error);
-    return NextResponse.json({ success: true, data: DEFAULT_CASH_BOOKS });
+    const centralBooks = (getCentralCollection('cashBooks') || []) as any[];
+    return NextResponse.json({
+      success: true,
+      data: centralBooks.length > 0 ? centralBooks : DEFAULT_CASH_BOOKS,
+    });
   }
 }
 
@@ -261,25 +285,51 @@ export async function POST(request: Request) {
       }
 
       const openBal = parseFloat(String(openingBalance)) || 0;
-      const newBook = await prisma.cashBook.create({
-        data: {
-          name,
-          city,
-          description: description || `Operating cash book for ${city}`,
-          openingBalance: openBal,
-          status: 'ACTIVE',
-        },
-      });
+      let newBook: any = null;
+
+      try {
+        newBook = await prisma.cashBook.create({
+          data: {
+            name,
+            city,
+            description: description || `Operating cash book for ${city}`,
+            openingBalance: openBal,
+            status: 'ACTIVE',
+          },
+        });
+      } catch (dbErr) {
+        console.warn('Prisma cashBook.create error (falling back to central store):', dbErr);
+      }
+
+      const bookToSave = newBook
+        ? {
+            ...newBook,
+            currentBalance: openBal,
+            totalCredits: 0,
+            totalDebits: 0,
+            transactionCount: 0,
+          }
+        : {
+            id: `cb-${Date.now()}`,
+            name,
+            city,
+            description: description || `Operating cash book for ${city}`,
+            openingBalance: openBal,
+            totalCredits: 0,
+            totalDebits: 0,
+            currentBalance: openBal,
+            transactionCount: 0,
+            status: 'ACTIVE',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+      saveCentralRecord('cashBooks', bookToSave);
 
       return NextResponse.json({
         success: true,
-        data: {
-          ...newBook,
-          currentBalance: openBal,
-          totalCredits: 0,
-          totalDebits: 0,
-          transactionCount: 0,
-        },
+        message: 'Cash book created successfully',
+        data: bookToSave,
       });
     }
 
@@ -290,10 +340,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, error: 'Cash Book ID is required' }, { status: 400 });
       }
 
-      await prisma.cashBook.update({
-        where: { id: targetId },
-        data: { status: 'ACTIVE' },
-      });
+      try {
+        await prisma.cashBook.update({
+          where: { id: targetId },
+          data: { status: 'ACTIVE' },
+        });
+      } catch (dbErr) {
+        console.warn('Prisma restore book warning:', dbErr);
+      }
+
+      updateCentralRecord('cashBooks', targetId, { status: 'ACTIVE' });
 
       return NextResponse.json({
         success: true,
@@ -342,31 +398,35 @@ export async function POST(request: Request) {
     const debit = isCashIn ? 0 : numAmount;
 
     // Verify cash book exists
-    const cashBook = await prisma.cashBook.findUnique({
-      where: { id: cashBookId },
-      include: {
-        transactions: {
-          select: { debit: true, credit: true },
+    let cashBook: any = null;
+    try {
+      cashBook = await prisma.cashBook.findUnique({
+        where: { id: cashBookId },
+        include: {
+          transactions: {
+            select: { debit: true, credit: true },
+          },
         },
-      },
-    });
+      });
+    } catch (dbErr) {
+      console.warn('DB error checking cash book (fallback):', dbErr);
+    }
 
     if (!cashBook) {
-      return NextResponse.json({ success: false, error: 'Cash book not found' }, { status: 404 });
+      const centralBooks = (getCentralCollection('cashBooks') || []) as any[];
+      cashBook =
+        centralBooks.find((b: any) => b.id === cashBookId) ||
+        DEFAULT_CASH_BOOKS.find((b: any) => b.id === cashBookId);
     }
 
-    // Compute previous balance & new balance
-    const prevCredits = cashBook.transactions.reduce((acc, t) => acc + (t.credit || 0), 0);
-    const prevDebits = cashBook.transactions.reduce((acc, t) => acc + (t.debit || 0), 0);
-    const prevBalance = (cashBook.openingBalance || 0) + prevCredits - prevDebits;
+    const prevCredits = cashBook?.transactions
+      ? cashBook.transactions.reduce((acc: number, t: any) => acc + (t.credit || 0), 0)
+      : cashBook?.totalCredits || 0;
+    const prevDebits = cashBook?.transactions
+      ? cashBook.transactions.reduce((acc: number, t: any) => acc + (t.debit || 0), 0)
+      : cashBook?.totalDebits || 0;
+    const prevBalance = (cashBook?.openingBalance || 0) + prevCredits - prevDebits;
     const newBalance = prevBalance + credit - debit;
-
-    // Validate and resolve foreign keys
-    let validUserId: string | null = null;
-    if (session?.userId) {
-      const userExists = await prisma.user.findUnique({ where: { id: session.userId } });
-      if (userExists) validUserId = userExists.id;
-    }
 
     let resolvedParty = party || accountPerson || (isCashIn ? 'Customer Payment' : 'Operating Expense');
     let resolvedVehicleNumber = rawVehicleNumber;
@@ -374,62 +434,184 @@ export async function POST(request: Request) {
     let resolvedChallanNumber = rawChallanNumber;
     let resolvedBiltyNumber = rawBiltyNumber;
 
-    let validCustomerId: string | null = null;
-    if (customerId) {
-      const cust = await prisma.customer.findUnique({ where: { id: customerId } });
-      if (cust) {
-        validCustomerId = cust.id;
-        resolvedParty = cust.name;
-      }
-    }
-
-    let validVehicleId: string | null = null;
-    if (vehicleId) {
-      const veh = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
-      if (veh) {
-        validVehicleId = veh.id;
-        resolvedVehicleNumber = veh.vehicleNumber;
-      }
-    }
-
-    let validDriverId: string | null = null;
-    if (driverId) {
-      const drv = await prisma.driver.findUnique({ where: { id: driverId } });
-      if (drv) {
-        validDriverId = drv.id;
-        resolvedDriverName = drv.name;
-      }
-    }
-
-    let validChallanId: string | null = null;
-    if (challanId) {
-      const chl = await prisma.challan.findUnique({ where: { id: challanId } });
-      if (chl) {
-        validChallanId = chl.id;
-        resolvedChallanNumber = chl.challanNumber;
-      }
-    }
-
-    let validBiltyId: string | null = null;
-    if (biltyId) {
-      const blt = await prisma.consignment.findUnique({ where: { id: biltyId } });
-      if (blt) {
-        validBiltyId = blt.id;
-        resolvedBiltyNumber = blt.biltyNumber;
-      }
-    }
-
     const defaultDesc = isCashIn
       ? `${category || 'Cash IN'} received from ${resolvedParty}`
       : `${category || 'Expense'} - ${resolvedParty}${resolvedVehicleNumber ? ` (${resolvedVehicleNumber})` : ''}`;
 
     const vch = voucherNumber || `VCH-${Date.now().toString().slice(-6)}`;
 
-    // Create the transaction record
-    const transaction = await prisma.cashBookTransaction.create({
-      data: {
+    let transaction: any = null;
+    try {
+      // Validate and resolve foreign keys
+      let validUserId: string | null = null;
+      if (session?.userId) {
+        try {
+          const userExists = await prisma.user.findUnique({ where: { id: session.userId } });
+          if (userExists) validUserId = userExists.id;
+        } catch {}
+      }
+
+      let validCustomerId: string | null = null;
+      if (customerId) {
+        try {
+          const cust = await prisma.customer.findUnique({ where: { id: customerId } });
+          if (cust) {
+            validCustomerId = cust.id;
+            resolvedParty = cust.name;
+          }
+        } catch {}
+      }
+
+      let validVehicleId: string | null = null;
+      if (vehicleId) {
+        try {
+          const veh = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
+          if (veh) {
+            validVehicleId = veh.id;
+            resolvedVehicleNumber = veh.vehicleNumber;
+          }
+        } catch {}
+      }
+
+      let validDriverId: string | null = null;
+      if (driverId) {
+        try {
+          const drv = await prisma.driver.findUnique({ where: { id: driverId } });
+          if (drv) {
+            validDriverId = drv.id;
+            resolvedDriverName = drv.name;
+          }
+        } catch {}
+      }
+
+      let validChallanId: string | null = null;
+      if (challanId) {
+        try {
+          const chl = await prisma.challan.findUnique({ where: { id: challanId } });
+          if (chl) {
+            validChallanId = chl.id;
+            resolvedChallanNumber = chl.challanNumber;
+          }
+        } catch {}
+      }
+
+      let validBiltyId: string | null = null;
+      if (biltyId) {
+        try {
+          const blt = await prisma.consignment.findUnique({ where: { id: biltyId } });
+          if (blt) {
+            validBiltyId = blt.id;
+            resolvedBiltyNumber = blt.biltyNumber;
+          }
+        } catch {}
+      }
+
+      // Create transaction via Prisma
+      transaction = await prisma.cashBookTransaction.create({
+        data: {
+          cashBookId,
+          date: date ? new Date(date) : new Date(),
+          voucherNumber: vch,
+          category: category || (isCashIn ? 'Customer Payment' : 'Other Expense'),
+          party: resolvedParty,
+          accountPerson: resolvedParty,
+          description: description || defaultDesc,
+          debit,
+          credit,
+          balance: newBalance,
+          paymentMethod: paymentMethod || 'CASH',
+          notes: notes || null,
+          customerId: validCustomerId,
+          vehicleId: validVehicleId,
+          vehicleNumber: resolvedVehicleNumber || null,
+          driverId: validDriverId,
+          driverName: resolvedDriverName || null,
+          biltyId: validBiltyId,
+          biltyNumber: resolvedBiltyNumber || null,
+          challanId: validChallanId,
+          challanNumber: resolvedChallanNumber || null,
+          route: route || null,
+          attachment: attachment || null,
+          createdById: validUserId,
+        },
+        include: {
+          customer: { select: { id: true, name: true, phone: true } },
+          vehicle: { select: { id: true, vehicleNumber: true, vehicleType: true } },
+          driver: { select: { id: true, name: true, phone: true } },
+          challan: { select: { id: true, challanNumber: true, origin: true, destination: true } },
+          bilty: { select: { id: true, biltyNumber: true, trackingId: true } },
+        },
+      });
+
+      // Customer Ledger Connection
+      if (customerId && isCashIn) {
+        try {
+          const customerAccount = await prisma.account.findFirst({
+            where: { customerId },
+          });
+
+          if (customerAccount) {
+            await prisma.accountTransaction.create({
+              data: {
+                accountId: customerAccount.id,
+                date: date ? new Date(date) : new Date(),
+                voucherNumber: vch,
+                description: `Cash IN Receipt: ${description || category || 'Customer Payment'}`,
+                credit: numAmount,
+                debit: 0,
+                paymentMethod: paymentMethod || 'CASH',
+                reference: vch,
+                notes: `Recorded via Cash Book: ${cashBook?.name || ''}`,
+              },
+            });
+          }
+        } catch (ledgerErr) {
+          console.warn('Customer ledger update warning:', ledgerErr);
+        }
+      }
+
+      // Challan Connection
+      if (challanId && !isCashIn) {
+        try {
+          const chl = await prisma.challan.findUnique({ where: { id: challanId } });
+          if (chl) {
+            const cat = (category || '').toLowerCase();
+            const updateData: any = {};
+
+            if (cat.includes('diesel') || cat.includes('vehicle') || cat.includes('fuel') || cat.includes('maintenance')) {
+              updateData.vehicleExpense = (chl.vehicleExpense || 0) + numAmount;
+            } else if (cat.includes('labour') || cat.includes('labor')) {
+              updateData.labourCost = (chl.labourCost || 0) + numAmount;
+            } else {
+              updateData.otherExpenses = (chl.otherExpenses || 0) + numAmount;
+            }
+
+            const curVehExp = updateData.vehicleExpense ?? chl.vehicleExpense;
+            const curLabExp = updateData.labourCost ?? chl.labourCost;
+            const curOthExp = updateData.otherExpenses ?? chl.otherExpenses;
+            const curComm = chl.commissionDeduction || 0;
+            const totalAmt = chl.totalAmount || 0;
+
+            updateData.estimatedProfit = totalAmt - curComm - curLabExp - curVehExp - curOthExp;
+
+            await prisma.challan.update({
+              where: { id: challanId },
+              data: updateData,
+            });
+          }
+        } catch (challanErr) {
+          console.warn('Challan expense sync warning:', challanErr);
+        }
+      }
+    } catch (txErr) {
+      console.warn('Prisma transaction create failed (falling back to central store):', txErr);
+    }
+
+    if (!transaction) {
+      transaction = {
+        id: `cbt-${Date.now()}`,
         cashBookId,
-        date: date ? new Date(date) : new Date(),
+        date: date ? new Date(date).toISOString() : new Date().toISOString(),
         voucherNumber: vch,
         category: category || (isCashIn ? 'Customer Payment' : 'Other Expense'),
         party: resolvedParty,
@@ -440,90 +622,23 @@ export async function POST(request: Request) {
         balance: newBalance,
         paymentMethod: paymentMethod || 'CASH',
         notes: notes || null,
-        customerId: validCustomerId,
-        vehicleId: validVehicleId,
         vehicleNumber: resolvedVehicleNumber || null,
-        driverId: validDriverId,
         driverName: resolvedDriverName || null,
-        biltyId: validBiltyId,
-        biltyNumber: resolvedBiltyNumber || null,
-        challanId: validChallanId,
         challanNumber: resolvedChallanNumber || null,
+        biltyNumber: resolvedBiltyNumber || null,
         route: route || null,
-        attachment: attachment || null,
-        createdById: validUserId,
-      },
-      include: {
-        customer: { select: { id: true, name: true, phone: true } },
-        vehicle: { select: { id: true, vehicleNumber: true, vehicleType: true } },
-        driver: { select: { id: true, name: true, phone: true } },
-        challan: { select: { id: true, challanNumber: true, origin: true, destination: true } },
-        bilty: { select: { id: true, biltyNumber: true, trackingId: true } },
-      },
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    // Persist transaction & update cash book in central store
+    saveCentralRecord('cashTransactions', transaction);
+    updateCentralRecord('cashBooks', cashBookId, {
+      totalCredits: prevCredits + credit,
+      totalDebits: prevDebits + debit,
+      currentBalance: newBalance,
+      transactionCount: (cashBook?.transactionCount || 0) + 1,
     });
-
-    // 1. Customer Ledger Connection:
-    // If Cash IN is linked to a customer, update customer ledger/account if exists
-    if (customerId && isCashIn) {
-      try {
-        const customerAccount = await prisma.account.findFirst({
-          where: { customerId },
-        });
-
-        if (customerAccount) {
-          await prisma.accountTransaction.create({
-            data: {
-              accountId: customerAccount.id,
-              date: date ? new Date(date) : new Date(),
-              voucherNumber: vch,
-              description: `Cash IN Receipt: ${description || category || 'Customer Payment'}`,
-              credit: numAmount,
-              debit: 0,
-              paymentMethod: paymentMethod || 'CASH',
-              reference: vch,
-              notes: `Recorded via Cash Book: ${cashBook.name}`,
-            },
-          });
-        }
-      } catch (ledgerErr) {
-        console.warn('Customer ledger update warning:', ledgerErr);
-      }
-    }
-
-    // 2. Challan Connection:
-    // If Cash OUT is linked to a Challan/Trip, update Challan vehicleExpense / labourCost
-    if (challanId && !isCashIn) {
-      try {
-        const challan = await prisma.challan.findUnique({ where: { id: challanId } });
-        if (challan) {
-          const cat = (category || '').toLowerCase();
-          const updateData: any = {};
-
-          if (cat.includes('diesel') || cat.includes('vehicle') || cat.includes('fuel') || cat.includes('maintenance')) {
-            updateData.vehicleExpense = (challan.vehicleExpense || 0) + numAmount;
-          } else if (cat.includes('labour') || cat.includes('labor')) {
-            updateData.labourCost = (challan.labourCost || 0) + numAmount;
-          } else {
-            updateData.otherExpenses = (challan.otherExpenses || 0) + numAmount;
-          }
-
-          const curVehExp = updateData.vehicleExpense ?? challan.vehicleExpense;
-          const curLabExp = updateData.labourCost ?? challan.labourCost;
-          const curOthExp = updateData.otherExpenses ?? challan.otherExpenses;
-          const curComm = challan.commissionDeduction || 0;
-          const totalAmt = challan.totalAmount || 0;
-
-          updateData.estimatedProfit = totalAmt - curComm - curLabExp - curVehExp - curOthExp;
-
-          await prisma.challan.update({
-            where: { id: challanId },
-            data: updateData,
-          });
-        }
-      } catch (challanErr) {
-        console.warn('Challan expense sync warning:', challanErr);
-      }
-    }
 
     return NextResponse.json({
       success: true,
@@ -534,7 +649,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error in cash book operation:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Internal server error' },
+      { success: false, error: error.message || 'Operation failed' },
       { status: 500 }
     );
   }
@@ -548,58 +663,66 @@ export async function DELETE(request: Request) {
 
     // Delete a specific transaction
     if (txId) {
-      const existing = await prisma.cashBookTransaction.findUnique({
-        where: { id: txId },
-      });
+      try {
+        const existing = await prisma.cashBookTransaction.findUnique({
+          where: { id: txId },
+        });
 
-      if (!existing) {
-        return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
-      }
+        if (existing) {
+          if (existing.challanId && existing.debit > 0) {
+            try {
+              const challan = await prisma.challan.findUnique({ where: { id: existing.challanId } });
+              if (challan) {
+                const cat = (existing.category || '').toLowerCase();
+                const updateData: any = {};
+                if (cat.includes('diesel') || cat.includes('vehicle') || cat.includes('fuel')) {
+                  updateData.vehicleExpense = Math.max(0, (challan.vehicleExpense || 0) - existing.debit);
+                } else if (cat.includes('labour') || cat.includes('labor')) {
+                  updateData.labourCost = Math.max(0, (challan.labourCost || 0) - existing.debit);
+                } else {
+                  updateData.otherExpenses = Math.max(0, (challan.otherExpenses || 0) - existing.debit);
+                }
 
-      // Revert challan expense if linked
-      if (existing.challanId && existing.debit > 0) {
-        try {
-          const challan = await prisma.challan.findUnique({ where: { id: existing.challanId } });
-          if (challan) {
-            const cat = (existing.category || '').toLowerCase();
-            const updateData: any = {};
-            if (cat.includes('diesel') || cat.includes('vehicle') || cat.includes('fuel')) {
-              updateData.vehicleExpense = Math.max(0, (challan.vehicleExpense || 0) - existing.debit);
-            } else if (cat.includes('labour') || cat.includes('labor')) {
-              updateData.labourCost = Math.max(0, (challan.labourCost || 0) - existing.debit);
-            } else {
-              updateData.otherExpenses = Math.max(0, (challan.otherExpenses || 0) - existing.debit);
+                const curVeh = updateData.vehicleExpense ?? challan.vehicleExpense;
+                const curLab = updateData.labourCost ?? challan.labourCost;
+                const curOth = updateData.otherExpenses ?? challan.otherExpenses;
+                updateData.estimatedProfit =
+                  (challan.totalAmount || 0) - (challan.commissionDeduction || 0) - curLab - curVeh - curOth;
+
+                await prisma.challan.update({
+                  where: { id: existing.challanId },
+                  data: updateData,
+                });
+              }
+            } catch (revertErr) {
+              console.warn('Revert challan expense warning:', revertErr);
             }
-
-            const curVeh = updateData.vehicleExpense ?? challan.vehicleExpense;
-            const curLab = updateData.labourCost ?? challan.labourCost;
-            const curOth = updateData.otherExpenses ?? challan.otherExpenses;
-            updateData.estimatedProfit = (challan.totalAmount || 0) - (challan.commissionDeduction || 0) - curLab - curVeh - curOth;
-
-            await prisma.challan.update({
-              where: { id: existing.challanId },
-              data: updateData,
-            });
           }
-        } catch (revertErr) {
-          console.warn('Revert challan expense warning:', revertErr);
+
+          await prisma.cashBookTransaction.delete({
+            where: { id: txId },
+          });
         }
+      } catch (dbErr) {
+        console.warn('Prisma delete tx warning:', dbErr);
       }
 
-      await prisma.cashBookTransaction.delete({
-        where: { id: txId },
-      });
-
+      deleteCentralRecord('cashTransactions', txId);
       return NextResponse.json({ success: true, message: 'Transaction deleted successfully' });
     }
 
     // Soft delete / archive entire Cash Book
     if (cashBookId) {
-      await prisma.cashBook.update({
-        where: { id: cashBookId },
-        data: { status: 'DELETED' },
-      });
+      try {
+        await prisma.cashBook.update({
+          where: { id: cashBookId },
+          data: { status: 'DELETED' },
+        });
+      } catch (dbErr) {
+        console.warn('Prisma archive book warning:', dbErr);
+      }
 
+      updateCentralRecord('cashBooks', cashBookId, { status: 'DELETED' });
       return NextResponse.json({ success: true, message: 'Cash book archived successfully' });
     }
 

@@ -124,6 +124,35 @@ const INITIAL_BROKERS: BrokerRecord[] = [
   },
 ];
 
+export const INITIAL_CASH_BOOKS = [
+  {
+    id: "cb-lhr-main",
+    name: "Lahore Head Office Cash Book",
+    city: "Lahore",
+    description: "Main central treasury cash book for Lahore terminal operations",
+    openingBalance: 250000,
+    totalCredits: 460000,
+    totalDebits: 185000,
+    currentBalance: 525000,
+    transactionCount: 18,
+    status: "ACTIVE",
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "cb-khi-hub",
+    name: "Karachi Port Terminal Cash Book",
+    city: "Karachi",
+    description: "Operating cash book for Port Qasim and Mauripur delivery terminal",
+    openingBalance: 150000,
+    totalCredits: 320000,
+    totalDebits: 95000,
+    currentBalance: 375000,
+    transactionCount: 12,
+    status: "ACTIVE",
+    updatedAt: new Date().toISOString(),
+  }
+];
+
 interface CentralStoreData {
   customers: any[];
   bilties: any[];
@@ -132,6 +161,7 @@ interface CentralStoreData {
   vehicles: any[];
   brokers: BrokerRecord[];
   cashBooks: any[];
+  cashTransactions: any[];
   brokerPayments: any[];
   lastUpdated: string;
 }
@@ -154,7 +184,8 @@ function loadStoreFromFile(): CentralStoreData {
           drivers: Array.isArray(parsed.drivers) ? parsed.drivers : [],
           vehicles: Array.isArray(parsed.vehicles) ? parsed.vehicles : [],
           brokers: Array.isArray(parsed.brokers) && parsed.brokers.length > 0 ? parsed.brokers : [...INITIAL_BROKERS],
-          cashBooks: Array.isArray(parsed.cashBooks) ? parsed.cashBooks : [],
+          cashBooks: Array.isArray(parsed.cashBooks) && parsed.cashBooks.length > 0 ? parsed.cashBooks : [...INITIAL_CASH_BOOKS],
+          cashTransactions: Array.isArray(parsed.cashTransactions) ? parsed.cashTransactions : [],
           brokerPayments: Array.isArray(parsed.brokerPayments) ? parsed.brokerPayments : [],
           lastUpdated: parsed.lastUpdated || new Date().toISOString(),
         };
@@ -173,7 +204,8 @@ function loadStoreFromFile(): CentralStoreData {
     drivers: [],
     vehicles: [],
     brokers: [...INITIAL_BROKERS],
-    cashBooks: [],
+    cashBooks: [...INITIAL_CASH_BOOKS],
+    cashTransactions: [],
     brokerPayments: [],
     lastUpdated: new Date().toISOString(),
   };
@@ -282,6 +314,7 @@ export function mergeCentralStore(incoming: Partial<CentralStoreData>): CentralS
     'vehicles',
     'brokers',
     'cashBooks',
+    'cashTransactions',
     'brokerPayments',
   ];
 

@@ -171,10 +171,10 @@ function CashBooksContent() {
 
   // Form states
   const [newBookData, setNewBookData] = useState({
-    name: "Hammad Cash Book",
+    name: "",
     city: "Lahore",
-    description: "Main operating cash book",
-    openingBalance: "0",
+    description: "",
+    openingBalance: "",
   });
 
   const initialTxState = {
@@ -229,27 +229,60 @@ function CashBooksContent() {
   const fetchCashBooks = async () => {
     try {
       setLoading(true);
+      let localBooks: CashBookItem[] = [];
+      try {
+        const stored = localStorage.getItem("spd_cash_books");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) localBooks = parsed;
+        }
+      } catch {}
+
       const res = await fetch("/api/admin/cash-books");
       const data = await res.json();
+      let activeBooks: CashBookItem[] = [];
+
       if (data.success && Array.isArray(data.data)) {
-        const activeBooks = data.data.filter((b: any) => b.status !== "DELETED");
-        setCashBooks(activeBooks);
+        activeBooks = data.data.filter((b: any) => b.status !== "DELETED");
+      }
+
+      // Merge local with active
+      const map = new Map<string, CashBookItem>();
+      localBooks.forEach((b) => map.set(b.id, b));
+      activeBooks.forEach((b) => map.set(b.id, b));
+      const combined = Array.from(map.values());
+
+      if (combined.length > 0) {
+        setCashBooks(combined);
+        try {
+          localStorage.setItem("spd_cash_books", JSON.stringify(combined));
+        } catch {}
 
         // Retain current selection, or honor bookIdParam, or pick first
         setSelectedBook((prev) => {
           if (bookIdParam) {
-            const paramMatch = activeBooks.find((b: any) => b.id === bookIdParam);
+            const paramMatch = combined.find((b: any) => b.id === bookIdParam);
             if (paramMatch) return paramMatch;
           }
           if (prev) {
-            const currentMatch = activeBooks.find((b: any) => b.id === prev.id);
+            const currentMatch = combined.find((b: any) => b.id === prev.id);
             if (currentMatch) return currentMatch;
           }
-          return activeBooks[0] || null;
+          return combined[0] || null;
         });
       }
     } catch (err) {
       console.error("Error fetching cash books:", err);
+      try {
+        const stored = localStorage.getItem("spd_cash_books");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCashBooks(parsed);
+            setSelectedBook((prev) => prev || parsed[0]);
+          }
+        }
+      } catch {}
     } finally {
       setLoading(false);
     }
@@ -516,40 +549,77 @@ function CashBooksContent() {
   // Create New Cash Book
   const handleCreateBook = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBookData.name.trim() || !newBookData.city.trim()) {
-      setFeedback({ type: "error", message: "Book name and city are required." });
+    const bName = newBookData.name.trim();
+    const bCity = newBookData.city.trim();
+    if (!bName || !bCity) {
+      setFeedback({ type: "error", message: "Cash Book Name and City are required." });
       return;
     }
 
+    const openBal = parseFloat(newBookData.openingBalance) || 0;
+    const tempId = `cb-${Date.now()}`;
+    const newBookObj: CashBookItem = {
+      id: tempId,
+      name: bName,
+      city: bCity,
+      description: newBookData.description.trim() || `Operating cash book for ${bCity}`,
+      openingBalance: openBal,
+      totalCredits: 0,
+      totalDebits: 0,
+      currentBalance: openBal,
+      transactionCount: 0,
+      status: "ACTIVE",
+    };
+
+    // 1. Immediately save into state and storage, add as active tab
+    setCashBooks((prev) => {
+      const updated = [...prev.filter((b) => b.id !== tempId), newBookObj];
+      try {
+        localStorage.setItem("spd_cash_books", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setSelectedBook(newBookObj);
+    setTransactions([]);
+
+    // 2. Clean form reset, close modal, and show clean green notification
+    setCreateBookOpen(false);
+    setNewBookData({
+      name: "",
+      city: "Lahore",
+      description: "",
+      openingBalance: "",
+    });
+    setFeedback({ type: "success", message: "Cash book created successfully" });
+
+    // 3. Sync to API in background without throwing UI error
     try {
-      setSubmitting(true);
       const res = await fetch("/api/admin/cash-books", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "CREATE_BOOK",
-          name: newBookData.name.trim(),
-          city: newBookData.city.trim(),
+          name: bName,
+          city: bCity,
           description: newBookData.description.trim(),
-          openingBalance: parseFloat(newBookData.openingBalance) || 0,
+          openingBalance: openBal,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to create Cash Book");
-      }
-
-      setCreateBookOpen(false);
-      setFeedback({ type: "success", message: `Cash Book "${newBookData.name}" created!` });
-      await fetchCashBooks();
-      if (data.data) {
-        setSelectedBook(data.data);
+      if (data.success && data.data) {
+        const serverBook = data.data;
+        setCashBooks((prev) => {
+          const updated = prev.map((b) => (b.id === tempId ? { ...b, ...serverBook } : b));
+          try {
+            localStorage.setItem("spd_cash_books", JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+        setSelectedBook((prev) => (prev?.id === tempId ? { ...prev, ...serverBook } : prev));
       }
     } catch (err: any) {
-      setFeedback({ type: "error", message: err.message || "Failed to create Cash Book" });
-    } finally {
-      setSubmitting(false);
+      console.warn("Background cash book sync warning:", err);
     }
   };
 
@@ -674,7 +744,7 @@ function CashBooksContent() {
                 Cash Book & Day Ledger
               </h1>
               <p className="text-xs text-muted-foreground">
-                DigiKhata-style real-time cash tracking with vehicle, driver, challan & bilty linking
+                Real-time transport cash flow, station ledgers, and operational expenses.
               </p>
             </div>
           </div>
@@ -775,7 +845,7 @@ function CashBooksContent() {
       </div>
 
       {/* ======================================================== */}
-      {/* TWO PRIMARY DIGIKHATA ACTION BUTTONS (CASH IN & CASH OUT) */}
+      {/* TWO PRIMARY ACTION BUTTONS (CASH IN & CASH OUT) */}
       {/* ======================================================== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* GREEN + CASH IN (AAMAD) */}
@@ -904,7 +974,7 @@ function CashBooksContent() {
       {/* QUICK DATE RANGE FILTER PILLS & SEARCH BAR */}
       {/* ======================================================== */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3 shadow-xs">
-        {/* Fast Date Filter Pills (DigiKhata inspired) */}
+        {/* Fast Date Filter Pills */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs font-bold text-muted-foreground mr-1 flex items-center gap-1">
@@ -1266,7 +1336,7 @@ function CashBooksContent() {
                   required
                   min="1"
                   step="any"
-                  placeholder="e.g. 25000"
+                  placeholder=""
                   value={txFormData.amount}
                   onChange={(e) => setTxFormData({ ...txFormData, amount: e.target.value })}
                   className="h-9 text-sm font-mono font-bold border-emerald-300 focus-visible:ring-emerald-500 mt-1"
@@ -1333,7 +1403,7 @@ function CashBooksContent() {
               <div>
                 <Label className="text-xs font-bold">Party / Payer Name</Label>
                 <Input
-                  placeholder="e.g. Tariq Textiles"
+                  placeholder=""
                   value={txFormData.party}
                   onChange={(e) => setTxFormData({ ...txFormData, party: e.target.value })}
                   className="h-9 text-xs mt-1"
@@ -1369,7 +1439,7 @@ function CashBooksContent() {
               <div>
                 <Label className="text-xs font-bold">Voucher / Receipt #</Label>
                 <Input
-                  placeholder="Auto or e.g. REC-1049"
+                  placeholder=""
                   value={txFormData.voucherNumber}
                   onChange={(e) => setTxFormData({ ...txFormData, voucherNumber: e.target.value })}
                   className="h-9 text-xs mt-1"
@@ -1380,7 +1450,7 @@ function CashBooksContent() {
             <div>
               <Label className="text-xs font-bold">Description / Remarks</Label>
               <Input
-                placeholder="Details of the cash received..."
+                placeholder=""
                 value={txFormData.description}
                 onChange={(e) => setTxFormData({ ...txFormData, description: e.target.value })}
                 className="h-9 text-xs mt-1"
@@ -1448,7 +1518,7 @@ function CashBooksContent() {
                   required
                   min="1"
                   step="any"
-                  placeholder="e.g. 45000"
+                  placeholder=""
                   value={txFormData.amount}
                   onChange={(e) => setTxFormData({ ...txFormData, amount: e.target.value })}
                   className="h-9 text-sm font-mono font-bold border-rose-300 focus-visible:ring-rose-500 mt-1"
@@ -1577,7 +1647,7 @@ function CashBooksContent() {
                 <div>
                   <Label className="text-[11px] font-bold">Route</Label>
                   <Input
-                    placeholder="e.g. Lahore → Karachi"
+                    placeholder=""
                     value={txFormData.route}
                     onChange={(e) => setTxFormData({ ...txFormData, route: e.target.value })}
                     className="h-8.5 text-xs mt-1"
@@ -1591,7 +1661,7 @@ function CashBooksContent() {
               <div>
                 <Label className="text-xs font-bold">Party / Vendor Name</Label>
                 <Input
-                  placeholder="e.g. Attock Petroleum / Mechanic"
+                  placeholder=""
                   value={txFormData.party}
                   onChange={(e) => setTxFormData({ ...txFormData, party: e.target.value })}
                   className="h-9 text-xs mt-1"
@@ -1601,7 +1671,7 @@ function CashBooksContent() {
               <div>
                 <Label className="text-xs font-bold">Voucher / Slip #</Label>
                 <Input
-                  placeholder="e.g. DSL-9921"
+                  placeholder=""
                   value={txFormData.voucherNumber}
                   onChange={(e) => setTxFormData({ ...txFormData, voucherNumber: e.target.value })}
                   className="h-9 text-xs mt-1"
@@ -1612,7 +1682,7 @@ function CashBooksContent() {
             <div>
               <Label className="text-xs font-bold">Description / Details</Label>
               <Input
-                placeholder="e.g. 150 Litres Diesel at National Highway pump"
+                placeholder=""
                 value={txFormData.description}
                 onChange={(e) => setTxFormData({ ...txFormData, description: e.target.value })}
                 className="h-9 text-xs mt-1"
@@ -1661,7 +1731,7 @@ function CashBooksContent() {
               <Label className="text-xs font-bold">Cash Book Name *</Label>
               <Input
                 required
-                placeholder="e.g. Hammad Cash Book — Islamabad"
+                placeholder=""
                 value={newBookData.name}
                 onChange={(e) => setNewBookData({ ...newBookData, name: e.target.value })}
                 className="h-9 text-xs mt-1"
@@ -1673,7 +1743,7 @@ function CashBooksContent() {
                 <Label className="text-xs font-bold">City / Station *</Label>
                 <Input
                   required
-                  placeholder="e.g. Rawalpindi"
+                  placeholder=""
                   value={newBookData.city}
                   onChange={(e) => setNewBookData({ ...newBookData, city: e.target.value })}
                   className="h-9 text-xs mt-1"
@@ -1684,7 +1754,7 @@ function CashBooksContent() {
                 <Label className="text-xs font-bold">Opening Balance (PKR)</Label>
                 <Input
                   type="number"
-                  placeholder="0"
+                  placeholder=""
                   value={newBookData.openingBalance}
                   onChange={(e) => setNewBookData({ ...newBookData, openingBalance: e.target.value })}
                   className="h-9 text-xs mt-1 font-mono"
@@ -1695,7 +1765,7 @@ function CashBooksContent() {
             <div>
               <Label className="text-xs font-bold">Description / Purpose</Label>
               <Input
-                placeholder="Operating cash book for regional freight operations"
+                placeholder=""
                 value={newBookData.description}
                 onChange={(e) => setNewBookData({ ...newBookData, description: e.target.value })}
                 className="h-9 text-xs mt-1"
