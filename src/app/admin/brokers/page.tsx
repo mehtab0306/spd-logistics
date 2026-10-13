@@ -45,6 +45,7 @@ import {
   Edit,
   Trash2,
   Save,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   getStoredBrokers,
@@ -59,6 +60,7 @@ import { PAKISTAN_CITIES } from "@/lib/constants";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
+import { exportToExcel } from "@/lib/export-excel";
 
 export default function BrokersPage() {
   const [brokers, setBrokers] = useState<any[]>([]);
@@ -256,6 +258,28 @@ export default function BrokersPage() {
     );
   }, [selectedBrokerForLedger, challans]);
 
+  const handleExportExcel = () => {
+    if (!filteredBrokers.length) return;
+    const data = filteredBrokers.map((b) => ({
+      "Broker Name": b.name || "",
+      "Contact Person": b.contactPerson || "",
+      "Phone": b.phone || "",
+      "WhatsApp": b.whatsapp || b.phone || "",
+      "City": b.city || "",
+      "CNIC / NTN": b.cnic || "",
+      "Commission Type": b.commissionType || "PERCENTAGE",
+      "Commission Rate": b.commissionRate || 0,
+      "Status": b.status || "ACTIVE",
+      "Trips Assigned": b.totalTrips || 0,
+      "Agreed Freight (PKR)": b.totalFreightAgreed || 0,
+      "Advance Given (PKR)": b.totalAdvancePaid || 0,
+      "Net Balance Payable (PKR)": b.netPayableBalance || b.openingBalance || 0,
+      "Bank Details": b.bankDetails || "",
+      "Notes": b.notes || "",
+    }));
+    exportToExcel(data, "SPD_Brokers_Directory");
+  };
+
   return (
     <div className="space-y-6 pb-20">
       {/* Page Header */}
@@ -264,7 +288,18 @@ export default function BrokersPage() {
           title="Fleet Brokers & Commission Agents"
           description="Manage third-party transport brokers, market vehicle commissions, trip freight ledgers, and cash disbursements."
         />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={!filteredBrokers.length}
+            className="rounded-xl text-xs font-bold gap-1.5 bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 shadow-xs"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Export Excel</span>
+          </Button>
+
           <Button
             variant="outline"
             size="sm"

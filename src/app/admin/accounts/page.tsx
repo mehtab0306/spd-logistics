@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
+import { exportToExcel } from "@/lib/export-excel";
 
 // LocalStorage Keys for complete system-wide cross-module sync
 const LOCAL_ACCOUNTS_KEY = "spd_local_accounts";
@@ -499,6 +500,26 @@ export default function AccountsPage() {
     return { totalOutstanding, totalDebits, totalCredits, totalWithBalance };
   }, [accounts]);
 
+  const handleExportExcel = () => {
+    if (!filteredAccounts.length) return;
+    const data = filteredAccounts.map((a) => ({
+      "Account #": a.accountNumber || "",
+      "Account Name": a.accountName || "",
+      "Account Type": a.accountType || "CORPORATE_CLIENT",
+      "Customer / Party": a.customer?.name || "-",
+      "Company Name": a.customer?.companyName || "-",
+      "Phone": a.customer?.phone || "-",
+      "City": a.customer?.city || "-",
+      "Opening Balance (PKR)": a.openingBalance || 0,
+      "Total Billed / Debits (PKR)": a.totalDebits || 0,
+      "Total Paid / Credits (PKR)": a.totalCredits || 0,
+      "Current Running Balance (PKR)": a.currentBalance || 0,
+      "Status": a.status || "ACTIVE",
+      "Notes": a.notes || "",
+    }));
+    exportToExcel(data, "SPD_Accounts_Ledgers");
+  };
+
   // Handle Create Account
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -943,6 +964,17 @@ export default function AccountsPage() {
               <SelectItem value="CREDIT_BALANCE">Credit Balance (&lt; 0)</SelectItem>
             </SelectContent>
           </Select>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={!filteredAccounts.length}
+            className="h-10 px-3.5 rounded-xl text-xs font-bold gap-1.5 bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 shadow-xs"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span className="hidden sm:inline">Export Excel</span>
+          </Button>
 
           <Button
             variant="outline"

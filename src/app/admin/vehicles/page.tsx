@@ -31,6 +31,7 @@ import {
   Printer,
   Phone,
   Edit,
+  FileSpreadsheet,
 } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
@@ -44,6 +45,7 @@ import {
   getStoredBilties,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
+import { exportToExcel } from "@/lib/export-excel";
 
 export default function VehiclesPage() {
   const router = useRouter();
@@ -286,6 +288,25 @@ export default function VehiclesPage() {
     }
   };
 
+  const handleExportExcel = () => {
+    if (!vehicles.length) return;
+    const data = vehicles.map((v) => ({
+      "Vehicle #": v.vehicleNumber || "",
+      "Registration #": v.registrationNumber || "",
+      "Type": v.vehicleType || "",
+      "Make & Model": `${v.make || ""} ${v.model || ""}`.trim(),
+      "Year": v.year || "",
+      "Capacity (Tons)": v.capacity || "",
+      "Owner / Fleet": v.ownerName || "",
+      "Current Location": v.currentLocation || "",
+      "Route": v.route || "",
+      "Assigned Driver": v.driver?.name || v.driverName || "-",
+      "Status": v.status || "AVAILABLE",
+      "Notes": v.notes || "",
+    }));
+    exportToExcel(data, "SPD_Fleet_Vehicles");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -297,13 +318,25 @@ export default function VehiclesPage() {
             Manage heavy cargo trucks, trailers, container carriers, driver assignments, and routes.
           </p>
         </div>
-        <Button
-          onClick={() => router.push("/admin/vehicles/new")}
-          className="w-full sm:w-auto bg-spd-blue hover:bg-spd-blueHover text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-4 shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Register Vehicle</span>
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={!vehicles.length}
+            className="w-full sm:w-auto rounded-xl bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 text-xs font-bold gap-2 h-10 px-4 shadow-xs"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Export Excel</span>
+          </Button>
+
+          <Button
+            onClick={() => router.push("/admin/vehicles/new")}
+            className="w-full sm:w-auto bg-spd-blue hover:bg-spd-blueHover text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-4 shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Register Vehicle</span>
+          </Button>
+        </div>
       </div>
 
       {/* Filter Bar */}

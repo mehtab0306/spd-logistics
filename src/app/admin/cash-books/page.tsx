@@ -44,9 +44,13 @@ import {
   X,
   CreditCard,
   ChevronRight,
+  Paperclip,
 } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
+import { exportToExcel } from "@/lib/export-excel";
+import { HybridCombobox } from "@/components/ui/hybrid-combobox";
+import { VoucherImageAttachment } from "@/components/shared/voucher-image-attachment";
 
 interface CashBookItem {
   id: string;
@@ -90,6 +94,7 @@ interface TransactionItem {
   challanNumber?: string;
   challan?: { id: string; challanNumber: string; truckNumber?: string };
   route?: string;
+  attachment?: string;
 }
 
 const CASH_IN_CATEGORIES = [
@@ -196,9 +201,11 @@ function CashBooksContent() {
     challanId: "",
     challanNumber: "",
     route: "",
+    attachment: "",
   };
 
   const [txFormData, setTxFormData] = useState(initialTxState);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // Smart highlight hook
   const { highlightClass } = useSmartHighlight(transactions);
@@ -439,6 +446,7 @@ function CashBooksContent() {
         customerId: txFormData.customerId || undefined,
         biltyId: txFormData.biltyId || undefined,
         biltyNumber: txFormData.biltyNumber || undefined,
+        attachment: txFormData.attachment || undefined,
       };
 
       const res = await fetch("/api/admin/cash-books", {
@@ -498,6 +506,7 @@ function CashBooksContent() {
         biltyId: txFormData.biltyId || undefined,
         biltyNumber: txFormData.biltyNumber || undefined,
         route: txFormData.route || undefined,
+        attachment: txFormData.attachment || undefined,
       };
 
       const res = await fetch("/api/admin/cash-books", {
@@ -646,54 +655,32 @@ function CashBooksContent() {
     }
   };
 
-  // Export to CSV
-  const handleExportCSV = () => {
+  // Universal Export to Excel / CSV
+  const handleExportExcel = () => {
     if (!filteredTransactions.length || !selectedBook) return;
-    const headers = [
-      "Date",
-      "Voucher #",
-      "Description",
-      "Category",
-      "Party",
-      "Vehicle",
-      "Driver",
-      "Bilty #",
-      "Challan #",
-      "Payment Method",
-      "Cash IN (Debit)",
-      "Cash OUT (Credit)",
-      "Running Balance",
-    ];
+    const data = filteredTransactions.map((t) => ({
+      "Date": t.date ? new Date(t.date).toLocaleDateString("en-GB") : "",
+      "Voucher #": t.voucherNumber || "",
+      "Description": t.description || "",
+      "Category": t.category || "",
+      "Party / Vendor": t.party || t.accountPerson || "",
+      "Payment Mode": t.paymentMethod || "CASH",
+      "Cash IN (آمد)": t.credit || 0,
+      "Cash OUT (خرچہ)": t.debit || 0,
+      "Running Balance": t.balance || 0,
+      "Vehicle #": t.vehicleNumber || "",
+      "Driver": t.driverName || "",
+      "Challan #": t.challanNumber || "",
+      "Bilty #": t.biltyNumber || "",
+      "Route": t.route || "",
+      "Proof Slip": t.attachment ? "Attached" : "No",
+      "Remarks / Notes": t.notes || "",
+    }));
 
-    const rows = filteredTransactions.map((t) => [
-      t.date ? new Date(t.date).toLocaleDateString("en-GB") : "",
-      t.voucherNumber || "",
-      `"${(t.description || "").replace(/"/g, '""')}"`,
-      t.category || "",
-      `"${(t.party || t.accountPerson || "").replace(/"/g, '""')}"`,
-      t.vehicleNumber || "",
-      t.driverName || "",
-      t.biltyNumber || "",
-      t.challanNumber || "",
-      t.paymentMethod || "CASH",
-      t.credit || 0,
-      t.debit || 0,
-      t.balance || 0,
-    ]);
-
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute(
-      "download",
-      `CashBook_${selectedBook.name.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.csv`
+    exportToExcel(
+      data,
+      `CashBook_${selectedBook.name.replace(/\s+/g, "_")}`
     );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // Print Day Book
@@ -764,12 +751,12 @@ function CashBooksContent() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             disabled={!filteredTransactions.length}
-            className="rounded-xl text-xs h-9 font-bold"
+            className="rounded-xl text-xs h-9 font-bold bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 shadow-xs"
           >
-            <Download className="w-3.5 h-3.5 mr-1.5" />
-            Export CSV
+            <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+            Export Excel
           </Button>
 
           <Button
@@ -1174,9 +1161,22 @@ function CashBooksContent() {
                       {/* Details & Transport Linking Badges */}
                       <TableCell>
                         <div className="space-y-1">
-                          <p className="font-bold text-slate-900 dark:text-white text-xs">
-                            {tx.description}
-                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-slate-900 dark:text-white text-xs">
+                              {tx.description}
+                            </p>
+                            {tx.attachment && (
+                              <button
+                                type="button"
+                                onClick={() => setLightboxImage(tx.attachment!)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-300 transition-colors shrink-0"
+                                title="Click to view attached voucher receipt proof"
+                              >
+                                <Paperclip className="w-3 h-3 text-amber-600" />
+                                <span>Receipt Proof</span>
+                              </button>
+                            )}
+                          </div>
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {tx.category && (
                               <Badge
@@ -1347,17 +1347,12 @@ function CashBooksContent() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-bold">Category</Label>
-                <select
+                <HybridCombobox
                   value={txFormData.category}
-                  onChange={(e) => setTxFormData({ ...txFormData, category: e.target.value })}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1"
-                >
-                  {CASH_IN_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setTxFormData({ ...txFormData, category: val })}
+                  options={CASH_IN_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                  className="mt-1"
+                />
               </div>
 
               <div>
@@ -1402,11 +1397,15 @@ function CashBooksContent() {
 
               <div>
                 <Label className="text-xs font-bold">Party / Payer Name</Label>
-                <Input
-                  placeholder=""
+                <HybridCombobox
                   value={txFormData.party}
-                  onChange={(e) => setTxFormData({ ...txFormData, party: e.target.value })}
-                  className="h-9 text-xs mt-1"
+                  onChange={(val) => setTxFormData({ ...txFormData, party: val })}
+                  options={customers.map((c) => ({
+                    value: c.companyName || c.name,
+                    label: c.companyName || c.name,
+                    sublabel: c.city || "Client",
+                  }))}
+                  className="mt-1"
                 />
               </div>
             </div>
@@ -1456,6 +1455,13 @@ function CashBooksContent() {
                 className="h-9 text-xs mt-1"
               />
             </div>
+
+            {/* Voucher Attachment */}
+            <VoucherImageAttachment
+              value={txFormData.attachment}
+              onChange={(val) => setTxFormData({ ...txFormData, attachment: val })}
+              label="Attach Voucher / Deposit Slip Proof (Optional)"
+            />
 
             <DialogFooter className="pt-2">
               <Button
@@ -1529,17 +1535,12 @@ function CashBooksContent() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-bold">Category *</Label>
-                <select
+                <HybridCombobox
                   value={txFormData.category}
-                  onChange={(e) => setTxFormData({ ...txFormData, category: e.target.value })}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs mt-1"
-                >
-                  {CASH_OUT_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setTxFormData({ ...txFormData, category: val })}
+                  options={CASH_OUT_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                  className="mt-1"
+                />
               </div>
 
               <div>
@@ -1568,50 +1569,46 @@ function CashBooksContent() {
                 {/* Vehicle Selection */}
                 <div>
                   <Label className="text-[11px] font-bold">Vehicle / Truck #</Label>
-                  <select
-                    value={txFormData.vehicleId}
-                    onChange={(e) => {
-                      const veh = vehicles.find((v) => v.id === e.target.value);
+                  <HybridCombobox
+                    value={txFormData.vehicleNumber}
+                    onChange={(val) => {
+                      const veh = vehicles.find((v) => v.vehicleNumber === val);
                       setTxFormData({
                         ...txFormData,
-                        vehicleId: e.target.value,
-                        vehicleNumber: veh ? veh.vehicleNumber : "",
+                        vehicleNumber: val,
+                        vehicleId: veh ? veh.id : txFormData.vehicleId,
                       });
                     }}
-                    className="w-full h-8.5 rounded-md border border-input bg-background px-2.5 text-xs mt-1"
-                  >
-                    <option value="">-- None / General Expense --</option>
-                    {vehicles.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.vehicleNumber} ({v.ownerName || "Vehicle"})
-                      </option>
-                    ))}
-                  </select>
+                    options={vehicles.map((v) => ({
+                      value: v.vehicleNumber,
+                      label: v.vehicleNumber,
+                      sublabel: v.ownerName || "Vehicle",
+                    }))}
+                    className="mt-1"
+                  />
                 </div>
 
                 {/* Driver Selection */}
                 <div>
                   <Label className="text-[11px] font-bold">Driver</Label>
-                  <select
-                    value={txFormData.driverId}
-                    onChange={(e) => {
-                      const d = drivers.find((drv) => drv.id === e.target.value);
+                  <HybridCombobox
+                    value={txFormData.driverName}
+                    onChange={(val) => {
+                      const d = drivers.find((drv) => drv.name === val);
                       setTxFormData({
                         ...txFormData,
-                        driverId: e.target.value,
-                        driverName: d ? d.name : "",
-                        party: d && !txFormData.party ? d.name : txFormData.party,
+                        driverName: val,
+                        driverId: d ? d.id : txFormData.driverId,
+                        party: !txFormData.party ? val : txFormData.party,
                       });
                     }}
-                    className="w-full h-8.5 rounded-md border border-input bg-background px-2.5 text-xs mt-1"
-                  >
-                    <option value="">-- Select Driver --</option>
-                    {drivers.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name} {d.phone ? `(${d.phone})` : ""}
-                      </option>
-                    ))}
-                  </select>
+                    options={drivers.map((d) => ({
+                      value: d.name,
+                      label: d.name,
+                      sublabel: d.phone || "Driver",
+                    }))}
+                    className="mt-1"
+                  />
                 </div>
               </div>
 
@@ -1660,11 +1657,14 @@ function CashBooksContent() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-bold">Party / Vendor Name</Label>
-                <Input
-                  placeholder=""
+                <HybridCombobox
                   value={txFormData.party}
-                  onChange={(e) => setTxFormData({ ...txFormData, party: e.target.value })}
-                  className="h-9 text-xs mt-1"
+                  onChange={(val) => setTxFormData({ ...txFormData, party: val })}
+                  options={[
+                    ...customers.map((c) => ({ value: c.companyName || c.name, label: c.companyName || c.name, sublabel: "Customer / Vendor" })),
+                    ...drivers.map((d) => ({ value: d.name, label: d.name, sublabel: "Driver" })),
+                  ]}
+                  className="mt-1"
                 />
               </div>
 
@@ -1688,6 +1688,13 @@ function CashBooksContent() {
                 className="h-9 text-xs mt-1"
               />
             </div>
+
+            {/* Voucher Attachment */}
+            <VoucherImageAttachment
+              value={txFormData.attachment}
+              onChange={(val) => setTxFormData({ ...txFormData, attachment: val })}
+              label="Attach Voucher / Fuel Slip / Expense Receipt Proof (Optional)"
+            />
 
             <DialogFooter className="pt-2">
               <Button
@@ -1877,6 +1884,35 @@ function CashBooksContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ======================================================== */}
+      {/* LIGHTBOX: VIEW VOUCHER / RECEIPT PROOF IMAGE */}
+      {/* ======================================================== */}
+      {lightboxImage && (
+        <Dialog open={!!lightboxImage} onOpenChange={() => setLightboxImage(null)}>
+          <DialogContent className="max-w-3xl p-4 bg-slate-950 border-slate-800 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold text-slate-200 flex items-center justify-between">
+                <span>Voucher / Receipt Proof</span>
+                <a
+                  href={lightboxImage}
+                  download="voucher-proof.jpg"
+                  className="text-xs text-spd-blue hover:underline flex items-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download
+                </a>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="mt-2 flex items-center justify-center max-h-[75vh] overflow-auto rounded-lg bg-black/40 p-2">
+              <img
+                src={lightboxImage}
+                alt="Voucher Receipt Proof"
+                className="max-h-[70vh] w-auto object-contain rounded"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

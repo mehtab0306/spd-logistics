@@ -44,8 +44,10 @@ import {
   Trash2,
   FileText,
   UserCheck,
+  FileSpreadsheet,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { exportToExcel } from "@/lib/export-excel";
 
 interface PayableItem {
   id: string;
@@ -482,42 +484,24 @@ export default function PayablesPage() {
     fetch(`/api/admin/payables?id=${id}`, { method: "DELETE" }).catch(() => {});
   };
 
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     if (payables.length === 0) return;
-    const headers = [
-      "Vendor / Beneficiary",
-      "Category",
-      "Reference",
-      "Vehicle / Driver",
-      "Description",
-      "Total Amount (PKR)",
-      "Paid Amount (PKR)",
-      "Remaining Balance (PKR)",
-      "Due Date",
-      "Status",
-    ];
+    const data = payables.map((p) => ({
+      "Vendor / Beneficiary": p.vendorName || "",
+      "Category": p.category || "",
+      "Reference": p.reference || "",
+      "Vehicle / Truck": p.vehicleNumber || "",
+      "Driver": p.driverName || "",
+      "Description": p.description || "",
+      "Total Amount (PKR)": p.totalAmount || 0,
+      "Paid Amount (PKR)": p.paidAmount || 0,
+      "Remaining Balance (PKR)": p.remainingAmount || 0,
+      "Due Date": p.dueDate ? p.dueDate.slice(0, 10) : "",
+      "Status": p.status || "UNPAID",
+      "Notes": p.notes || "",
+    }));
 
-    const rows = payables.map((p) => [
-      `"${p.vendorName}"`,
-      `"${p.category}"`,
-      `"${p.reference || ""}"`,
-      `"${p.vehicleNumber || p.driverName || ""}"`,
-      `"${p.description}"`,
-      p.totalAmount,
-      p.paidAmount,
-      p.remainingAmount,
-      p.dueDate ? p.dueDate.slice(0, 10) : "",
-      p.status,
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `spd_payables_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportToExcel(data, "SPD_Payables_Summary");
   };
 
   const getCategoryBadge = (cat: string) => {
@@ -549,9 +533,15 @@ export default function PayablesPage() {
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportCSV} className="w-full sm:w-auto gap-1.5">
-              <Download className="h-4 w-4" />
-              Export CSV
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={payables.length === 0}
+              className="w-full sm:w-auto gap-1.5 bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 font-bold shadow-xs"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+              Export Excel
             </Button>
             <Button variant="outline" size="sm" onClick={() => window.print()} className="w-full sm:w-auto gap-1.5">
               <Printer className="h-4 w-4" />

@@ -41,6 +41,8 @@ import {
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
 import { PAKISTAN_CITIES } from "@/lib/constants";
+import { exportToExcel } from "@/lib/export-excel";
+import { HybridCombobox } from "@/components/ui/hybrid-combobox";
 
 export default function ChallanPage() {
   const router = useRouter();
@@ -277,6 +279,26 @@ export default function ChallanPage() {
     }
   };
 
+  const handleExportWarehouseBilties = () => {
+    if (!filteredBilties.length) return;
+    const data = filteredBilties.map((b) => ({
+      "Bilty #": b.biltyNumber || "",
+      "Tracking ID": b.trackingId || "",
+      "Date": b.date ? new Date(b.date).toLocaleDateString("en-GB") : "",
+      "Origin": b.origin || "",
+      "Destination": b.destination || "",
+      "Warehouse": b.warehouse || "Lahore",
+      "Sender": b.senderName || "",
+      "Receiver": b.receiverName || "",
+      "Packages": b.quantity || 1,
+      "Weight (kg)": b.weight || 0,
+      "Freight (PKR)": b.freight || 0,
+      "Total (PKR)": b.totalAmount || b.freight || 0,
+      "Payment Status": b.remainingBalance <= 0 ? "PAID" : "TO-PAY",
+    }));
+    exportToExcel(data, `Warehouse_Bilties_${warehouseFilter || "ALL"}`);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
@@ -443,9 +465,19 @@ export default function ChallanPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={handleExportWarehouseBilties}
+            disabled={!filteredBilties.length}
+            className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold gap-2 h-10 px-3.5 shadow-xs"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Export Warehouse Bilties</span>
+          </Button>
+
           <Link href="/admin/challan-in-transit">
-            <Button variant="outline" className="rounded-xl text-xs font-bold gap-2">
+            <Button variant="outline" className="rounded-xl text-xs font-bold gap-2 h-10 px-3.5">
               <Truck className="w-4 h-4 text-emerald-600" />
               <span>Challan in Transit</span>
             </Button>
@@ -694,34 +726,22 @@ export default function ChallanPage() {
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                   From (Booking Station) *
                 </Label>
-                <select
+                <HybridCombobox
                   value={challanData.origin}
-                  onChange={(e) => setChallanData({ ...challanData, origin: e.target.value })}
-                  className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
-                >
-                  {PAKISTAN_CITIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setChallanData({ ...challanData, origin: val })}
+                  options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
+                />
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                   To (Delivery Station) *
                 </Label>
-                <select
+                <HybridCombobox
                   value={challanData.destination}
-                  onChange={(e) => setChallanData({ ...challanData, destination: e.target.value })}
-                  className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
-                >
-                  {PAKISTAN_CITIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setChallanData({ ...challanData, destination: val })}
+                  options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
+                />
               </div>
             </FormSectionCard>
 
@@ -786,14 +806,16 @@ export default function ChallanPage() {
                     <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                       Market Truck Registration # *
                     </Label>
-                    <Input
-                      required
-                      placeholder=""
+                    <HybridCombobox
                       value={challanData.truckNumber}
-                      onChange={(e) =>
-                        setChallanData({ ...challanData, truckNumber: e.target.value.toUpperCase() })
+                      onChange={(val) =>
+                        setChallanData({ ...challanData, truckNumber: val.toUpperCase() })
                       }
-                      className="rounded-xl h-10 text-xs font-mono uppercase font-black"
+                      options={vehicles.map((v) => ({
+                        value: v.vehicleNumber,
+                        label: v.vehicleNumber,
+                        sublabel: v.ownerName || "Vehicle",
+                      }))}
                     />
                   </div>
 
@@ -801,14 +823,21 @@ export default function ChallanPage() {
                     <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                       Driver Name *
                     </Label>
-                    <Input
-                      required
-                      placeholder=""
+                    <HybridCombobox
                       value={challanData.driverName}
-                      onChange={(e) =>
-                        setChallanData({ ...challanData, driverName: e.target.value })
-                      }
-                      className="rounded-xl h-10 text-xs"
+                      onChange={(val) => {
+                        const d = drivers.find((drv) => drv.name === val);
+                        setChallanData({
+                          ...challanData,
+                          driverName: val,
+                          driverPhone: d ? d.phone || d.contact || challanData.driverPhone : challanData.driverPhone,
+                        });
+                      }}
+                      options={drivers.map((d) => ({
+                        value: d.name,
+                        label: d.name,
+                        sublabel: d.phone || "Driver",
+                      }))}
                     />
                   </div>
 

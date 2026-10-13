@@ -54,6 +54,7 @@ import {
   mergeLocalWithApi,
   getStoredBilties,
 } from "@/lib/local-persistence";
+import { exportToExcel } from "@/lib/export-excel";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -471,30 +472,26 @@ export default function CustomersPage() {
     }
   };
 
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     if (customers.length === 0) return;
-    const headers = ["Account ID", "Name", "Company", "Phone", "Email", "City", "Warehouse", "Status", "Opening Balance", "Credit Limit"];
-    const rows = customers.map((c) => [
-      c.accountId,
-      `"${c.name}"`,
-      `"${c.companyName || ""}"`,
-      c.phone || "",
-      c.email || "",
-      c.city || "",
-      c.warehouse || "",
-      c.status,
-      c.openingBalance,
-      c.creditLimit,
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `spd_customers_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const data = customers.map((c) => ({
+      "Account ID": c.accountId || c.id || "",
+      "Customer / Shipper Name": c.name || "",
+      "Company Name": c.companyName || "",
+      "Phone": c.phone || "",
+      "WhatsApp": c.whatsapp || c.phone || "",
+      "Email / Login": c.email || "",
+      "CNIC / NTN": c.cnic || "",
+      "City": c.city || "Lahore",
+      "Warehouse Station": c.warehouse || "LAHORE",
+      "Address": c.address || "",
+      "Status": c.status || "ACTIVE",
+      "Opening Balance (PKR)": c.openingBalance || 0,
+      "Current Balance (PKR)": c.account?.balance ?? c.openingBalance ?? 0,
+      "Credit Limit (PKR)": c.creditLimit || 0,
+      "Total Bilties": c._count?.consignmentsAsCustomer || 0,
+    }));
+    exportToExcel(data, "SPD_Customers_Directory");
   };
 
   return (
@@ -511,11 +508,11 @@ export default function CustomersPage() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
           <Button
             variant="outline"
-            onClick={handleExportCSV}
-            className="w-full sm:w-auto rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold gap-2"
+            onClick={handleExportExcel}
+            className="w-full sm:w-auto rounded-xl bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 text-xs font-bold gap-2 shadow-xs"
           >
-            <Download className="w-4 h-4" />
-            <span>Export CSV</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Export Excel</span>
           </Button>
           <Button
             onClick={() => router.push("/admin/customers/new")}

@@ -42,8 +42,10 @@ import {
   FileText,
   ChevronRight,
   User,
+  FileSpreadsheet,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { exportToExcel } from "@/lib/export-excel";
 
 interface BiltyDetail {
   id: string;
@@ -451,41 +453,22 @@ export default function ReceivablesPage() {
     }
   };
 
-  // CSV Export
-  const handleExportCSV = () => {
+  // Universal Excel Export
+  const handleExportExcel = () => {
     if (customers.length === 0) return;
-    const headers = [
-      "Customer Name",
-      "Company",
-      "Phone",
-      "City",
-      "Total Bilties",
-      "Total Invoiced (PKR)",
-      "Total Paid (PKR)",
-      "Outstanding Balance (PKR)",
-      "Payment Status",
-    ];
+    const data = customers.map((c) => ({
+      "Customer Name": c.customerName || "",
+      "Company": c.companyName || "",
+      "Phone": c.phone || "",
+      "City": c.city || "",
+      "Total Bilties": c.totalBiltiesCount || 0,
+      "Total Invoiced (PKR)": c.totalInvoicedAmount || 0,
+      "Total Paid (PKR)": c.totalPaidAmount || 0,
+      "Outstanding Balance (PKR)": c.totalOutstandingBalance || 0,
+      "Payment Status": c.paymentStatus || "UNPAID",
+    }));
 
-    const rows = customers.map((c) => [
-      `"${c.customerName}"`,
-      `"${c.companyName || ""}"`,
-      `"${c.phone}"`,
-      `"${c.city}"`,
-      c.totalBiltiesCount,
-      c.totalInvoicedAmount,
-      c.totalPaidAmount,
-      c.totalOutstandingBalance,
-      c.paymentStatus,
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `spd_receivables_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportToExcel(data, "SPD_Receivables_Summary");
   };
 
   // Print Report
@@ -528,9 +511,15 @@ export default function ReceivablesPage() {
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportCSV} className="w-full sm:w-auto gap-1.5">
-              <Download className="h-4 w-4" />
-              Export CSV
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={customers.length === 0}
+              className="w-full sm:w-auto gap-1.5 bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 font-bold shadow-xs"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+              Export Excel
             </Button>
             <Button variant="default" size="sm" onClick={handlePrint} className="w-full sm:w-auto bg-spd-blue hover:bg-blue-800 text-white gap-1.5">
               <Printer className="h-4 w-4" />

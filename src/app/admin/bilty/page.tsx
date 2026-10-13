@@ -42,8 +42,10 @@ import {
   Camera,
   Upload,
   Maximize2,
+  FileSpreadsheet,
 } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { exportToExcel } from "@/lib/export-excel";
 import {
   getStoredBilties,
   saveStoredBilty,
@@ -1208,6 +1210,35 @@ export default function BiltyPage() {
     }
   };
 
+  const handleExportExcel = () => {
+    exportToExcel(
+      "SPD_Bilties_Export",
+      [
+        { header: "Bilty #", accessor: (b) => b.biltyNumber || "" },
+        { header: "Tracking ID", accessor: (b) => b.trackingId || "" },
+        { header: "Booking Date", accessor: (b) => b.date ? new Date(b.date).toLocaleDateString("en-GB") : "" },
+        { header: "From (Station)", accessor: (b) => b.origin || "" },
+        { header: "To (Station)", accessor: (b) => b.destination || "" },
+        { header: "Sender / Consignor", accessor: (b) => b.senderName || "" },
+        { header: "Sender Phone", accessor: (b) => b.senderPhone || "" },
+        { header: "Receiver / Consignee", accessor: (b) => b.receiverName || "" },
+        { header: "Receiver Phone", accessor: (b) => b.receiverPhone || "" },
+        { header: "Cargo / Goods Details", accessor: (b) => b.packageDetails || "" },
+        { header: "Packages / Qty", accessor: (b) => b.quantity || 1 },
+        { header: "Weight (Kg)", accessor: (b) => b.weight || "" },
+        { header: "Vehicle", accessor: (b) => b.vehicleNumber || b.vehicle?.vehicleNumber || "Unassigned" },
+        { header: "Driver", accessor: (b) => b.driverName || b.driver?.name || "Unassigned" },
+        { header: "Base Freight (PKR)", accessor: (b) => b.freight || 0 },
+        { header: "Total Amount (PKR)", accessor: (b) => b.totalAmount || 0 },
+        { header: "Paid Amount (PKR)", accessor: (b) => b.paidAmount || 0 },
+        { header: "Remaining Balance (PKR)", accessor: (b) => b.remainingBalance ?? ((b.totalAmount || 0) - (b.paidAmount || 0)) },
+        { header: "Payment Status", accessor: (b) => b.paymentStatus || "PENDING" },
+        { header: "Shipment Status", accessor: (b) => b.shipmentStatus || "BOOKED" },
+      ],
+      consignments
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1219,13 +1250,24 @@ export default function BiltyPage() {
             Generate official consignment bilty vouchers, assign fleet drivers, update status, and print vouchers.
           </p>
         </div>
-        <Button
-          onClick={() => router.push("/admin/bilty/new")}
-          className="w-full sm:w-auto bg-spd-red hover:bg-spd-redHover text-white font-bold text-xs sm:text-sm rounded-xl shadow-md gap-2 h-10 px-4 shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Consignment Bilty</span>
-        </Button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={!consignments.length}
+            className="rounded-xl text-xs sm:text-sm font-bold gap-2 h-10 border-slate-300 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 text-slate-700 dark:text-slate-200"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Export Excel</span>
+          </Button>
+          <Button
+            onClick={() => router.push("/admin/bilty/new")}
+            className="w-full sm:w-auto bg-spd-red hover:bg-spd-redHover text-white font-bold text-xs sm:text-sm rounded-xl shadow-md gap-2 h-10 px-4 shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Consignment Bilty</span>
+          </Button>
+        </div>
       </div>
 
       {/* Action Feedback Banner */}
@@ -2112,37 +2154,50 @@ export default function BiltyPage() {
                   </div>
                 </div>
 
-                {/* Consignment & Cargo Photos Section (Task 2) */}
-                {viewDetailsBilty.photos && viewDetailsBilty.photos.length > 0 && (
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                        <Camera className="w-4 h-4 text-spd-blue" />
-                        Attached Consignment Cargo Photos ({viewDetailsBilty.photos.length})
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-medium">Click photo to view in high-resolution</span>
-                    </div>
+                {/* Proof & Attachment Documents (Cargo Photo, Physical Bilty Copy, Weight Slip Proof) */}
+                {(() => {
+                  const proofItems = [
+                    { title: "Goods / Cargo Photo", url: viewDetailsBilty.cargoPhoto || viewDetailsBilty.photos?.[0] },
+                    { title: "Physical Bilty Copy", url: viewDetailsBilty.biltyPhoto || viewDetailsBilty.photos?.[1] },
+                    { title: "Weight Slip / Loading Proof", url: viewDetailsBilty.weightSlipPhoto || viewDetailsBilty.photos?.[2] },
+                  ].filter((p) => Boolean(p.url));
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {viewDetailsBilty.photos.map((photo: string, index: number) => (
-                        <div
-                          key={index}
-                          onClick={() => setPreviewPhotoUrl(photo)}
-                          className="group relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 aspect-video cursor-pointer shadow-sm hover:shadow-md transition-all"
-                        >
-                          <img
-                            src={photo}
-                            alt={`Cargo Photo ${index + 1}`}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-bold">
-                            <Maximize2 className="w-4 h-4" /> Full View
+                  if (proofItems.length === 0) return null;
+
+                  return (
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                          <Camera className="w-4 h-4 text-spd-red" />
+                          Attachment & Proof Documents ({proofItems.length})
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">Click photo to view in high-resolution</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {proofItems.map((item, index) => (
+                          <div
+                            key={index}
+                            onClick={() => setPreviewPhotoUrl(item.url)}
+                            className="group relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex flex-col aspect-video cursor-pointer shadow-sm hover:shadow-md transition-all"
+                          >
+                            <img
+                              src={item.url}
+                              alt={item.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                            />
+                            <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/70 text-white text-[10px] font-bold">
+                              {item.title}
+                            </div>
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-bold">
+                              <Maximize2 className="w-4 h-4" /> Full View
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* 3. Tracking Event History (Section 8) */}
                 <div className="space-y-2">

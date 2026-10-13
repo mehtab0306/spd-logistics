@@ -37,6 +37,7 @@ import {
   MessageSquare,
   Printer,
   Package,
+  FileSpreadsheet,
 } from "lucide-react";
 import { formatDate, cn } from "@/lib/utils";
 import { buildWhatsAppUrl, getAdminToDriverWhatsAppMessage } from "@/lib/whatsapp";
@@ -51,6 +52,7 @@ import {
   getStoredBilties,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
+import { exportToExcel } from "@/lib/export-excel";
 
 export default function DriversPage() {
   const router = useRouter();
@@ -466,6 +468,23 @@ export default function DriversPage() {
     }
   };
 
+  const handleExportExcel = () => {
+    if (!drivers.length) return;
+    const data = drivers.map((d) => ({
+      "Driver Name": d.name || "",
+      "Phone / Contact": d.phone || d.contact || "",
+      "CNIC": d.cnic || "",
+      "License Number": d.licenseNumber || "",
+      "License Expiry": d.licenseExpiry ? new Date(d.licenseExpiry).toLocaleDateString("en-GB") : "",
+      "Assigned Vehicle": d.vehicleNumber || d.assignedVehicle?.vehicleNumber || "-",
+      "Status": d.status || "AVAILABLE",
+      "Address": d.address || "",
+      "Emergency Contact": d.emergencyContact || "",
+      "Notes": d.notes || "",
+    }));
+    exportToExcel(data, "SPD_Drivers_Directory");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -477,13 +496,25 @@ export default function DriversPage() {
             Manage long-haul transport drivers, assign vehicles, create driver login credentials, and track route statuses.
           </p>
         </div>
-        <Button
-          onClick={() => router.push("/admin/drivers/new")}
-          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-4 shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add New Driver</span>
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={!drivers.length}
+            className="w-full sm:w-auto rounded-xl bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 text-xs font-bold gap-2 h-10 px-4 shadow-xs"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Export Excel</span>
+          </Button>
+
+          <Button
+            onClick={() => router.push("/admin/drivers/new")}
+            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-4 shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Driver</span>
+          </Button>
+        </div>
       </div>
 
       {actionFeedback && (

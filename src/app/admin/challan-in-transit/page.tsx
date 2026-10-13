@@ -32,6 +32,7 @@ import {
   saveStoredBilty,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
+import { exportToExcel } from "@/lib/export-excel";
 
 export default function ChallanInTransitPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -141,6 +142,30 @@ export default function ChallanInTransitPage() {
     );
   });
 
+  const handleExportExcel = () => {
+    if (!filteredChallans.length) return;
+    const data = filteredChallans.map((c) => ({
+      "Challan #": c.challanNumber || "",
+      "Date": c.date ? new Date(c.date).toLocaleDateString("en-GB") : "",
+      "Status": c.status || "IN_TRANSIT",
+      "Origin": c.origin || "",
+      "Destination": c.destination || "",
+      "Warehouse": c.warehouse || "",
+      "Truck #": c.truckNumber || "",
+      "Hiring Mode": c.hiringMode === "MARKET_BROKER" ? "Market Broker" : "Company Fleet",
+      "Broker": c.brokerName || "-",
+      "Driver Name": c.driverName || "",
+      "Driver Phone": c.driverPhone || "",
+      "Bilties Count": Array.isArray(c.consignments) ? c.consignments.length : 0,
+      "Total Freight (PKR)": c.totalAmount || 0,
+      "Truck Freight (PKR)": c.truckFreight || c.brokerFreight || 0,
+      "Advance Paid (PKR)": c.advancePaidToDriver || c.brokerAdvance || 0,
+      "Estimated Profit (PKR)": c.estimatedProfit || 0,
+      "Notes": c.notes || "",
+    }));
+    exportToExcel(data, "Challan_In_Transit");
+  };
+
   return (
     <div className="space-y-6 pb-20">
       {/* Printable Challan Modal */}
@@ -167,7 +192,17 @@ export default function ChallanInTransitPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={!filteredChallans.length}
+            className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-xl shadow-xs gap-2 h-10 px-4"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Export Excel</span>
+          </Button>
+
           <Link href="/admin/challan">
             <Button className="bg-spd-blue hover:bg-spd-blueHover text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-4">
               <FileSpreadsheet className="w-4 h-4" />

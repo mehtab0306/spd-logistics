@@ -28,6 +28,8 @@ import {
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
 import { PAKISTAN_CITIES } from "@/lib/constants";
+import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
+import { HybridCombobox } from "@/components/ui/hybrid-combobox";
 
 export default function EditBiltyPage() {
   const router = useRouter();
@@ -77,6 +79,9 @@ export default function EditBiltyPage() {
 
     shipmentStatus: "BOOKED",
     notes: "",
+    cargoPhoto: "",
+    biltyPhoto: "",
+    weightSlipPhoto: "",
   });
 
   useEffect(() => {
@@ -157,6 +162,9 @@ export default function EditBiltyPage() {
 
           shipmentStatus: found.shipmentStatus || "BOOKED",
           notes: found.notes || "",
+          cargoPhoto: found.cargoPhoto || (found.photos?.[0] || ""),
+          biltyPhoto: found.biltyPhoto || (found.photos?.[1] || ""),
+          weightSlipPhoto: found.weightSlipPhoto || (found.photos?.[2] || ""),
         });
       }
     } catch (err) {
@@ -267,6 +275,10 @@ export default function EditBiltyPage() {
         paidAmount: paidNum,
         remainingBalance,
         paymentStatus,
+        cargoPhoto: formData.cargoPhoto || null,
+        biltyPhoto: formData.biltyPhoto || null,
+        weightSlipPhoto: formData.weightSlipPhoto || null,
+        photos: [formData.cargoPhoto, formData.biltyPhoto, formData.weightSlipPhoto].filter(Boolean),
         updatedAt: new Date().toISOString(),
       };
 
@@ -414,34 +426,26 @@ export default function EditBiltyPage() {
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
               From (Booking Station) *
             </Label>
-            <select
+            <HybridCombobox
               value={formData.origin}
-              onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
-            >
-              {PAKISTAN_CITIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setFormData({ ...formData, origin: val })}
+              options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
+              placeholder=""
+              inputClassName="h-10 rounded-xl font-semibold"
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
               To (Delivery Station) *
             </Label>
-            <select
+            <HybridCombobox
               value={formData.destination}
-              onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
-            >
-              {PAKISTAN_CITIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setFormData({ ...formData, destination: val })}
+              options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
+              placeholder=""
+              inputClassName="h-10 rounded-xl font-semibold"
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -496,12 +500,30 @@ export default function EditBiltyPage() {
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                 Sender / Consignor Name *
               </Label>
-              <Input
+              <HybridCombobox
                 required
                 value={formData.senderName}
                 placeholder=""
-                onChange={(e) => setFormData({ ...formData, senderName: e.target.value })}
-                className="rounded-xl h-10 text-xs font-semibold"
+                onChange={(val) => setFormData({ ...formData, senderName: val })}
+                onSelectOption={(opt) => {
+                  const c = opt.meta;
+                  if (c) {
+                    setFormData((prev) => ({
+                      ...prev,
+                      customerId: c.id,
+                      senderName: c.name || c.companyName || prev.senderName,
+                      senderPhone: c.phone || prev.senderPhone,
+                      senderAddress: c.address || (c.city ? `${c.city}, Pakistan` : prev.senderAddress),
+                    }));
+                  }
+                }}
+                options={customers.map((c) => ({
+                  value: c.name || c.companyName || "",
+                  label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
+                  subLabel: `${c.city || "Pakistan"} • ${c.companyName || "Client"}`,
+                  meta: c,
+                }))}
+                inputClassName="h-10 rounded-xl font-semibold"
               />
             </div>
 
@@ -541,12 +563,29 @@ export default function EditBiltyPage() {
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                 Receiver / Consignee Name *
               </Label>
-              <Input
+              <HybridCombobox
                 required
                 value={formData.receiverName}
                 placeholder=""
-                onChange={(e) => setFormData({ ...formData, receiverName: e.target.value })}
-                className="rounded-xl h-10 text-xs font-semibold"
+                onChange={(val) => setFormData({ ...formData, receiverName: val })}
+                onSelectOption={(opt) => {
+                  const c = opt.meta;
+                  if (c) {
+                    setFormData((prev) => ({
+                      ...prev,
+                      receiverName: c.name || c.companyName || prev.receiverName,
+                      receiverPhone: c.phone || prev.receiverPhone,
+                      receiverAddress: c.address || (c.city ? `${c.city}, Pakistan` : prev.receiverAddress),
+                    }));
+                  }
+                }}
+                options={customers.map((c) => ({
+                  value: c.name || c.companyName || "",
+                  label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
+                  subLabel: `${c.city || "Pakistan"} • ${c.companyName || "Client"}`,
+                  meta: c,
+                }))}
+                inputClassName="h-10 rounded-xl font-semibold"
               />
             </div>
 
@@ -667,27 +706,84 @@ export default function EditBiltyPage() {
         >
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Assigned Vehicle
+              Assigned Vehicle (Select or Type Truck #)
             </Label>
-            <SearchableSelect
-              options={vehicleOptions}
-              value={formData.vehicleId}
-              onChange={handleVehicleSelect}
+            <HybridCombobox
+              value={formData.vehicleNumber}
+              onChange={(val) => setFormData({ ...formData, vehicleNumber: val })}
+              onSelectOption={(opt) => {
+                const v = opt.meta;
+                if (v) {
+                  setFormData((prev) => ({
+                    ...prev,
+                    vehicleId: v.id,
+                    vehicleNumber: v.vehicleNumber || v.registrationNumber || opt.value,
+                    driverId: v.driverId || prev.driverId,
+                    driverName: v.driver?.name || prev.driverName,
+                  }));
+                }
+              }}
+              options={vehicles.map((v) => ({
+                value: v.vehicleNumber || v.registrationNumber || "",
+                label: `${v.vehicleNumber || v.registrationNumber} (${v.type || v.make || "Truck"})`,
+                subLabel: `Owner: ${v.ownerName || "SPD"} • Status: ${v.status || "AVAILABLE"}`,
+                meta: v,
+              }))}
               placeholder=""
-              emptyMessage="No vehicles available"
+              inputClassName="h-10 rounded-xl"
             />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Assigned Driver
+              Assigned Driver (Select or Type Name)
             </Label>
-            <SearchableSelect
-              options={driverOptions}
-              value={formData.driverId}
-              onChange={handleDriverSelect}
+            <HybridCombobox
+              value={formData.driverName}
+              onChange={(val) => setFormData({ ...formData, driverName: val })}
+              onSelectOption={(opt) => {
+                const d = opt.meta;
+                if (d) {
+                  setFormData((prev) => ({
+                    ...prev,
+                    driverId: d.id,
+                    driverName: d.name || opt.value,
+                  }));
+                }
+              }}
+              options={drivers.map((d) => ({
+                value: d.name || "",
+                label: `${d.name} (${d.phone || d.contact || "No phone"})`,
+                subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status || "AVAILABLE"}`,
+                meta: d,
+              }))}
               placeholder=""
-              emptyMessage="No drivers available"
+              inputClassName="h-10 rounded-xl"
+            />
+          </div>
+        </FormSectionCard>
+
+        {/* Section: Attachment & Proof Documents (Triple Image Attachment) */}
+        <FormSectionCard
+          title="Attachment & Proof Documents"
+          badge="Proofs"
+          description="Upload cargo photos, physical consignment bilty stamp copy, and weighbridge slips"
+        >
+          <div className="col-span-1 sm:col-span-2">
+            <TripleImageAttachment
+              attachments={{
+                cargoPhoto: formData.cargoPhoto,
+                biltyPhoto: formData.biltyPhoto,
+                weightSlipPhoto: formData.weightSlipPhoto,
+              }}
+              onChange={(updated) =>
+                setFormData({
+                  ...formData,
+                  cargoPhoto: updated.cargoPhoto || "",
+                  biltyPhoto: updated.biltyPhoto || "",
+                  weightSlipPhoto: updated.weightSlipPhoto || "",
+                })
+              }
             />
           </div>
         </FormSectionCard>

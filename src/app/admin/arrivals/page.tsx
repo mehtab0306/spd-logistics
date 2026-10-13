@@ -19,6 +19,7 @@ import {
   ArrowRight,
   Printer,
   Layers,
+  FileSpreadsheet,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { PrintableChallan } from "@/components/challan/printable-challan";
@@ -28,6 +29,7 @@ import {
   getDeletedChallanIds,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
+import { exportToExcel } from "@/lib/export-excel";
 
 export default function ArrivalsPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -121,6 +123,24 @@ export default function ArrivalsPage() {
     );
   });
 
+  const handleExportExcel = () => {
+    if (!filtered.length) return;
+    const data = filtered.map((c) => ({
+      "Challan #": c.challanNumber || "",
+      "Arrival Date": c.arrivalDate ? new Date(c.arrivalDate).toLocaleDateString("en-GB") : "",
+      "Origin": c.origin || "",
+      "Destination Hub": c.destination || "",
+      "Truck #": c.truckNumber || "",
+      "Driver": c.driverName || "",
+      "Driver Phone": c.driverPhone || "",
+      "Status": c.status || "ARRIVED",
+      "Consignments Count": Array.isArray(c.consignments) ? c.consignments.length : 0,
+      "Total Freight (PKR)": c.totalAmount || 0,
+      "Notes / Inspection": c.notes || "",
+    }));
+    exportToExcel(data, "Warehouse_Arrivals");
+  };
+
   return (
     <div className="space-y-6 pb-20">
       {printChallan && (
@@ -146,7 +166,17 @@ export default function ArrivalsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={!filtered.length}
+            className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-xl shadow-xs gap-2 h-10 px-4"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Export Excel</span>
+          </Button>
+
           <Link href="/admin/delivery">
             <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-4">
               <Package className="w-4 h-4" />
