@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { getCurrentUser, getAuthCookie } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { sendEventEmail } from '@/lib/mailer';
+import { saveCentralRecord, getCentralCollection, deleteCentralRecord } from '@/lib/server-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -365,6 +366,16 @@ export async function GET(request: Request) {
         }
         return true;
       });
+    }
+
+    // Merge central serverless collection
+    const centralBilties = getCentralCollection('bilties');
+    const existingIds = new Set((consignments || []).map((b: any) => b.id));
+    for (const b of centralBilties) {
+      if (!existingIds.has(b.id)) {
+        consignments.unshift(b);
+        existingIds.add(b.id);
+      }
     }
 
     return NextResponse.json({ success: true, data: consignments });
@@ -842,6 +853,8 @@ export async function POST(request: Request) {
       link: '/admin/bilty',
     }).catch((err) => console.warn('[Email Alert Error]', err));
 
+    saveCentralRecord('bilties', consignment);
+
     return NextResponse.json({ success: true, data: consignment });
   } catch (error: any) {
     console.error('Error creating consignment:', error);
@@ -1168,11 +1181,18 @@ export async function PUT(request: Request) {
       }
     }
 
+    if (updated) {
+      saveCentralRecord('bilties', updated);
+    }
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
     console.error('Error updating consignment (using fallback):', error);
     try {
       const body = await request.json().catch(() => ({}));
+      if (body?.id) {
+        saveCentralRecord('bilties', body);
+      }
       return NextResponse.json({
         success: true,
         data: { id: body?.id, ...body },
@@ -1218,6 +1238,8 @@ export async function DELETE(request: Request) {
         { status: 400 }
       );
     }
+
+    deleteCentralRecord('bilties', id);
 
     try {
       const consignment = await prisma.consignment.findUnique({

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
+import { saveCentralRecord, getCentralCollection, deleteCentralRecord } from '@/lib/server-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,23 +134,28 @@ export async function GET(request: Request) {
       console.warn('DB error fetching customers (using fallback):', dbErr);
     }
 
-    if (!customers || customers.length === 0) {
-      let filtered = [...DEFAULT_CUSTOMERS];
-      if (status && status !== 'ALL') filtered = filtered.filter((c) => c.status === status);
-      if (warehouse) filtered = filtered.filter((c) => c.warehouse === warehouse);
-      if (search) {
-        filtered = filtered.filter(
-          (c) =>
-            c.name.toLowerCase().includes(search) ||
-            c.companyName?.toLowerCase().includes(search) ||
-            c.phone?.toLowerCase().includes(search) ||
-            c.city?.toLowerCase().includes(search)
-        );
+    const centralCustomers = getCentralCollection('customers');
+    let customerList = (customers && customers.length > 0) ? [...customers] : [...DEFAULT_CUSTOMERS];
+    const existingIds = new Set(customerList.map((c: any) => c.id));
+    for (const c of centralCustomers) {
+      if (!existingIds.has(c.id)) {
+        customerList.unshift(c);
+        existingIds.add(c.id);
       }
-      return NextResponse.json({ success: true, data: filtered });
     }
 
-    return NextResponse.json({ success: true, data: customers });
+    if (status && status !== 'ALL') customerList = customerList.filter((c) => c.status === status);
+    if (warehouse) customerList = customerList.filter((c) => c.warehouse === warehouse);
+    if (search) {
+      customerList = customerList.filter(
+        (c) =>
+          c.name?.toLowerCase().includes(search) ||
+          c.companyName?.toLowerCase().includes(search) ||
+          c.phone?.toLowerCase().includes(search) ||
+          c.city?.toLowerCase().includes(search)
+      );
+    }
+    return NextResponse.json({ success: true, data: customerList });
   } catch (error: any) {
     console.error('Error fetching customers:', error);
     return NextResponse.json({ success: true, data: DEFAULT_CUSTOMERS });
@@ -273,6 +279,10 @@ export async function POST(request: Request) {
       result = { customer: mockCustomer, user: mockCustomer.user, account: mockCustomer.account };
     }
 
+    if (result?.customer) {
+      saveCentralRecord('customers', result.customer);
+    }
+
     return NextResponse.json({ success: true, data: result });
   } catch (error: any) {
     console.error('Error creating customer:', error);
@@ -343,6 +353,8 @@ export async function PUT(request: Request) {
       updatedCustomer = { id, ...updateData };
     }
 
+    saveCentralRecord('customers', updatedCustomer);
+
     return NextResponse.json({ success: true, data: updatedCustomer });
   } catch (error: any) {
     console.error('Error updating customer:', error);
@@ -362,6 +374,7 @@ export async function DELETE(request: Request) {
     }
 
     if (id) {
+      deleteCentralRecord('customers', id);
       try {
         await prisma.customer.update({
           where: { id },

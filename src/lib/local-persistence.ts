@@ -366,3 +366,110 @@ export function removeStoredChallan(id: string): any[] {
   addDeletedId(DELETED_CHALLANS_KEY, id);
   return list;
 }
+
+// ==========================================
+// 6. BROKERS (`spd_brokers` & `spd_local_brokers`)
+// ==========================================
+export const BROKERS_KEY = "spd_brokers";
+export const LOCAL_BROKERS_KEY = "spd_local_brokers";
+export const DELETED_BROKERS_KEY = "spd_local_deleted_brokers";
+
+export function getStoredBrokers(): any[] {
+  return readMergedStorage(BROKERS_KEY, LOCAL_BROKERS_KEY).filter(
+    (b) => b && b.id && b.name
+  );
+}
+
+export function getDeletedBrokerIds(): string[] {
+  return getDeletedIds(DELETED_BROKERS_KEY);
+}
+
+export function saveStoredBroker(broker: any): any[] {
+  if (!broker || !broker.id) return getStoredBrokers();
+  const list = getStoredBrokers();
+  const idx = list.findIndex(
+    (b) =>
+      String(b.id) === String(broker.id) ||
+      (broker.name && String(b.name).toLowerCase().trim() === String(broker.name).toLowerCase().trim())
+  );
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...broker };
+  } else {
+    list.unshift(broker);
+  }
+  writeDualStorage(BROKERS_KEY, LOCAL_BROKERS_KEY, list);
+  return list;
+}
+
+export function removeStoredBroker(id: string): any[] {
+  const list = getStoredBrokers().filter((b) => String(b.id) !== String(id));
+  writeDualStorage(BROKERS_KEY, LOCAL_BROKERS_KEY, list);
+  addDeletedId(DELETED_BROKERS_KEY, id);
+  return list;
+}
+
+// ==========================================
+// 7. UNIVERSAL CROSS-DEVICE SERVER SYNC
+// ==========================================
+let isSyncing = false;
+
+export async function syncWithServer(): Promise<void> {
+  if (typeof window === "undefined" || isSyncing) return;
+  isSyncing = true;
+
+  try {
+    const res = await fetch("/api/admin/sync", { cache: "no-store" });
+    if (!res.ok) return;
+    const { data } = await res.json();
+    if (!data || typeof data !== "object") return;
+
+    // 1. Merge server brokers into client
+    if (Array.isArray(data.brokers) && data.brokers.length > 0) {
+      const localBrokers = getStoredBrokers();
+      const merged = mergeLocalWithApi(localBrokers, data.brokers, getDeletedBrokerIds());
+      writeDualStorage(BROKERS_KEY, LOCAL_BROKERS_KEY, merged);
+    }
+
+    // 2. Merge server customers into client
+    if (Array.isArray(data.customers) && data.customers.length > 0) {
+      const localCust = getStoredCustomers();
+      const merged = mergeLocalWithApi(localCust, data.customers, getDeletedCustomerIds());
+      writeDualStorage(CUSTOMERS_KEY, LOCAL_CUSTOMERS_KEY, merged);
+    }
+
+    // 3. Merge server bilties into client
+    if (Array.isArray(data.bilties) && data.bilties.length > 0) {
+      const localBilties = getStoredBilties();
+      const merged = mergeLocalWithApi(localBilties, data.bilties, getDeletedBiltyIds(), "biltyNumber");
+      writeDualStorage(BILTIES_KEY, LOCAL_BILTIES_KEY, merged);
+    }
+
+    // 4. Merge server challans into client
+    if (Array.isArray(data.challans) && data.challans.length > 0) {
+      const localChallans = getStoredChallans();
+      const merged = mergeLocalWithApi(localChallans, data.challans, getDeletedChallanIds(), "challanNumber");
+      writeDualStorage(CHALLANS_KEY, LOCAL_CHALLANS_KEY, merged);
+    }
+
+    // 5. Merge server drivers into client
+    if (Array.isArray(data.drivers) && data.drivers.length > 0) {
+      const localDrivers = getStoredDrivers();
+      const merged = mergeLocalWithApi(localDrivers, data.drivers, getDeletedDriverIds(), "cnic");
+      writeDualStorage(DRIVERS_KEY, LOCAL_DRIVERS_KEY, merged);
+    }
+
+    // 6. Merge server vehicles into client
+    if (Array.isArray(data.vehicles) && data.vehicles.length > 0) {
+      const localVehicles = getStoredVehicles();
+      const merged = mergeLocalWithApi(localVehicles, data.vehicles, getDeletedVehicleIds(), "vehicleNumber");
+      writeDualStorage(VEHICLES_KEY, LOCAL_VEHICLES_KEY, merged);
+    }
+
+    window.dispatchEvent(new CustomEvent("spd-sync-completed", { detail: data }));
+  } catch (err) {
+    console.warn("Background server sync skipped:", err);
+  } finally {
+    isSyncing = false;
+  }
+}
+

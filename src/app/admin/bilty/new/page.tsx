@@ -33,33 +33,7 @@ import {
   saveStoredBilty,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
-
-const PAKISTAN_CITIES = [
-  "Lahore",
-  "Karachi",
-  "Islamabad",
-  "Rawalpindi",
-  "Faisalabad",
-  "Multan",
-  "Peshawar",
-  "Quetta",
-  "Gujranwala",
-  "Sialkot",
-  "Hyderabad",
-  "Sukkur",
-  "Bahawalpur",
-  "Sargodha",
-  "Rahim Yar Khan",
-  "Sheikhupura",
-  "Jhang",
-  "Gujrat",
-  "Kasur",
-  "Mardan",
-  "Abbottabad",
-  "Hub",
-  "Gwadar",
-  "Gilgit",
-];
+import { PAKISTAN_CITIES } from "@/lib/constants";
 
 export default function NewBiltyPage() {
   const router = useRouter();
@@ -305,8 +279,8 @@ export default function NewBiltyPage() {
           {
             id: `evt-${uniqueId}`,
             status: formData.shipmentStatus || "BOOKED",
-            location: `${formData.origin} Hub`,
-            notes: `Consignment booked at ${formData.origin} Terminal (${finalBiltyNumber}).`,
+            location: formData.origin,
+            notes: `Consignment booked at ${formData.origin} (${finalBiltyNumber}).`,
             timestamp,
           },
         ],
@@ -427,11 +401,11 @@ export default function NewBiltyPage() {
       )}
 
       <form id="new-bilty-form" onSubmit={handleSubmit} noValidate className="space-y-6">
-        {/* Section 1: Route & Warehouse Identification */}
+        {/* Section 1: Route & Booking Stations */}
         <FormSectionCard
-          title="Consignment Route & Origin Warehouse"
-          badge="Dispatch"
-          description="Operational corridor, booking terminal, and sequential identifier"
+          title="From / To (Booking & Delivery Stations)"
+          badge="Corridor"
+          description="Booking station, destination station, and consignment vouchers"
         >
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
@@ -441,6 +415,7 @@ export default function NewBiltyPage() {
               type="date"
               required
               value={formData.date}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
               className="rounded-xl h-10 text-xs"
             />
@@ -448,21 +423,21 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Warehouse Terminal *
+              Station *
             </Label>
             <select
               value={formData.warehouse}
               onChange={(e) => setFormData({ ...formData, warehouse: e.target.value })}
               className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
             >
-              <option value="LAHORE">Lahore Main Terminal</option>
-              <option value="KARACHI">Karachi Port Terminal</option>
+              <option value="LAHORE">Lahore</option>
+              <option value="KARACHI">Karachi</option>
             </select>
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Origin City *
+              From (Booking Station) *
             </Label>
             <select
               value={formData.origin}
@@ -479,7 +454,7 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Destination City *
+              To (Delivery Station) *
             </Label>
             <select
               value={formData.destination}
@@ -500,6 +475,7 @@ export default function NewBiltyPage() {
             </Label>
             <Input
               value={formData.biltyNumber}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, biltyNumber: e.target.value.toUpperCase() })}
               className="rounded-xl h-10 text-xs uppercase font-mono tracking-wider font-bold"
             />
@@ -511,6 +487,7 @@ export default function NewBiltyPage() {
             </Label>
             <Input
               value={formData.trackingId}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, trackingId: e.target.value.toUpperCase() })}
               className="rounded-xl h-10 text-xs uppercase font-mono tracking-wider"
             />
@@ -519,15 +496,15 @@ export default function NewBiltyPage() {
 
         {/* Section 2: Sender & Receiver Parties */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Sender Party */}
+          {/* Sender / Consignor */}
           <FormSectionCard
-            title="Sender / Shipper Information"
+            title="Sender / Consignor"
             badge="Origin"
-            description="Select registered customer or enter shipper contact"
+            description="Select registered customer or enter consignor contact"
           >
             <div className="col-span-1 sm:col-span-2 space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Select Registered Customer (Auto-fills Shipper)
+                Select Registered Customer (Auto-fills Consignor)
               </Label>
               <SearchableSelect
                 options={customerOptions}
@@ -540,11 +517,12 @@ export default function NewBiltyPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Sender Full Name *
+                Sender / Consignor Name *
               </Label>
               <Input
                 required
                 value={formData.senderName}
+                placeholder=""
                 onChange={(e) => setFormData({ ...formData, senderName: e.target.value })}
                 className="rounded-xl h-10 text-xs font-semibold"
               />
@@ -552,11 +530,12 @@ export default function NewBiltyPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Sender Phone *
+                Sender / Consignor Phone *
               </Label>
               <Input
                 required
                 value={formData.senderPhone}
+                placeholder=""
                 onChange={(e) => setFormData({ ...formData, senderPhone: e.target.value })}
                 className="rounded-xl h-10 text-xs font-mono"
               />
@@ -564,29 +543,31 @@ export default function NewBiltyPage() {
 
             <div className="col-span-1 sm:col-span-2 space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Sender Address
+                Sender / Consignor Address
               </Label>
               <Input
                 value={formData.senderAddress}
+                placeholder=""
                 onChange={(e) => setFormData({ ...formData, senderAddress: e.target.value })}
                 className="rounded-xl h-10 text-xs"
               />
             </div>
           </FormSectionCard>
 
-          {/* Receiver Party */}
+          {/* Receiver / Consignee */}
           <FormSectionCard
-            title="Receiver / Consignee Information"
+            title="Receiver / Consignee"
             badge="Destination"
-            description="Delivery contact and delivery location details"
+            description="Consignee contact and delivery location details"
           >
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Receiver Full Name *
+                Receiver / Consignee Name *
               </Label>
               <Input
                 required
                 value={formData.receiverName}
+                placeholder=""
                 onChange={(e) => setFormData({ ...formData, receiverName: e.target.value })}
                 className="rounded-xl h-10 text-xs font-semibold"
               />
@@ -594,11 +575,12 @@ export default function NewBiltyPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Receiver Phone *
+                Receiver / Consignee Phone *
               </Label>
               <Input
                 required
                 value={formData.receiverPhone}
+                placeholder=""
                 onChange={(e) => setFormData({ ...formData, receiverPhone: e.target.value })}
                 className="rounded-xl h-10 text-xs font-mono"
               />
@@ -606,10 +588,11 @@ export default function NewBiltyPage() {
 
             <div className="col-span-1 sm:col-span-2 space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Receiver Delivery Address *
+                Receiver / Consignee Delivery Address *
               </Label>
               <Input
                 value={formData.receiverAddress}
+                placeholder=""
                 onChange={(e) => setFormData({ ...formData, receiverAddress: e.target.value })}
                 className="rounded-xl h-10 text-xs"
               />
@@ -630,6 +613,7 @@ export default function NewBiltyPage() {
             <Input
               required
               value={formData.packageDetails}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, packageDetails: e.target.value })}
               className="rounded-xl h-10 text-xs font-semibold"
             />
@@ -644,6 +628,7 @@ export default function NewBiltyPage() {
               min="1"
               required
               value={formData.quantity}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
               className="rounded-xl h-10 text-xs font-bold"
             />
@@ -657,6 +642,7 @@ export default function NewBiltyPage() {
               type="number"
               step="any"
               value={formData.weight}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
               className="rounded-xl h-10 text-xs font-mono"
             />
@@ -670,6 +656,7 @@ export default function NewBiltyPage() {
               type="number"
               step="any"
               value={formData.cpm}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, cpm: e.target.value })}
               className="rounded-xl h-10 text-xs font-mono"
             />
@@ -684,7 +671,7 @@ export default function NewBiltyPage() {
               onChange={(e) => setFormData({ ...formData, shipmentStatus: e.target.value })}
               className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
             >
-              <option value="BOOKED">Booked (At Warehouse)</option>
+              <option value="BOOKED">Booked (At Station)</option>
               <option value="IN_WAREHOUSE">In Warehouse Storage</option>
               <option value="LOADED">Loaded on Vehicle</option>
               <option value="DISPATCHED">Dispatched</option>
@@ -741,6 +728,7 @@ export default function NewBiltyPage() {
               step="any"
               required
               value={formData.freight}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, freight: e.target.value })}
               className="rounded-xl h-10 text-xs font-mono font-bold"
             />
@@ -754,6 +742,7 @@ export default function NewBiltyPage() {
               type="number"
               step="any"
               value={formData.additionalCharges}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, additionalCharges: e.target.value })}
               className="rounded-xl h-10 text-xs font-mono"
             />
@@ -767,6 +756,7 @@ export default function NewBiltyPage() {
               type="number"
               step="any"
               value={formData.discount}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, discount: e.target.value })}
               className="rounded-xl h-10 text-xs font-mono"
             />
@@ -780,6 +770,7 @@ export default function NewBiltyPage() {
               type="number"
               step="any"
               value={formData.paidAmount}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, paidAmount: e.target.value })}
               className="rounded-xl h-10 text-xs font-mono"
             />
@@ -836,6 +827,7 @@ export default function NewBiltyPage() {
             </Label>
             <Input
               value={formData.notes}
+              placeholder=""
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className="rounded-xl h-10 text-xs"
             />

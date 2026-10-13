@@ -200,6 +200,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     items: [
       { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
       { title: 'Customers', href: '/admin/customers', icon: 'Users' },
+      { title: 'Brokers', href: '/admin/brokers', icon: 'Handshake' },
       { title: 'Accounts', href: '/admin/accounts', icon: 'BookOpen' },
       { title: 'Cash Books', href: '/admin/cash-books', icon: 'Wallet' },
       { title: 'Bilty / Consignments', href: '/admin/bilty', icon: 'Package' },
@@ -241,3 +242,33 @@ export const PAGINATION = {
   DEFAULT_PAGE_SIZE: 25,
   PAGE_SIZE_OPTIONS: [10, 25, 50, 100],
 } as const;
+
+// Clean Pakistan Transport Stations / Cities (NO "Hub" or "Terminal" technical jargon)
+export const PAKISTAN_CITIES = [
+  'Lahore',
+  'Karachi',
+  'Rawalpindi',
+  'Islamabad',
+  'Faisalabad',
+  'Multan',
+  'Peshawar',
+  'Quetta',
+  'Gujranwala',
+  'Sialkot',
+  'Rahim Yar Khan',
+  'Sukkur',
+  'Hyderabad',
+  'Sahiwal',
+  'Sargodha',
+  'D.G. Khan',
+  'Bahawalpur',
+  'Gujrat',
+] as const;
+
+export function cleanCityName(raw: string | null | undefined): string {
+  if (!raw) return '';
+  return raw
+    .replace(/\s+(Main Terminal|Central Hub|Hub Station|Terminal|Hub|Port Hub|Cargo Station|Station|Gate #\d+)/gi, '')
+    .trim();
+}
+

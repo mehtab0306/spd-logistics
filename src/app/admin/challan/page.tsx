@@ -22,10 +22,11 @@ import {
   Package,
   Layers,
   ArrowRight,
+  Handshake,
 } from "lucide-react";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { PrintableChallan } from "@/components/challan/printable-challan";
 import {
   getStoredBilties,
@@ -35,27 +36,11 @@ import {
   getDeletedVehicleIds,
   getStoredDrivers,
   getDeletedDriverIds,
+  getStoredBrokers,
   saveStoredChallan,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
-
-const PAKISTAN_CITIES = [
-  "Lahore",
-  "Karachi",
-  "Islamabad",
-  "Rawalpindi",
-  "Faisalabad",
-  "Multan",
-  "Peshawar",
-  "Quetta",
-  "Gujranwala",
-  "Sialkot",
-  "Hyderabad",
-  "Sukkur",
-  "Bahawalpur",
-  "Sargodha",
-  "Rahim Yar Khan",
-];
+import { PAKISTAN_CITIES } from "@/lib/constants";
 
 export default function ChallanPage() {
   const router = useRouter();
@@ -70,6 +55,7 @@ export default function ChallanPage() {
 
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
+  const [brokers, setBrokers] = useState<any[]>([]);
 
   // Search & Filter for left column
   const [biltySearch, setBiltySearch] = useState("");
@@ -85,6 +71,13 @@ export default function ChallanPage() {
     warehouse: "LAHORE",
     origin: "Lahore",
     destination: "Karachi",
+
+    hiringMode: "COMPANY_FLEET" as "COMPANY_FLEET" | "MARKET_BROKER",
+    brokerId: "",
+    brokerName: "",
+    brokerPhone: "",
+    brokerFreight: "",
+    brokerAdvance: "",
 
     vehicleId: "",
     truckNumber: "",
@@ -104,15 +97,17 @@ export default function ChallanPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [biltyRes, vehRes, drvRes] = await Promise.all([
+      const [biltyRes, vehRes, drvRes, brkRes] = await Promise.all([
         fetch("/api/admin/bilty").catch(() => null),
         fetch("/api/admin/vehicles").catch(() => null),
         fetch("/api/admin/drivers").catch(() => null),
+        fetch("/api/admin/brokers").catch(() => null),
       ]);
 
       const biltyData = biltyRes ? await biltyRes.json().catch(() => ({})) : {};
       const vehData = vehRes ? await vehRes.json().catch(() => ({})) : {};
       const drvData = drvRes ? await drvRes.json().catch(() => ({})) : {};
+      const brkData = brkRes ? await brkRes.json().catch(() => ({})) : {};
 
       const apiBilties = Array.isArray(biltyData.data)
         ? biltyData.data
@@ -129,6 +124,7 @@ export default function ChallanPage() {
         : Array.isArray(drvData.drivers)
         ? drvData.drivers
         : [];
+      const apiBrokers = Array.isArray(brkData.data) ? brkData.data : [];
 
       const allBilties = mergeLocalWithApi(getStoredBilties(), apiBilties, getDeletedBiltyIds(), "biltyNumber");
       const unassigned = allBilties.filter(
@@ -141,6 +137,7 @@ export default function ChallanPage() {
 
       setVehicles(mergeLocalWithApi(getStoredVehicles(), apiVehicles, getDeletedVehicleIds(), "registrationNumber"));
       setDrivers(mergeLocalWithApi(getStoredDrivers(), apiDrivers, getDeletedDriverIds()));
+      setBrokers(mergeLocalWithApi(getStoredBrokers(), apiBrokers, []));
 
       // Auto-suggest sequential Challan number
       const year = new Date().getFullYear();
@@ -157,6 +154,7 @@ export default function ChallanPage() {
       setAvailableBilties(localUnassigned);
       setVehicles(getStoredVehicles());
       setDrivers(getStoredDrivers());
+      setBrokers(getStoredBrokers());
     } finally {
       setLoading(false);
     }
@@ -254,13 +252,30 @@ export default function ChallanPage() {
   );
 
   // Financial & Profit Calculations
-  const truckFreightCost = parseFloat(challanData.truckFreight) || 0;
-  const driverAdvancePaid = parseFloat(challanData.advancePaidToDriver) || 0;
+  const isBroker = challanData.hiringMode === "MARKET_BROKER";
+  const truckFreightCost = isBroker
+    ? parseFloat(challanData.brokerFreight) || 0
+    : parseFloat(challanData.truckFreight) || 0;
+  const driverAdvancePaid = isBroker
+    ? parseFloat(challanData.brokerAdvance) || 0
+    : parseFloat(challanData.advancePaidToDriver) || 0;
   const driverBalanceDue = Math.max(0, truckFreightCost - driverAdvancePaid);
 
   const netTripProfit = totalGrossFreight - truckFreightCost;
   const profitMargin =
     totalGrossFreight > 0 ? (netTripProfit / totalGrossFreight) * 100 : 0;
+
+  const handleBrokerSelect = (brokerId: string, meta?: any) => {
+    const brk = meta || brokers.find((b) => b.id === brokerId);
+    if (brk) {
+      setChallanData((prev) => ({
+        ...prev,
+        brokerId,
+        brokerName: brk.name,
+        brokerPhone: brk.phone || "",
+      }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,18 +283,19 @@ export default function ChallanPage() {
     setSuccessMsg("");
 
     if (selectedBiltyIds.length === 0) {
-      console.log("[ChallanPage] Validation warning: No bilties selected");
       setFormError("Please select at least one Bilty from the warehouse list.");
       return;
     }
     if (!challanData.truckNumber.trim()) {
-      console.log("[ChallanPage] Validation warning: Truck number missing");
       setFormError("Truck / Vehicle is required.");
       return;
     }
     if (!challanData.driverName.trim()) {
-      console.log("[ChallanPage] Validation warning: Driver name missing");
       setFormError("Driver is required.");
+      return;
+    }
+    if (isBroker && !challanData.brokerId && !challanData.brokerName) {
+      setFormError("Please select a Broker for the market vehicle.");
       return;
     }
 
@@ -309,6 +325,13 @@ export default function ChallanPage() {
         warehouse: challanData.warehouse || "LAHORE",
         origin: challanData.origin || "Lahore",
         destination: challanData.destination || "Karachi",
+        hiringMode: challanData.hiringMode,
+        brokerId: isBroker ? challanData.brokerId || null : null,
+        brokerName: isBroker ? challanData.brokerName || null : null,
+        brokerPhone: isBroker ? challanData.brokerPhone || null : null,
+        brokerFreight: isBroker ? truckFreightCost : 0,
+        brokerAdvance: isBroker ? driverAdvancePaid : 0,
+        brokerBalance: isBroker ? driverBalanceDue : 0,
         vehicleId: challanData.vehicleId || null,
         truckNumber: challanData.truckNumber.trim(),
         driverId: challanData.driverId || null,
@@ -338,7 +361,7 @@ export default function ChallanPage() {
       setAvailableBilties((prev) => prev.filter((b) => !selectedBiltyIds.includes(b.id)));
       setSelectedBiltyIds([]);
 
-      // 4. Try sending to backend API wrapped in try/catch (do NOT rollback on serverless error)
+      // 4. Send to backend API
       try {
         await fetch("/api/admin/challan", {
           method: "POST",
@@ -348,6 +371,8 @@ export default function ChallanPage() {
             challanNumber: finalChallanNo,
             truckFreight: truckFreightCost,
             advancePaidToDriver: driverAdvancePaid,
+            brokerFreight: isBroker ? truckFreightCost : 0,
+            brokerAdvance: isBroker ? driverAdvancePaid : 0,
             selectedBiltyIds,
           }),
         });
@@ -364,6 +389,13 @@ export default function ChallanPage() {
       setSubmitting(false);
     }
   };
+
+  const brokerOptions = brokers.map((b) => ({
+    value: b.id,
+    label: `${b.name} (${b.city || "Transport Broker"})`,
+    subLabel: `Contact: ${b.contactPerson || "Agent"} • Ph: ${b.phone || "N/A"} • Rate: ${b.commissionType === "PERCENTAGE" ? `${b.commissionRate}%` : `₨ ${b.commissionRate}`}`,
+    meta: b,
+  }));
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
@@ -471,9 +503,9 @@ export default function ChallanPage() {
                   onChange={(e) => setWarehouseFilter(e.target.value)}
                   className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 w-full sm:w-auto"
                 >
-                  <option value="LAHORE">Lahore Hub</option>
-                  <option value="KARACHI">Karachi Hub</option>
-                  <option value="">All Warehouses</option>
+                  <option value="LAHORE">Lahore</option>
+                  <option value="KARACHI">Karachi</option>
+                  <option value="">All Stations</option>
                 </select>
                 <Button
                   type="button"
@@ -554,7 +586,7 @@ export default function ChallanPage() {
                             <span className="font-semibold block text-slate-800 dark:text-slate-200">
                               {b.origin} → {b.destination}
                             </span>
-                            <span className="text-[10px] text-slate-400">{b.warehouse} Hub</span>
+                            <span className="text-[10px] text-slate-400">{b.warehouse || "Lahore"}</span>
                           </td>
                           <td className="p-3">
                             <span className="font-semibold block text-slate-800 dark:text-slate-200">
@@ -636,6 +668,7 @@ export default function ChallanPage() {
                 </Label>
                 <Input
                   required
+                  placeholder=""
                   value={challanData.challanNumber}
                   onChange={(e) =>
                     setChallanData({ ...challanData, challanNumber: e.target.value.toUpperCase() })
@@ -659,7 +692,7 @@ export default function ChallanPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Origin Terminal *
+                  From (Booking Station) *
                 </Label>
                 <select
                   value={challanData.origin}
@@ -676,7 +709,7 @@ export default function ChallanPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Destination Terminal *
+                  To (Delivery Station) *
                 </Label>
                 <select
                   value={challanData.destination}
@@ -692,50 +725,203 @@ export default function ChallanPage() {
               </div>
             </FormSectionCard>
 
-            {/* Vehicle & Driver Assignment */}
+            {/* Vehicle & Driver / Broker Assignment */}
             <FormSectionCard
               title="Fleet & Personnel Assignment"
-              badge="Fleet"
-              description="Select truck and long-haul driver with real-time phone linkage"
+              badge="Fleet / Broker"
+              description="Assign company fleet truck or hire market vehicle through commission broker"
             >
-              <div className="col-span-1 sm:col-span-2 space-y-1.5">
+              {/* Hiring Mode Toggle */}
+              <div className="col-span-1 sm:col-span-2 space-y-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Select Fleet Truck / Vehicle *
+                  Vehicle Source / Hiring Mode *
                 </Label>
-                <SearchableSelect
-                  options={vehicleOptions}
-                  value={challanData.vehicleId}
-                  onChange={handleVehicleSelect}
-                  placeholder=""
-                  emptyMessage="No available vehicles"
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setChallanData((prev) => ({ ...prev, hiringMode: "COMPANY_FLEET" }))}
+                    className={cn(
+                      "flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                      challanData.hiringMode === "COMPANY_FLEET"
+                        ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-xs"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                    )}
+                  >
+                    <Truck className="w-4 h-4" />
+                    <span>Company Fleet</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setChallanData((prev) => ({ ...prev, hiringMode: "MARKET_BROKER" }))}
+                    className={cn(
+                      "flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                      challanData.hiringMode === "MARKET_BROKER"
+                        ? "bg-spd-blue text-white border-transparent shadow-xs"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                    )}
+                  >
+                    <Handshake className="w-4 h-4" />
+                    <span>Market Vehicle (Broker)</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Assigned Driver *
-                </Label>
-                <SearchableSelect
-                  options={driverOptions}
-                  value={challanData.driverId}
-                  onChange={handleDriverSelect}
-                  placeholder=""
-                  emptyMessage="No available drivers"
-                />
-              </div>
+              {challanData.hiringMode === "MARKET_BROKER" ? (
+                <>
+                  <div className="col-span-1 sm:col-span-2 space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Select Commission Broker *
+                    </Label>
+                    <SearchableSelect
+                      options={brokerOptions}
+                      value={challanData.brokerId}
+                      onChange={handleBrokerSelect}
+                      placeholder=""
+                      emptyMessage="No brokers registered"
+                    />
+                  </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Driver Phone Number
-                </Label>
-                <Input
-                  value={challanData.driverPhone}
-                  onChange={(e) =>
-                    setChallanData({ ...challanData, driverPhone: e.target.value })
-                  }
-                  className="rounded-xl h-10 text-xs font-mono"
-                />
-              </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Market Truck Registration # *
+                    </Label>
+                    <Input
+                      required
+                      placeholder=""
+                      value={challanData.truckNumber}
+                      onChange={(e) =>
+                        setChallanData({ ...challanData, truckNumber: e.target.value.toUpperCase() })
+                      }
+                      className="rounded-xl h-10 text-xs font-mono uppercase font-black"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Driver Name *
+                    </Label>
+                    <Input
+                      required
+                      placeholder=""
+                      value={challanData.driverName}
+                      onChange={(e) =>
+                        setChallanData({ ...challanData, driverName: e.target.value })
+                      }
+                      className="rounded-xl h-10 text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Driver Phone
+                    </Label>
+                    <Input
+                      placeholder=""
+                      value={challanData.driverPhone}
+                      onChange={(e) =>
+                        setChallanData({ ...challanData, driverPhone: e.target.value })
+                      }
+                      className="rounded-xl h-10 text-xs font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Broker Contact Phone
+                    </Label>
+                    <Input
+                      placeholder=""
+                      value={challanData.brokerPhone}
+                      onChange={(e) =>
+                        setChallanData({ ...challanData, brokerPhone: e.target.value })
+                      }
+                      className="rounded-xl h-10 text-xs font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Broker Agreed Freight (PKR) *
+                    </Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      placeholder=""
+                      value={challanData.brokerFreight}
+                      onChange={(e) =>
+                        setChallanData({ ...challanData, brokerFreight: e.target.value })
+                      }
+                      className="rounded-xl h-10 text-xs font-mono font-bold"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Advance Paid to Broker (PKR)
+                    </Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      placeholder=""
+                      value={challanData.brokerAdvance}
+                      onChange={(e) =>
+                        setChallanData({ ...challanData, brokerAdvance: e.target.value })
+                      }
+                      className="rounded-xl h-10 text-xs font-mono"
+                    />
+                  </div>
+
+                  <div className="col-span-1 sm:col-span-2 p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 flex items-center justify-between text-xs font-bold">
+                    <span className="text-blue-900 dark:text-blue-200">Balance Payable to Broker:</span>
+                    <span className="font-mono text-sm font-black text-rose-600">
+                      ₨ {Math.max(0, (parseFloat(challanData.brokerFreight) || 0) - (parseFloat(challanData.brokerAdvance) || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="col-span-1 sm:col-span-2 space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Select Fleet Truck / Vehicle *
+                    </Label>
+                    <SearchableSelect
+                      options={vehicleOptions}
+                      value={challanData.vehicleId}
+                      onChange={handleVehicleSelect}
+                      placeholder=""
+                      emptyMessage="No available vehicles"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Assigned Driver *
+                    </Label>
+                    <SearchableSelect
+                      options={driverOptions}
+                      value={challanData.driverId}
+                      onChange={handleDriverSelect}
+                      placeholder=""
+                      emptyMessage="No available drivers"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Driver Phone Number
+                    </Label>
+                    <Input
+                      placeholder=""
+                      value={challanData.driverPhone}
+                      onChange={(e) =>
+                        setChallanData({ ...challanData, driverPhone: e.target.value })
+                      }
+                      className="rounded-xl h-10 text-xs font-mono"
+                    />
+                  </div>
+                </>
+              )}
             </FormSectionCard>
 
             {/* Trip Expenses & Profit Calculator (Matching Reference Formula) */}
@@ -802,19 +988,19 @@ export default function ChallanPage() {
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Truck Transport Cost:</span>
+                    <span>{isBroker ? "Broker Transport Rate:" : "Truck Transport Cost:"}</span>
                     <span className="font-mono text-red-300">
                       - {formatCurrency(truckFreightCost)}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Driver Advance Paid:</span>
+                    <span>{isBroker ? "Broker Advance Paid:" : "Driver Advance Paid:"}</span>
                     <span className="font-mono text-slate-200">
                       {formatCurrency(driverAdvancePaid)}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Driver Balance Payable:</span>
+                    <span>{isBroker ? "Broker Balance Payable:" : "Driver Balance Payable:"}</span>
                     <span className="font-mono text-amber-300">
                       {formatCurrency(driverBalanceDue)}
                     </span>

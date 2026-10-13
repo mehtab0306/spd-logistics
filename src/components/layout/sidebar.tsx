@@ -33,11 +33,13 @@ import {
   Navigation,
   CheckCircle2,
   Mic,
+  Handshake,
 } from "lucide-react";
 
 const iconMap: Record<string, React.ElementType> = {
   LayoutDashboard,
   Users,
+  Handshake,
   BookOpen,
   Wallet,
   Package,

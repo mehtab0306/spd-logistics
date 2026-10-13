@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, getAuthCookie } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
+import { saveCentralRecord, getCentralCollection, updateCentralRecord, deleteCentralRecord } from '@/lib/server-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,6 +157,16 @@ export async function GET(request: Request) {
       console.warn('DB error fetching challans (serving fallback):', dbErr);
     }
 
+    // Merge central serverless collection
+    const centralChallans = getCentralCollection('challans');
+    const existingIds = new Set((challans || []).map((c: any) => c.id));
+    for (const c of centralChallans) {
+      if (!existingIds.has(c.id)) {
+        challans.unshift(c);
+        existingIds.add(c.id);
+      }
+    }
+
     if (!challans || challans.length === 0) {
       challans = DEFAULT_CHALLANS;
     }
@@ -287,15 +298,28 @@ export async function POST(request: Request) {
         },
       }).catch(() => {});
 
+      const enrichedChallan = {
+        ...challan,
+        brokerId: body.brokerId || null,
+        brokerName: body.brokerName || null,
+        brokerPhone: body.brokerPhone || null,
+        brokerFreight: parseFloat(String(body.brokerFreight || 0)) || 0,
+        brokerAdvance: parseFloat(String(body.brokerAdvance || 0)) || 0,
+        brokerBalance: parseFloat(String(body.brokerBalance || 0)) || 0,
+        hiringMode: body.hiringMode || (body.brokerName ? 'MARKET_BROKER' : 'COMPANY_VEHICLE'),
+        consignments: selectedBilties,
+      };
+      saveCentralRecord('challans', enrichedChallan);
+
       return NextResponse.json({
         success: true,
         message: `Challan ${challan.challanNumber} created successfully!`,
-        challan,
-        data: challan,
+        challan: enrichedChallan,
+        data: enrichedChallan,
       });
     } catch (dbErr) {
       const mockChallan = {
-        id: `chl_${Date.now()}`,
+        id: body.id || `chl_${Date.now()}`,
         challanNumber,
         date: date ? new Date(date).toISOString() : new Date().toISOString(),
         time: time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -307,6 +331,13 @@ export async function POST(request: Request) {
         origin,
         destination,
         warehouse,
+        hiringMode: body.hiringMode || (body.brokerName ? 'MARKET_BROKER' : 'COMPANY_VEHICLE'),
+        brokerId: body.brokerId || null,
+        brokerName: body.brokerName || null,
+        brokerPhone: body.brokerPhone || null,
+        brokerFreight: parseFloat(String(body.brokerFreight || 0)) || 0,
+        brokerAdvance: parseFloat(String(body.brokerAdvance || 0)) || 0,
+        brokerBalance: parseFloat(String(body.brokerBalance || 0)) || 0,
         totalAmount,
         truckFreight: parseFloat(String(truckFreight)) || 0,
         advancePaidToDriver: parseFloat(String(advancePaidToDriver)) || 0,
@@ -317,6 +348,8 @@ export async function POST(request: Request) {
         consignments: selectedBilties,
         createdAt: new Date().toISOString(),
       };
+      saveCentralRecord('challans', mockChallan);
+
       return NextResponse.json({
         success: true,
         message: `Challan ${challanNumber} created successfully!`,
@@ -348,6 +381,15 @@ export async function PUT(request: Request) {
       return NextResponse.json({ success: false, error: 'Challan ID is required' }, { status: 400 });
     }
 
+    const updateData: any = {};
+    if (status) updateData.status = status;
+    if (arrivalDate) updateData.arrivalDate = new Date(arrivalDate);
+    if (arrivalTime) updateData.arrivalTime = arrivalTime;
+    if (arrivalReceiver !== undefined) updateData.arrivalReceiver = arrivalReceiver;
+    if (arrivalNotes !== undefined) updateData.arrivalNotes = arrivalNotes;
+    if (deliveryNotes !== undefined) updateData.deliveryNotes = deliveryNotes;
+    if (notes !== undefined) updateData.notes = notes;
+
     try {
       const existing = await prisma.challan.findUnique({
         where: { id },
@@ -358,19 +400,12 @@ export async function PUT(request: Request) {
         throw new Error('Challan only in localStorage');
       }
 
-      const updateData: any = {};
-      if (status) updateData.status = status;
-      if (arrivalDate) updateData.arrivalDate = new Date(arrivalDate);
-      if (arrivalTime) updateData.arrivalTime = arrivalTime;
-      if (arrivalReceiver !== undefined) updateData.arrivalReceiver = arrivalReceiver;
-      if (arrivalNotes !== undefined) updateData.arrivalNotes = arrivalNotes;
-      if (deliveryNotes !== undefined) updateData.deliveryNotes = deliveryNotes;
-      if (notes !== undefined) updateData.notes = notes;
-
       const updated = await prisma.challan.update({
         where: { id },
         data: updateData,
       });
+
+      updateCentralRecord('challans', id, updateData);
 
       return NextResponse.json({
         success: true,
@@ -378,6 +413,7 @@ export async function PUT(request: Request) {
         data: updated,
       });
     } catch {
+      updateCentralRecord('challans', id, updateData);
       return NextResponse.json({
         success: true,
         message: 'Challan updated successfully!',
@@ -398,6 +434,8 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ success: false, error: 'Challan ID is required' }, { status: 400 });
     }
+
+    deleteCentralRecord('challans', id);
 
     try {
       await prisma.challan.delete({ where: { id } });

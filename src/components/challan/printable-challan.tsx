@@ -89,6 +89,11 @@ export function PrintableChallan({ challan, onClose }: PrintableChallanProps) {
               <span className="text-xs font-black text-slate-900 font-mono">
                 {challan.truckNumber || (challan.vehicle ? challan.vehicle.vehicleNumber : "N/A")}
               </span>
+              {challan.brokerName && (
+                <span className="text-[10px] font-bold text-blue-700 block mt-0.5">
+                  Broker: {challan.brokerName}
+                </span>
+              )}
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-500 block">Driver Name & Phone</span>
@@ -100,7 +105,7 @@ export function PrintableChallan({ challan, onClose }: PrintableChallanProps) {
               </span>
             </div>
             <div>
-              <span className="text-[10px] uppercase font-bold text-slate-500 block">Route Corridor</span>
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">Route (From &rarr; To)</span>
               <span className="text-xs font-bold text-slate-900">
                 {challan.origin} → {challan.destination}
               </span>

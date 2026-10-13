@@ -1264,9 +1264,9 @@ export default function BiltyPage() {
             onChange={(e) => setWarehouseFilter(e.target.value)}
             className="flex-1 sm:flex-initial h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]"
           >
-            <option value="">All Hubs</option>
-            <option value="LAHORE">Lahore Hub</option>
-            <option value="KARACHI">Karachi Hub</option>
+            <option value="">All Stations</option>
+            <option value="LAHORE">Lahore</option>
+            <option value="KARACHI">Karachi</option>
           </select>
 
           <select
@@ -1362,7 +1362,7 @@ export default function BiltyPage() {
                           : "bg-red-100 text-spd-red dark:bg-red-950/60 dark:text-red-400"
                       }`}
                     >
-                      {c.warehouse || "LAHORE"} HUB
+                      {c.warehouse || "LAHORE"}
                     </span>
                   </div>
 
@@ -1498,7 +1498,7 @@ export default function BiltyPage() {
                   <TableRow>
                     <TableHead className="text-xs font-bold">Bilty # / Tracking</TableHead>
                     <TableHead className="text-xs font-bold">Shipper & Receiver</TableHead>
-                    <TableHead className="text-xs font-bold">Route & Hub</TableHead>
+                    <TableHead className="text-xs font-bold">Route & Station</TableHead>
                     <TableHead className="text-xs font-bold">Truck & Driver</TableHead>
                     <TableHead className="text-xs font-bold">Total Freight</TableHead>
                     <TableHead className="text-xs font-bold">Balance</TableHead>
@@ -1549,7 +1549,7 @@ export default function BiltyPage() {
                                 : "bg-red-100 text-spd-red dark:bg-red-950/60 dark:text-red-400"
                             }`}
                           >
-                            {c.warehouse || "LAHORE"} HUB
+                            {c.warehouse || "LAHORE"}
                           </span>
                         </div>
                       </TableCell>
@@ -1751,7 +1751,7 @@ export default function BiltyPage() {
                 <span className="font-bold">{printBilty?.destination}</span>
               </div>
               <div>
-                <span className="text-slate-500 uppercase text-[9px] block">Warehouse Hub</span>
+                <span className="text-slate-500 uppercase text-[9px] block">Booking Station</span>
                 <span className="font-bold text-red-600">{printBilty?.warehouse}</span>
               </div>
             </div>
