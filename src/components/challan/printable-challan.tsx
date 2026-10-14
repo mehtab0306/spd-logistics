@@ -4,6 +4,7 @@ import React from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Printer, X } from "lucide-react";
+import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
 
 interface PrintableChallanProps {
   challan: any;
@@ -50,37 +51,13 @@ export function PrintableChallan({ challan, onClose }: PrintableChallanProps) {
 
         {/* PRINTABLE DOCUMENT BODY */}
         <div id="challan-printable-content" className="space-y-4 text-xs font-sans">
-          {/* Header */}
-          <div className="border-b-2 border-slate-900 pb-3 flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <img
-                src="/images/spd-logo.jpg"
-                alt="SPD Logistics"
-                className="h-16 w-auto object-contain rounded border border-slate-300"
-              />
-              <div>
-                <h1 className="text-xl font-black tracking-tight text-red-600">
-                  SUPER PAK DATA GOODS TRANSPORT CO.
-                </h1>
-                <p className="text-[11px] font-bold text-blue-900 uppercase tracking-wide">
-                  SPD Logistics &bull; Heavy Cargo & Long-Haul Fleet &bull; Est. 1996
-                </p>
-                <p className="text-[10px] text-slate-600">
-                  Main Head Office: Bhati Gate Transport Center, Lahore &bull; Karachi Port Terminal Hub
-                </p>
-                <p className="text-[10px] text-slate-600">
-                  UAN / Phone: 042-111-773-773 / 0300-8441234 &bull; Web: www.spdlogistics.com
-                </p>
-              </div>
-            </div>
-            <div className="text-right border-2 border-red-600 rounded-lg p-2 bg-red-50/50">
-              <span className="text-[10px] font-bold text-slate-500 uppercase block">Dispatch Manifest</span>
-              <span className="text-lg font-black text-red-600 block">{challan.challanNumber}</span>
-              <span className="text-[10px] font-bold text-slate-700 block">
-                Date: {formatDate(challan.dispatchDate || challan.date || challan.createdAt)}
-              </span>
-            </div>
-          </div>
+          {/* Official Letterhead Header */}
+          <PrintHeader
+            title="Trip Dispatch Manifest & Fleet Challan"
+            documentNumber={challan.challanNumber}
+            date={formatDate(challan.dispatchDate || challan.date || challan.createdAt)}
+            station={challan.origin ? `${challan.origin} Station` : "Lahore Central Station"}
+          />
 
           {/* Trip & Vehicle Metadata Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 p-3 rounded-lg border border-slate-300">
@@ -207,36 +184,13 @@ export function PrintableChallan({ challan, onClose }: PrintableChallanProps) {
             </div>
           </div>
 
-          {/* Legal Declarations & Signatures */}
-          <div className="pt-6 space-y-8">
-            <p className="text-[9px] text-slate-500 text-justify leading-relaxed">
-              <strong>NOTICE TO CARRIER:</strong> The driver and transport operator acknowledge receipt of the above listed commercial packages in good order and condition. Goods must be delivered directly to the designated receiving hub without unauthorized diversion or delay. In case of accident, breakdown, or delay, notify the central dispatch office immediately.
-            </p>
-
-            <div className="grid grid-cols-3 gap-6 pt-4 text-center">
-              <div>
-                <div className="border-b border-slate-900 h-10"></div>
-                <span className="text-[10px] font-bold uppercase text-slate-700 block mt-1">
-                  Driver Signature
-                </span>
-                <span className="text-[9px] text-slate-400">Name & Thumb Impression</span>
-              </div>
-              <div>
-                <div className="border-b border-slate-900 h-10"></div>
-                <span className="text-[10px] font-bold uppercase text-slate-700 block mt-1">
-                  Dispatch Officer
-                </span>
-                <span className="text-[9px] text-slate-400">Warehouse Terminal Stamp</span>
-              </div>
-              <div>
-                <div className="border-b border-slate-900 h-10"></div>
-                <span className="text-[10px] font-bold uppercase text-slate-700 block mt-1">
-                  Destination Hub Receiver
-                </span>
-                <span className="text-[9px] text-slate-400">Arrival Verification Stamp</span>
-              </div>
-            </div>
-          </div>
+          {/* Official Transport Signatures & Legal Notice */}
+          <PrintFooter
+            notes="NOTICE TO CARRIER: The driver and transport operator acknowledge receipt of the above listed commercial packages in good order and condition. Goods must be delivered directly to the designated receiving station without unauthorized diversion or delay. In case of accident, breakdown, or delay, notify the central dispatch office immediately."
+            preparedByLabel="Prepared By"
+            checkedByLabel="Checked By"
+            authorizedLabel="Authorized Signature"
+          />
         </div>
       </div>
     </div>

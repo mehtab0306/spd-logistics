@@ -51,16 +51,19 @@ import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import { exportToExcel } from "@/lib/export-excel";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
 import { VoucherImageAttachment } from "@/components/shared/voucher-image-attachment";
+import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
 
 interface CashBookItem {
   id: string;
   name: string;
   city: string;
+  station?: string;
   description?: string;
   openingBalance: number;
   totalCredits: number;
   totalDebits: number;
   currentBalance: number;
+  balance?: number;
   transactionCount: number;
   status: string;
 }
@@ -720,12 +723,13 @@ function CashBooksContent() {
       {/* ======================================================== */}
       {/* TOP HEADER: CASH BOOK SWITCHER & ACTIONS */}
       {/* ======================================================== */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-spd-blue/10 dark:bg-spd-blue/20 text-spd-blue">
-              <Wallet className="h-6 w-6" />
-            </div>
+      <div className="print:hidden space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-spd-blue/10 dark:bg-spd-blue/20 text-spd-blue">
+                <Wallet className="h-6 w-6" />
+              </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                 Cash Book & Day Ledger
@@ -1295,6 +1299,166 @@ function CashBooksContent() {
             </Table>
           </div>
         )}
+      </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* DEDICATED A4 PRINTABLE CASH BOOK DAY LEDGER */}
+      {/* ======================================================== */}
+      <div id="cash-book-printable" className="hidden print:block font-sans text-black p-4 space-y-3 bg-white">
+        <PrintHeader
+          title={`Cash Book & Day Ledger: ${selectedBook?.name || "General Cash Book"}`}
+          subtitle="Real-Time Station Cash Receipts, Operational Expenses & Ledger Balance"
+          documentNumber={selectedBook?.id}
+          station={selectedBook?.station || selectedBook?.city || "Head Office Station (Lahore)"}
+        />
+
+        {/* Financial Summary Box */}
+        <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50">
+          <div className="grid grid-cols-4 gap-2 text-xs">
+            <div>
+              <span className="text-[10px] text-slate-500 block uppercase">Cash Book Title</span>
+              <span className="font-bold text-slate-900">{selectedBook?.name || "Cash Book"}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-500 block uppercase">Assigned Station</span>
+              <span className="font-bold text-slate-900">{selectedBook?.station || selectedBook?.city || "Lahore Station"}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-500 block uppercase">Opening Balance</span>
+              <span className="font-semibold text-slate-800">{formatCurrency(selectedBook?.openingBalance || 0)}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-500 block uppercase">Net Current Balance</span>
+              <span className="font-black text-slate-900">{formatCurrency(selectedBook?.balance ?? selectedBook?.currentBalance ?? 0)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Financial KPI Cards */}
+        {(() => {
+          const printTotalIn = filteredTransactions.reduce((acc, t) => acc + (Number(t.credit) || 0), 0);
+          const printTotalOut = filteredTransactions.reduce((acc, t) => acc + (Number(t.debit) || 0), 0);
+          const printNetBalance = (Number(selectedBook?.openingBalance) || 0) + printTotalIn - printTotalOut;
+
+          return (
+            <div className="grid grid-cols-3 gap-2 border border-slate-300 rounded-lg p-2 text-center bg-white">
+              <div>
+                <span className="text-[9px] uppercase font-bold text-emerald-600 block">Total Cash IN (آمد)</span>
+                <span className="text-sm font-black text-emerald-700">
+                  +{formatCurrency(printTotalIn)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase font-bold text-rose-600 block">Total Cash OUT (خرچہ)</span>
+                <span className="text-sm font-black text-rose-700">
+                  -{formatCurrency(printTotalOut)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase font-bold text-slate-700 block">Net Day Balance (بقایا)</span>
+                <span className="text-sm font-black text-slate-900">
+                  {formatCurrency(printNetBalance)}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Transactions Table */}
+        <div>
+          <p className="text-[11px] font-black uppercase text-slate-800 mb-1">
+            Day Book Itemized Transaction Register ({filteredTransactions.length} Entries)
+          </p>
+          <table className="w-full border-collapse border border-slate-300 text-[10px]">
+            <thead>
+              <tr className="bg-slate-100 text-slate-800">
+                <th className="border border-slate-300 p-1.5 text-left w-20">Date</th>
+                <th className="border border-slate-300 p-1.5 text-left w-24">Voucher #</th>
+                <th className="border border-slate-300 p-1.5 text-left">Description & Category</th>
+                <th className="border border-slate-300 p-1.5 text-left">Party / Vendor</th>
+                <th className="border border-slate-300 p-1.5 text-left">Vehicle / Driver</th>
+                <th className="border border-slate-300 p-1.5 text-right text-emerald-700 font-bold w-24">Cash IN</th>
+                <th className="border border-slate-300 p-1.5 text-right text-rose-700 font-bold w-24">Cash OUT</th>
+                <th className="border border-slate-300 p-1.5 text-right font-black text-slate-900 w-24">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTransactions.map((tx: any, idx: number) => (
+                <tr key={tx.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                  <td className="border border-slate-300 p-1 whitespace-nowrap font-mono text-[9px]">
+                    {tx.date ? new Date(tx.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                  </td>
+                  <td className="border border-slate-300 p-1 font-mono font-bold text-slate-800">
+                    {tx.voucherNumber || tx.id?.slice(0, 8)}
+                  </td>
+                  <td className="border border-slate-300 p-1">
+                    <div className="font-semibold text-slate-900">{tx.description || tx.category}</div>
+                    <div className="text-[9px] text-slate-500">{tx.category} • {tx.paymentMethod || "CASH"}</div>
+                  </td>
+                  <td className="border border-slate-300 p-1 font-medium">
+                    {tx.party || tx.accountPerson || "—"}
+                  </td>
+                  <td className="border border-slate-300 p-1 font-mono text-[9px]">
+                    {tx.vehicleNumber || tx.driverName || tx.challanNumber ? (
+                      <div>
+                        {tx.vehicleNumber && <span className="font-bold">{tx.vehicleNumber} </span>}
+                        {tx.driverName && <span>({tx.driverName}) </span>}
+                        {tx.challanNumber && <span className="text-blue-700 block">Challan: {tx.challanNumber}</span>}
+                      </div>
+                    ) : "—"}
+                  </td>
+                  <td className="border border-slate-300 p-1 text-right font-mono font-bold text-emerald-700">
+                    {tx.credit > 0 ? formatCurrency(tx.credit) : "—"}
+                  </td>
+                  <td className="border border-slate-300 p-1 text-right font-mono font-bold text-rose-700">
+                    {tx.debit > 0 ? formatCurrency(tx.debit) : "—"}
+                  </td>
+                  <td className="border border-slate-300 p-1 text-right font-mono font-black text-slate-900">
+                    {formatCurrency(tx.balance || 0)}
+                  </td>
+                </tr>
+              ))}
+              {filteredTransactions.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="border border-slate-300 p-3 text-center text-slate-400 italic">
+                    No cash transactions recorded for this period.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              {(() => {
+                const totalIn = filteredTransactions.reduce((acc, t) => acc + (Number(t.credit) || 0), 0);
+                const totalOut = filteredTransactions.reduce((acc, t) => acc + (Number(t.debit) || 0), 0);
+                const netBal = (Number(selectedBook?.openingBalance) || 0) + totalIn - totalOut;
+                return (
+                  <tr className="bg-slate-100 font-black border-t-2 border-slate-400">
+                    <td colSpan={5} className="p-1.5 text-right uppercase text-[10px] text-slate-700">
+                      Register Totals ({filteredTransactions.length} Transactions):
+                    </td>
+                    <td className="p-1.5 text-right font-mono text-emerald-700">
+                      +{formatCurrency(totalIn)}
+                    </td>
+                    <td className="p-1.5 text-right font-mono text-rose-700">
+                      -{formatCurrency(totalOut)}
+                    </td>
+                    <td className="p-1.5 text-right font-mono text-slate-900">
+                      {formatCurrency(netBal)}
+                    </td>
+                  </tr>
+                );
+              })()}
+            </tfoot>
+          </table>
+        </div>
+
+        <PrintFooter
+          notes="Official Day Book & Transport Cash Ledger generated from Super Pak Data Goods Transport Co. Core Accounting System. All cash collections and operational expenses must match physical voucher receipts."
+          preparedByLabel="Prepared By"
+          checkedByLabel="Checked By"
+          authorizedLabel="Authorized Signature"
+        />
       </div>
 
       {/* ======================================================== */}

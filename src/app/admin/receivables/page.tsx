@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { exportToExcel } from "@/lib/export-excel";
+import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
 
 interface BiltyDetail {
   id: string;
@@ -530,9 +531,12 @@ export default function ReceivablesPage() {
       </div>
 
       {/* Printable Header */}
-      <div className="hidden print:block text-center border-b pb-4 mb-4">
-        <h2 className="text-2xl font-bold">SPD LOGISTICS — RECEIVABLES REPORT</h2>
-        <p className="text-sm text-gray-500">Super Pak Data Goods Transport Co. | Generated on {new Date().toLocaleDateString("en-PK")}</p>
+      <div className="hidden print:block">
+        <PrintHeader
+          title="ACCOUNTS RECEIVABLE & CUSTOMER OUTSTANDING LEDGER"
+          subtitle="Customer Ledger Balances, Active Consignments & Credit Summary"
+          station="Nationwide Operations"
+        />
       </div>
 
       {/* Summary KPI Cards */}
@@ -731,6 +735,16 @@ export default function ReceivablesPage() {
         </div>
       )}
 
+      {/* Main Report Printable Footer */}
+      <div className="hidden print:block">
+        <PrintFooter
+          notes="Official Accounts Receivable ledger generated from Super Pak Data Goods Transport Co. Core Ledger. Confirmed freight charges are legally recoverable under standard carriage agreements."
+          preparedByLabel="Prepared By"
+          checkedByLabel="Checked By"
+          authorizedLabel="Authorized Signature"
+        />
+      </div>
+
       {/* DIALOG 1: Bilty-Wise Breakdown */}
       <Dialog open={viewBiltiesOpen} onOpenChange={setViewBiltiesOpen}>
         <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -876,31 +890,11 @@ export default function ReceivablesPage() {
           {/* DEDICATED A4 PRINTABLE RECEIVABLES STATEMENT */}
           <div id="printable-statement" className="hidden print:block font-sans text-black p-4 space-y-3 bg-white">
             {/* Header */}
-            <div className="flex items-center justify-between border-b-2 border-slate-900 pb-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src="/images/spd-logo.jpg"
-                  alt="SPD Logistics"
-                  className="h-14 w-auto object-contain rounded border border-slate-300"
-                />
-                <div>
-                  <h1 className="text-xl font-black tracking-tight text-red-600">
-                    SUPER PAK DATA GOODS TRANSPORT CO.
-                  </h1>
-                  <p className="text-[11px] font-bold text-blue-900 uppercase">
-                    Accounts Receivable & Consignment Bilty Statement &bull; Est. 1996
-                  </p>
-                  <p className="text-[10px] text-slate-600">
-                    Bhati Gate Transport Center, Lahore &bull; Karachi Port Terminal &bull; 0325 2024433 / 0300 2024433
-                  </p>
-                </div>
-              </div>
-              <div className="text-right border-2 border-slate-900 p-2 rounded-lg bg-slate-50">
-                <p className="text-[9px] font-bold uppercase text-slate-500">STATEMENT DATE</p>
-                <p className="text-xs font-black text-slate-900">{new Date().toLocaleDateString("en-PK", { dateStyle: "long" })}</p>
-                <p className="text-[9px] font-mono text-slate-600 mt-0.5">CUST REF: {selectedCustomer?.customerId}</p>
-              </div>
-            </div>
+            <PrintHeader
+              title="Customer Consignment & Receivable Statement"
+              documentNumber={selectedCustomer?.customerId}
+              station={selectedCustomer?.city || "Nationwide"}
+            />
 
             {/* Customer Information Block */}
             <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50">
@@ -1003,20 +997,12 @@ export default function ReceivablesPage() {
             </div>
 
             {/* Official Signatures Row */}
-            <div className="grid grid-cols-3 gap-8 pt-4 text-center text-xs">
-              <div className="border-t border-slate-400 pt-1.5">
-                <p className="font-bold text-slate-900">Accounts & Billing Officer</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">SPD Logistics Roster</p>
-              </div>
-              <div className="border-t border-slate-400 pt-1.5">
-                <p className="font-bold text-slate-900">Customer Acknowledgment</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">{selectedCustomer?.companyName || selectedCustomer?.customerName}</p>
-              </div>
-              <div className="border-t border-slate-400 pt-1.5">
-                <p className="font-bold text-slate-900">Chief Auditor Stamp</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Official Stamp & Date</p>
-              </div>
-            </div>
+            <PrintFooter
+              notes="This customer account statement itemizes all commercial consignments, settled payments, and outstanding balances on record with SPD Logistics."
+              preparedByLabel="Prepared By"
+              checkedByLabel="Checked By"
+              authorizedLabel="Authorized Signature"
+            />
           </div>
         </DialogContent>
       </Dialog>

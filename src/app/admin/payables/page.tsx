@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { exportToExcel } from "@/lib/export-excel";
+import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
 
 interface PayableItem {
   id: string;
@@ -556,9 +557,12 @@ export default function PayablesPage() {
       </div>
 
       {/* Printable Header */}
-      <div className="hidden print:block text-center border-b pb-4 mb-4">
-        <h2 className="text-2xl font-bold">SPD LOGISTICS — PAYABLES & EXPENSES REPORT</h2>
-        <p className="text-sm text-gray-500">Super Pak Data Goods Transport Co. | Generated on {new Date().toLocaleDateString("en-PK")}</p>
+      <div className="hidden print:block">
+        <PrintHeader
+          title="ACCOUNTS PAYABLE & EXPENSES DISBURSEMENT REPORT"
+          subtitle="Operating Liabilities, Fuel & Fleet Disbursements • Est. 1996"
+          station="Head Office Station (Lahore)"
+        />
       </div>
 
       {/* Summary KPI Cards */}
@@ -767,6 +771,16 @@ export default function PayablesPage() {
           </div>
         </div>
       )}
+
+      {/* Main Report Printable Footer */}
+      <div className="hidden print:block">
+        <PrintFooter
+          notes="Official Accounts Payable & Fleet Expense register generated from Super Pak Data Goods Transport Co. Core Ledger. Payouts require prior verification from the Chief Auditor."
+          preparedByLabel="Prepared By"
+          checkedByLabel="Checked By"
+          authorizedLabel="Authorized Signature"
+        />
+      </div>
 
       {/* DIALOG: Add / Edit Payable */}
       <Dialog open={addModalOpen || editModalOpen} onOpenChange={(open) => {

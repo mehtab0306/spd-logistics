@@ -153,68 +153,126 @@
     background-clip: text;
   }
 
-  /* Print styles */
+  /* Universal Corporate A4 Print styles */
   @media print {
     @page {
       size: A4 portrait;
-      margin: 8mm;
+      margin: 15mm;
     }
 
-    /* Strict single-page modal statement print engine */
-    body:has(#printable-statement) *,
-    body:has(#printable-bilty) * {
-      visibility: hidden !important;
-    }
-
-    body:has(#printable-statement) #printable-statement,
-    body:has(#printable-statement) #printable-statement *,
-    body:has(#printable-bilty) #printable-bilty,
-    body:has(#printable-bilty) #printable-bilty * {
-      visibility: visible !important;
-    }
-
-    #printable-statement,
-    #printable-bilty {
-      position: absolute !important;
-      left: 0 !important;
-      top: 0 !important;
-      width: 100% !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      display: block !important;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
-      page-break-after: avoid !important;
-      background: white !important;
-      color: black !important;
-      box-shadow: none !important;
-    }
-
-    body:has(#printable-statement),
-    body:has(#printable-bilty) {
-      overflow: hidden !important;
-      height: 100% !important;
-      background: white !important;
-    }
-
+    /* Universal Web Clutter Removal */
+    aside,
+    nav,
+    header,
+    [role="navigation"],
     .no-print,
-    .print\:hidden {
+    .print\:hidden,
+    button,
+    input,
+    select,
+    .pagination,
+    [data-radix-portal] > div[data-state="open"] > button,
+    .theme-toggle,
+    .notification-bell,
+    .toast,
+    [data-sonner-toaster] {
       display: none !important;
     }
 
-    .print-only,
-    .print\:block {
-      display: block !important;
-    }
-
-    body {
-      background: white !important;
-      color: black !important;
+    /* Reset Body and Canvas to Full A4 Width */
+    html, body {
+      background: #ffffff !important;
+      color: #000000 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      min-width: 100% !important;
+      height: auto !important;
+      overflow: visible !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      font-size: 10pt !important;
     }
 
-    /* Reset modal dialog container in print so it prints full page without clipping or scrollbars */
+    /* Reset Layout Containers */
+    main,
+    .main-content,
+    div[class*="min-h-screen"],
+    div[class*="overflow-hidden"],
+    div[class*="overflow-y-auto"],
+    div[class*="flex-1"] {
+      overflow: visible !important;
+      height: auto !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-shadow: none !important;
+      border: none !important;
+    }
+
+    /* Clean Structured Tables: High-contrast black borders, clean numeric alignment */
+    table,
+    .print-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      border: 1px solid #000000 !important;
+      margin-top: 8px !important;
+      margin-bottom: 8px !important;
+      page-break-inside: auto !important;
+      background: #ffffff !important;
+    }
+
+    tr {
+      page-break-inside: avoid !important;
+      page-break-after: auto !important;
+    }
+
+    thead {
+      display: table-header-group !important;
+    }
+
+    tfoot {
+      display: table-footer-group !important;
+    }
+
+    th, td,
+    .print-table th,
+    .print-table td {
+      border: 1px solid #000000 !important;
+      color: #000000 !important;
+      padding: 4px 6px !important;
+    }
+
+    th,
+    .print-table th {
+      background-color: #f1f5f9 !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+    }
+
+    /* Full A4 Width & Centered print containers */
+    .print-container,
+    .print\:block,
+    #printable-statement,
+    #printable-bilty,
+    #challan-printable-content,
+    #cash-book-printable,
+    #payables-printable,
+    #receivables-printable {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      color: #000000 !important;
+      box-shadow: none !important;
+      border: none !important;
+    }
+
+    /* Modal Dialog reset for printable modals */
     [role="dialog"],
     [data-radix-portal] > div,
     [data-radix-portal] div[role="dialog"] {
@@ -235,6 +293,7 @@
 
     /* Hide background backdrop overlay */
     div[data-state="open"][aria-hidden="true"],
+    .fixed.inset-0.bg-black\/70,
     .fixed.inset-0.bg-black\/80,
     .fixed.inset-0.bg-background\/80 {
       display: none !important;

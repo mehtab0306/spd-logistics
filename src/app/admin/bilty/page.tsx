@@ -65,6 +65,7 @@ import {
   getAdminToDriverWhatsAppMessage,
 } from "@/lib/whatsapp";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
+import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
 
 export default function BiltyPage() {
   const router = useRouter();
@@ -1752,31 +1753,12 @@ export default function BiltyPage() {
           {/* PRINTABLE AREA */}
           <div id="printable-bilty" className="p-6 border-2 border-slate-900 rounded-xl bg-white text-black space-y-4 font-sans text-xs">
             {/* Voucher Header */}
-            <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
-              <div className="flex items-center gap-3">
-                <img
-                  src="/images/spd-logo.jpg"
-                  alt="SPD Logistics"
-                  className="h-14 w-auto object-contain rounded border border-slate-300"
-                />
-                <div>
-                  <h2 className="text-xl font-black tracking-tight text-red-600">
-                    SUPER PAK DATA GOODS TRANSPORT CO.
-                  </h2>
-                  <p className="text-[11px] font-bold text-blue-900 uppercase">
-                    SPD Logistics &bull; Nationwide Cargo & Highway Transport &bull; Est. 1996
-                  </p>
-                  <p className="text-[10px] text-slate-600">
-                    Main Head Office: Bhati Gate Transport Center, Lahore &bull; Karachi Port Terminal
-                  </p>
-                </div>
-              </div>
-              <div className="text-right border-2 border-red-600 p-2 rounded-lg bg-red-50">
-                <p className="text-[10px] font-bold uppercase text-red-600">BILTY NUMBER</p>
-                <p className="text-sm font-black text-red-700">{printBilty?.biltyNumber}</p>
-                <p className="text-[9px] font-mono text-slate-700 mt-0.5">TRK: {printBilty?.trackingId}</p>
-              </div>
-            </div>
+            <PrintHeader
+              title="Consignment Bilty Voucher / Goods Receipt"
+              documentNumber={printBilty?.biltyNumber}
+              station={printBilty?.warehouse ? `${printBilty.warehouse} Station` : "Lahore Central Station"}
+              date={printBilty ? formatDate(printBilty.date) : undefined}
+            />
 
             {/* Meta Row */}
             <div className="grid grid-cols-4 gap-2 border-b pb-3 font-semibold text-[11px]">
@@ -1876,17 +1858,12 @@ export default function BiltyPage() {
             </div>
 
             {/* Signatures & Stamp */}
-            <div className="grid grid-cols-3 gap-6 pt-6 border-t border-slate-300 text-center text-[10px]">
-              <div className="border-t border-dashed border-slate-400 pt-1 font-bold">
-                Shipper Signature
-              </div>
-              <div className="border-t border-dashed border-slate-400 pt-1 font-bold">
-                Driver / Dispatcher Signature
-              </div>
-              <div className="border-t border-dashed border-slate-400 pt-1 font-bold text-red-600">
-                Official SPD Logistics Stamp
-              </div>
-            </div>
+            <PrintFooter
+              notes="The carrier acknowledges receipt of goods in sound order for transport. Claims for loss, pilferage, or damage must be filed in writing at destination within 24 hours of delivery."
+              preparedByLabel="Prepared By"
+              checkedByLabel="Checked By"
+              authorizedLabel="Authorized Signature"
+            />
           </div>
         </DialogContent>
       </Dialog>

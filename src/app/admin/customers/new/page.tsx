@@ -102,7 +102,9 @@ export default function NewCustomerPage() {
       const timestamp = new Date().toISOString();
       const openBal = parseFloat(formData.openingBalance) || 0;
       const credLim = parseFloat(formData.creditLimit) || 0;
-      const finalEmail = formData.email.trim() || "customer@gmail.com";
+      const finalEmail =
+        formData.email.trim() ||
+        `${formData.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "") || "cust"}${uniqueId.slice(-4)}@spdcustomer.com`;
       const finalPassword = formData.password.trim() || "admin";
 
       const newCustomerRecord = {
@@ -170,6 +172,7 @@ export default function NewCustomerPage() {
           phone: newCustomerRecord.phone,
         });
         localStorage.setItem("spd_customer_credentials", JSON.stringify(creds));
+        localStorage.setItem("spd_customers_auth", JSON.stringify(creds));
       } catch (credErr) {
         console.warn("Could not save customer credentials to localStorage:", credErr);
       }

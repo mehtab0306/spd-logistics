@@ -1419,7 +1419,7 @@ export default function SettingsPage() {
                       className="rounded-xl h-10 text-xs bg-slate-50 dark:bg-slate-800/60"
                     />
                     <p className="text-[10px] text-slate-400">
-                      Standard default for demo is <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded font-mono">admin123</code>
+                      Standard initial system password is <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded font-mono">admin123</code>
                     </p>
                   </div>
 

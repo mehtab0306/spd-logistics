@@ -158,7 +158,7 @@ export default function DriverLoginPage() {
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="e.g. driver@example.com or 03219876543"
+                placeholder=""
                 className="h-11 rounded-xl bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus-visible:ring-emerald-500"
               />
             </div>
@@ -178,7 +178,7 @@ export default function DriverLoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder=""
                   className="h-11 pr-11 rounded-xl bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus-visible:ring-emerald-500"
                 />
                 <button

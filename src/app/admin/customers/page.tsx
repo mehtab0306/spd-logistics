@@ -55,6 +55,7 @@ import {
   getStoredBilties,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
+import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -433,6 +434,39 @@ export default function CustomersPage() {
           password: newPassword,
         }),
       }).catch(() => {});
+
+      // Persist to local customer state & localStorage
+      try {
+        const storedCustomers = getStoredCustomers();
+        const updatedList = storedCustomers.map((c: any) => {
+          if (c.id === resetPasswordCustomer.id) {
+            return { ...c, loginPassword: newPassword };
+          }
+          return c;
+        });
+        localStorage.setItem("spd_customers", JSON.stringify(updatedList));
+
+        // Update spd_customer_credentials and spd_customers_auth
+        const rawAuth = localStorage.getItem("spd_customers_auth") || localStorage.getItem("spd_customer_credentials") || "[]";
+        let authList = JSON.parse(rawAuth);
+        if (!Array.isArray(authList)) authList = [];
+        const existingIdx = authList.findIndex((a: any) => a.id === resetPasswordCustomer.id || a.email?.toLowerCase() === resetPasswordCustomer.email?.toLowerCase());
+        if (existingIdx >= 0) {
+          authList[existingIdx].password = newPassword;
+        } else {
+          authList.unshift({
+            id: resetPasswordCustomer.id,
+            email: (resetPasswordCustomer.email || "").toLowerCase(),
+            password: newPassword,
+            name: resetPasswordCustomer.name,
+            phone: resetPasswordCustomer.phone,
+          });
+        }
+        localStorage.setItem("spd_customers_auth", JSON.stringify(authList));
+        localStorage.setItem("spd_customer_credentials", JSON.stringify(authList));
+      } catch (locErr) {
+        console.warn("Could not save updated password locally:", locErr);
+      }
 
       setResetPasswordCustomer(null);
       setNewPassword("");
@@ -916,31 +950,11 @@ export default function CustomersPage() {
           {/* DEDICATED A4 PRINTABLE CUSTOMER STATEMENT */}
           <div id="printable-statement" className="hidden print:block font-sans text-black p-4 space-y-3 bg-white">
             {/* Header */}
-            <div className="flex items-center justify-between border-b-2 border-slate-900 pb-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src="/images/spd-logo.jpg"
-                  alt="SPD Logistics"
-                  className="h-14 w-auto object-contain rounded border border-slate-300"
-                />
-                <div>
-                  <h1 className="text-xl font-black tracking-tight text-red-600">
-                    SUPER PAK DATA GOODS TRANSPORT CO.
-                  </h1>
-                  <p className="text-[11px] font-bold text-blue-900 uppercase">
-                    Commercial Customer Account Statement & Ledger &bull; Est. 1996
-                  </p>
-                  <p className="text-[10px] text-slate-600">
-                    Head Office: Bhati Gate Transport Center, Lahore &bull; Karachi Port Terminal &bull; 0325 2024433 / 0300 2024433
-                  </p>
-                </div>
-              </div>
-              <div className="text-right border-2 border-slate-900 p-2 rounded-lg bg-slate-50">
-                <p className="text-[9px] font-bold uppercase text-slate-500">STATEMENT DATE</p>
-                <p className="text-xs font-black text-slate-900">{new Date().toLocaleDateString("en-PK", { dateStyle: "long" })}</p>
-                <p className="text-[9px] font-mono text-slate-600 mt-0.5">ACC ID: {viewCustomer?.accountId || viewCustomer?.id}</p>
-              </div>
-            </div>
+            <PrintHeader
+              title="Customer Account Statement & Ledger"
+              documentNumber={viewCustomer?.accountId || viewCustomer?.id}
+              station={viewCustomer?.city || "Lahore Central Station"}
+            />
 
             {/* Customer Profile Block */}
             <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50">
@@ -1055,20 +1069,12 @@ export default function CustomersPage() {
             </div>
 
             {/* Official Signatures Row */}
-            <div className="grid grid-cols-3 gap-8 pt-4 text-center text-xs">
-              <div className="border-t border-slate-400 pt-1.5">
-                <p className="font-bold text-slate-900">Accounts Department</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">SPD Logistics Roster</p>
-              </div>
-              <div className="border-t border-slate-400 pt-1.5">
-                <p className="font-bold text-slate-900">Customer Acknowledgment</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">{viewCustomer?.companyName || viewCustomer?.name}</p>
-              </div>
-              <div className="border-t border-slate-400 pt-1.5">
-                <p className="font-bold text-slate-900">Chief Financial Controller</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Official Stamp & Date</p>
-              </div>
-            </div>
+            <PrintFooter
+              notes="This customer account statement itemizes commercial consignment bookings, payments credited, and outstanding balances. Discrepancies must be reported within 7 business days."
+              preparedByLabel="Prepared By"
+              checkedByLabel="Checked By"
+              authorizedLabel="Authorized Signature"
+            />
           </div>
         </DialogContent>
       </Dialog>
