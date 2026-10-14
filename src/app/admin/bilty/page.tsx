@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,8 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
-import { exportToExcel } from "@/lib/export-excel";
+import { exportToExcel, export4SheetBiltyExcel } from "@/lib/export-excel";
+import { BiltySheetViewer } from "@/components/bilty/bilty-sheet-viewer";
 import {
   getStoredBilties,
   saveStoredBilty,
@@ -1489,9 +1491,18 @@ export default function BiltyPage() {
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="h-8 w-8 rounded-lg text-emerald-700"
+                        onClick={() => export4SheetBiltyExcel(c)}
+                        title="Export 4-Sheet Excel"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         className="h-8 w-8 rounded-lg text-spd-blue"
                         onClick={() => setPrintBilty(c)}
-                        title="Print Bilty"
+                        title="4-Sheet Dossier & Print"
                       >
                         <Printer className="w-3.5 h-3.5" />
                       </Button>
@@ -1685,8 +1696,17 @@ export default function BiltyPage() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            className="h-8 w-8 rounded-lg text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                            title="Export 4-Sheet Excel (.xlsx)"
+                            onClick={() => export4SheetBiltyExcel(c)}
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
                             className="h-8 w-8 rounded-lg text-spd-blue hover:bg-blue-50 dark:hover:bg-blue-950/50"
-                            title="Print Bilty Voucher"
+                            title="4-Sheet Dossier & Print"
                             onClick={() => setPrintBilty(c)}
                           >
                             <Printer className="w-3.5 h-3.5" />
@@ -1733,138 +1753,10 @@ export default function BiltyPage() {
         </>
       )}
 
-      {/* MODAL 2: PRINTABLE BILTY VOUCHER */}
+      {/* MODAL 2: 4-SHEET TRANSPORT DOSSIER VIEWER & EXPORT */}
       <Dialog open={!!printBilty} onOpenChange={() => setPrintBilty(null)}>
-        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-          <div className="flex items-center justify-between border-b pb-3 mb-4 print:hidden">
-            <div>
-              <p className="font-bold text-sm text-slate-900 dark:text-white">Consignment Bilty Voucher</p>
-              <p className="text-xs text-slate-400">Official goods transport voucher for dispatch & delivery</p>
-            </div>
-            <Button
-              onClick={() => window.print()}
-              className="bg-spd-blue hover:bg-spd-blueHover text-white font-bold text-xs rounded-xl gap-2"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print Consignment Voucher</span>
-            </Button>
-          </div>
-
-          {/* PRINTABLE AREA */}
-          <div id="printable-bilty" className="p-6 border-2 border-slate-900 rounded-xl bg-white text-black space-y-4 font-sans text-xs">
-            {/* Voucher Header */}
-            <PrintHeader
-              title="Consignment Bilty Voucher / Goods Receipt"
-              documentNumber={printBilty?.biltyNumber}
-              station={printBilty?.warehouse ? `${printBilty.warehouse} Station` : "Lahore Central Station"}
-              date={printBilty ? formatDate(printBilty.date) : undefined}
-            />
-
-            {/* Meta Row */}
-            <div className="grid grid-cols-4 gap-2 border-b pb-3 font-semibold text-[11px]">
-              <div>
-                <span className="text-slate-500 uppercase text-[9px] block">Booking Date</span>
-                <span>{printBilty ? formatDate(printBilty.date) : ""}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 uppercase text-[9px] block">Origin</span>
-                <span className="font-bold">{printBilty?.origin}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 uppercase text-[9px] block">Destination</span>
-                <span className="font-bold">{printBilty?.destination}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 uppercase text-[9px] block">Booking Station</span>
-                <span className="font-bold text-red-600">{printBilty?.warehouse}</span>
-              </div>
-            </div>
-
-            {/* Sender / Receiver Boxes */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 border border-slate-300 rounded-lg">
-                <p className="font-bold uppercase text-[10px] text-blue-900 border-b pb-1 mb-1">
-                  Shipper / Consignor Details
-                </p>
-                <p className="font-bold text-xs">{printBilty?.senderName}</p>
-                <p className="text-[11px]">{printBilty?.senderPhone || "No phone"}</p>
-                <p className="text-[10px] text-slate-600">{printBilty?.senderAddress || "Lahore Station"}</p>
-              </div>
-
-              <div className="p-3 border border-slate-300 rounded-lg">
-                <p className="font-bold uppercase text-[10px] text-red-600 border-b pb-1 mb-1">
-                  Consignee / Receiver Details
-                </p>
-                <p className="font-bold text-xs">{printBilty?.receiverName}</p>
-                <p className="text-[11px]">{printBilty?.receiverPhone || "No phone"}</p>
-                <p className="text-[10px] text-slate-600">{printBilty?.receiverAddress || "Karachi Station"}</p>
-              </div>
-            </div>
-
-            {/* Fleet & Package Table */}
-            <div className="border border-slate-300 rounded-lg overflow-hidden">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-100 text-[10px] font-bold uppercase border-b">
-                  <tr>
-                    <th className="p-2 border-r">Package Description</th>
-                    <th className="p-2 border-r">Quantity</th>
-                    <th className="p-2 border-r">Weight (KG)</th>
-                    <th className="p-2 border-r">Vehicle #</th>
-                    <th className="p-2">Driver Name</th>
-                  </tr>
-                </thead>
-                <tbody className="text-xs">
-                  <tr>
-                    <td className="p-2 border-r font-semibold">{printBilty?.packageDetails}</td>
-                    <td className="p-2 border-r font-bold">{printBilty?.quantity}</td>
-                    <td className="p-2 border-r font-bold">{printBilty?.weight || "N/A"}</td>
-                    <td className="p-2 border-r font-mono font-bold">{printBilty?.vehicleNumber || "Pending"}</td>
-                    <td className="p-2 font-bold">{printBilty?.driverName || "Pending"}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Charges Breakdown */}
-            <div className="flex justify-end">
-              <div className="w-72 border border-slate-300 rounded-lg p-3 space-y-1.5 bg-slate-50 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Base Freight:</span>
-                  <span className="font-bold">{formatCurrency(printBilty?.freight || 0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Labor / Additional:</span>
-                  <span>{formatCurrency(printBilty?.additionalCharges || 0)}</span>
-                </div>
-                {printBilty?.discount > 0 && (
-                  <div className="flex justify-between text-red-600">
-                    <span>Discount:</span>
-                    <span>-{formatCurrency(printBilty.discount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-slate-300 pt-1 font-black text-sm text-slate-900">
-                  <span>Total Amount:</span>
-                  <span>{formatCurrency(printBilty?.totalAmount || 0)}</span>
-                </div>
-                <div className="flex justify-between text-emerald-700 font-bold">
-                  <span>Paid Amount:</span>
-                  <span>{formatCurrency(printBilty?.paidAmount || 0)}</span>
-                </div>
-                <div className="flex justify-between border-t border-slate-300 pt-1 font-black text-red-600">
-                  <span>Remaining Balance:</span>
-                  <span>{formatCurrency(printBilty?.remainingBalance || 0)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Signatures & Stamp */}
-            <PrintFooter
-              notes="The carrier acknowledges receipt of goods in sound order for transport. Claims for loss, pilferage, or damage must be filed in writing at destination within 24 hours of delivery."
-              preparedByLabel="Prepared By"
-              checkedByLabel="Checked By"
-              authorizedLabel="Authorized Signature"
-            />
-          </div>
+        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+          <BiltySheetViewer bilty={printBilty} showBackLink={false} />
         </DialogContent>
       </Dialog>
 
@@ -2209,19 +2101,39 @@ export default function BiltyPage() {
             );
           })()}
 
-          <DialogFooter className="mt-4 flex items-center justify-between sm:justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                const b = viewDetailsBilty;
-                setViewDetailsBilty(null);
-                setPrintBilty(b);
-              }}
-              className="rounded-xl text-xs font-semibold gap-1.5"
-            >
-              <Printer className="w-3.5 h-3.5" /> Print Voucher
-            </Button>
+          <DialogFooter className="mt-4 flex flex-wrap items-center justify-between gap-2 sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const b = viewDetailsBilty;
+                  setViewDetailsBilty(null);
+                  setPrintBilty(b);
+                }}
+                className="rounded-xl text-xs font-semibold gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" /> 4-Sheet Dossier
+              </Button>
+              <Button
+                type="button"
+                onClick={() => export4SheetBiltyExcel(viewDetailsBilty)}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold gap-1.5 shadow-sm"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" /> 4-Sheet Excel
+              </Button>
+              {viewDetailsBilty?.id && (
+                <Link href={`/admin/bilty/${viewDetailsBilty.id}`}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl text-xs font-semibold gap-1.5"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Full Page View
+                  </Button>
+                </Link>
+              )}
+            </div>
             <Button
               type="button"
               variant="outline"

@@ -7,6 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Package,
   ArrowLeft,
   Save,
@@ -14,11 +22,14 @@ import {
   AlertTriangle,
   Building2,
   Truck,
-  UserCog,
-  MapPin,
-  Calendar,
-  Wallet,
+  Plus,
+  Trash2,
   CheckCircle2,
+  Calculator,
+  EyeOff,
+  UserPlus,
+  Receipt,
+  FileSpreadsheet,
 } from "lucide-react";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
@@ -26,6 +37,7 @@ import { formatCurrency } from "@/lib/utils";
 import {
   getStoredCustomers,
   getDeletedCustomerIds,
+  saveStoredCustomer,
   getStoredDrivers,
   getDeletedDriverIds,
   getStoredVehicles,
@@ -37,6 +49,16 @@ import { PAKISTAN_CITIES } from "@/lib/constants";
 import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
 
+export interface BiltyCargoItem {
+  detail: string;
+  quantity: string | number;
+  weight: string | number;
+  volume: string | number;
+  rate: string | number;
+  freightAsPer: "Per KG" | "Per CBM" | "Per Quantity" | "Fixed Freight";
+  freight: number;
+}
+
 export default function NewBiltyPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -47,7 +69,47 @@ export default function NewBiltyPage() {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
 
+  // Inline Quick Add Customer Modal State
+  const [quickCustomerModalOpen, setQuickCustomerModalOpen] = useState(false);
+  const [quickCustomerTarget, setQuickCustomerTarget] = useState<"sender" | "receiver">("sender");
+  const [quickCustomerData, setQuickCustomerData] = useState({
+    name: "",
+    phone: "",
+    city: "Lahore",
+    address: "",
+    ntn: "",
+    strn: "",
+  });
+  const [quickCustomerSubmitting, setQuickCustomerSubmitting] = useState(false);
+
+  // Dynamic Cargo Items Rows
+  const [items, setItems] = useState<BiltyCargoItem[]>([
+    {
+      detail: "General Commercial Cargo",
+      quantity: "1",
+      weight: "100",
+      volume: "",
+      rate: "",
+      freightAsPer: "Fixed Freight",
+      freight: 0,
+    },
+  ]);
+
+  // Operational Additional Charges Breakdown
+  const [additionalBreakdown, setAdditionalBreakdown] = useState({
+    labour: "",
+    lifterCrane: "",
+    pickupLocal: "",
+    deliveryLocal: "",
+    godownStorage: "",
+    other: "",
+  });
+
   const [formData, setFormData] = useState({
+    // Sheet 1 Header Controls
+    billTo: "Sender" as "Sender" | "Receiver",
+    amountType: "To Pay" as "Paid" | "To Pay" | "To Be Billed",
+    dispatchMode: "Normal" as "Normal" | "Urgent",
     biltyNumber: "",
     trackingId: "",
     date: new Date().toISOString().slice(0, 10),
@@ -55,30 +117,39 @@ export default function NewBiltyPage() {
     origin: "Lahore",
     destination: "Karachi",
 
+    // Parties
     customerId: "",
     senderName: "",
     senderPhone: "",
     senderAddress: "",
+    senderNtn: "",
 
     receiverName: "",
     receiverPhone: "",
     receiverAddress: "",
+    receiverNtn: "",
+    deliveryAddress: "",
 
+    // Commercial Identifiers
+    poNumber: "",
+    blNumber: "",
+    lcNumber: "",
+    containerNumber: "",
+    gdNumber: "",
+
+    // Fleet
     vehicleId: "",
     vehicleNumber: "",
     driverId: "",
     driverName: "",
 
-    packageDetails: "",
-    quantity: "1",
-    weight: "",
-    cpm: "",
-
-    freight: "",
-    additionalCharges: "",
+    // Financials
+    manualBaseFreight: "",
     discount: "",
     paidAmount: "",
+    hideAmount: false,
 
+    // Status & Notes
     shipmentStatus: "BOOKED",
     notes: "",
     cargoPhoto: "",
@@ -130,6 +201,143 @@ export default function NewBiltyPage() {
     }
   };
 
+  // Quick Customer Creation Handler
+  const handleQuickCustomerSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickCustomerData.name.trim()) return;
+
+    setQuickCustomerSubmitting(true);
+    try {
+      const newCust = {
+        id: `cust-${Date.now()}`,
+        name: quickCustomerData.name.trim(),
+        companyName: quickCustomerData.name.trim(),
+        phone: quickCustomerData.phone.trim() || "0300-0000000",
+        city: quickCustomerData.city || "Pakistan",
+        address: quickCustomerData.address.trim() || `${quickCustomerData.city}, Pakistan`,
+        ntn: quickCustomerData.ntn.trim() || null,
+        strn: quickCustomerData.strn.trim() || null,
+        balance: 0,
+        createdAt: new Date().toISOString(),
+      };
+
+      saveStoredCustomer(newCust);
+      setCustomers((prev) => [newCust, ...prev]);
+
+      if (quickCustomerTarget === "sender") {
+        setFormData((prev) => ({
+          ...prev,
+          customerId: newCust.id,
+          senderName: newCust.name,
+          senderPhone: newCust.phone,
+          senderAddress: newCust.address,
+          senderNtn: newCust.ntn || "",
+        }));
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          receiverName: newCust.name,
+          receiverPhone: newCust.phone,
+          receiverAddress: newCust.address,
+          receiverNtn: newCust.ntn || "",
+        }));
+      }
+
+      setQuickCustomerModalOpen(false);
+      setQuickCustomerData({
+        name: "",
+        phone: "",
+        city: "Lahore",
+        address: "",
+        ntn: "",
+        strn: "",
+      });
+    } catch (err) {
+      console.error("Failed to save quick customer:", err);
+    } finally {
+      setQuickCustomerSubmitting(false);
+    }
+  };
+
+  // Dynamic Item Row Management & Auto-Calculation
+  const handleItemChange = (index: number, field: keyof BiltyCargoItem, value: any) => {
+    setItems((prev) => {
+      const updated = [...prev];
+      const item = { ...updated[index], [field]: value };
+
+      const qty = parseFloat(String(item.quantity)) || 0;
+      const wt = parseFloat(String(item.weight)) || 0;
+      const vol = parseFloat(String(item.volume)) || 0;
+      const rate = parseFloat(String(item.rate)) || 0;
+
+      let computedFreight = 0;
+      if (item.freightAsPer === "Per KG") {
+        computedFreight = wt * rate;
+      } else if (item.freightAsPer === "Per CBM") {
+        computedFreight = vol * rate;
+      } else if (item.freightAsPer === "Per Quantity") {
+        computedFreight = qty * rate;
+      } else {
+        // Fixed Freight
+        computedFreight = rate > 0 ? rate : parseFloat(String(item.freight)) || 0;
+      }
+
+      item.freight = Math.round(computedFreight);
+      updated[index] = item;
+      return updated;
+    });
+  };
+
+  const addItemRow = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        detail: "",
+        quantity: 1,
+        weight: "",
+        volume: "",
+        rate: "",
+        freightAsPer: "Fixed Freight",
+        freight: 0,
+      },
+    ]);
+  };
+
+  const removeItemRow = (index: number) => {
+    if (items.length <= 1) return;
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Financial Calculations
+  const calculatedItemsFreightSum = items.reduce((sum, item) => sum + (parseFloat(String(item.freight)) || 0), 0);
+  const baseFreightNum =
+    formData.manualBaseFreight !== ""
+      ? parseFloat(formData.manualBaseFreight) || 0
+      : calculatedItemsFreightSum > 0
+      ? calculatedItemsFreightSum
+      : 0;
+
+  const labourNum = parseFloat(additionalBreakdown.labour) || 0;
+  const lifterNum = parseFloat(additionalBreakdown.lifterCrane) || 0;
+  const pickupNum = parseFloat(additionalBreakdown.pickupLocal) || 0;
+  const deliveryNum = parseFloat(additionalBreakdown.deliveryLocal) || 0;
+  const godownNum = parseFloat(additionalBreakdown.godownStorage) || 0;
+  const otherNum = parseFloat(additionalBreakdown.other) || 0;
+
+  const totalAdditionalCharges = labourNum + lifterNum + pickupNum + deliveryNum + godownNum + otherNum;
+  const discountNum = parseFloat(formData.discount) || 0;
+  const paidNum = parseFloat(formData.paidAmount) || 0;
+
+  const subTotal = Math.max(0, baseFreightNum + totalAdditionalCharges - discountNum);
+  const salesTax15Pct = Math.round(subTotal * 0.15);
+  const totalAmount = subTotal + salesTax15Pct;
+  const remainingBalance = totalAmount - paidNum;
+
+  // Aggregate item quantities & weights for top-level schema compatibility
+  const totalQuantity = items.reduce((sum, i) => sum + (parseInt(String(i.quantity)) || 1), 0);
+  const totalWeight = items.reduce((sum, i) => sum + (parseFloat(String(i.weight)) || 0), 0);
+  const primaryPackageDetail = items.map((i) => i.detail).filter(Boolean).join(" • ") || "General Commercial Merchandise";
+
   const handleCustomerSelect = (customerId: string, meta?: any) => {
     setFormData((prev) => {
       const cust = meta || customers.find((c) => String(c.id) === String(customerId));
@@ -140,6 +348,7 @@ export default function NewBiltyPage() {
           senderName: cust.name || cust.companyName || prev.senderName,
           senderPhone: cust.phone || cust.whatsapp || prev.senderPhone,
           senderAddress: cust.address || prev.senderAddress,
+          senderNtn: cust.ntn || prev.senderNtn,
         };
       }
       return { ...prev, customerId };
@@ -170,43 +379,20 @@ export default function NewBiltyPage() {
     });
   };
 
-  const handleDriverSelect = (driverId: string, meta?: any) => {
-    setFormData((prev) => {
-      const drv = meta || drivers.find((d) => String(d.id) === String(driverId));
-      return {
-        ...prev,
-        driverId,
-        driverName: drv ? drv.name : prev.driverName,
-      };
-    });
-  };
-
-  // Live calculations
-  const freightNum = parseFloat(formData.freight) || 0;
-  const addlNum = parseFloat(formData.additionalCharges) || 0;
-  const discountNum = parseFloat(formData.discount) || 0;
-  const paidNum = parseFloat(formData.paidAmount) || 0;
-
-  const totalAmount = Math.max(0, freightNum + addlNum - discountNum);
-  const remainingBalance = totalAmount - paidNum;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
     setSuccessMessage("");
 
     if (!formData.senderName.trim()) {
-      console.log("[NewBilty] Validation warning: Sender name is missing");
-      setFormError("Sender name or registered customer selection is required.");
+      setFormError("Sender name or customer selection is required.");
       return;
     }
     if (!formData.receiverName.trim()) {
-      console.log("[NewBilty] Validation warning: Receiver name is missing");
       setFormError("Receiver / Consignee name is required.");
       return;
     }
     if (!formData.receiverPhone.trim()) {
-      console.log("[NewBilty] Validation warning: Receiver phone is missing");
       setFormError("Receiver mobile phone number is required.");
       return;
     }
@@ -226,8 +412,10 @@ export default function NewBiltyPage() {
         `SPD-${year}-${Math.floor(100000 + Math.random() * 900000)}`;
 
       const paymentStatus =
-        remainingBalance <= 0 && totalAmount > 0
+        formData.amountType === "Paid" || (remainingBalance <= 0 && totalAmount > 0)
           ? "PAID"
+          : formData.amountType === "To Be Billed"
+          ? "TO_BE_BILLED"
           : paidNum > 0
           ? "PARTIAL"
           : "UNPAID";
@@ -244,14 +432,35 @@ export default function NewBiltyPage() {
         warehouse: formData.warehouse || "LAHORE",
         origin: formData.origin || "Lahore",
         destination: formData.destination || "Karachi",
+
+        // Sheet 1 Specific Controls
+        billTo: formData.billTo,
+        amountType: formData.amountType,
+        dispatchMode: formData.dispatchMode,
+        hideAmount: formData.hideAmount,
+
+        // Commercial Identifiers
+        poNumber: formData.poNumber.trim() || null,
+        blNumber: formData.blNumber.trim() || null,
+        lcNumber: formData.lcNumber.trim() || null,
+        containerNumber: formData.containerNumber.trim() || null,
+        gdNumber: formData.gdNumber.trim() || null,
+
+        // Parties
         customerId: formData.customerId || null,
         customer: selectedCust ? { id: selectedCust.id, name: selectedCust.name, companyName: selectedCust.companyName } : null,
         senderName: formData.senderName.trim(),
         senderPhone: formData.senderPhone.trim() || "0300-0000000",
         senderAddress: formData.senderAddress.trim() || `${formData.origin}, Pakistan`,
+        senderNtn: formData.senderNtn || selectedCust?.ntn || null,
+
         receiverName: formData.receiverName.trim(),
         receiverPhone: formData.receiverPhone.trim(),
         receiverAddress: formData.receiverAddress.trim() || `${formData.destination}, Pakistan`,
+        receiverNtn: formData.receiverNtn || null,
+        deliveryAddress: formData.deliveryAddress.trim() || formData.receiverAddress.trim(),
+
+        // Fleet
         vehicleId: formData.vehicleId || null,
         vehicleNumber: formData.vehicleNumber || selectedVeh?.registrationNumber || selectedVeh?.vehicleNumber || null,
         vehicle: selectedVeh
@@ -265,18 +474,34 @@ export default function NewBiltyPage() {
         driverId: formData.driverId || null,
         driverName: formData.driverName || selectedDrv?.name || null,
         driver: selectedDrv ? { id: selectedDrv.id, name: selectedDrv.name, phone: selectedDrv.phone } : null,
-        packageDetails: formData.packageDetails.trim() || "General Commercial Cargo",
-        quantity: parseInt(formData.quantity) || 1,
-        weight: formData.weight ? parseFloat(formData.weight) : 100,
-        cpm: formData.cpm ? parseFloat(formData.cpm) : null,
-        freight: freightNum,
-        additionalCharges: addlNum,
+
+        // Dynamic Items
+        items,
+        packageDetails: primaryPackageDetail,
+        quantity: totalQuantity,
+        weight: totalWeight || 100,
+        cpm: parseFloat(String(items[0]?.volume)) || null,
+
+        // Financials & Breakdown
+        additionalChargesBreakdown: {
+          labour: labourNum,
+          lifterCrane: lifterNum,
+          pickupLocal: pickupNum,
+          deliveryLocal: deliveryNum,
+          godownStorage: godownNum,
+          other: otherNum,
+        },
+        freight: baseFreightNum,
+        additionalCharges: totalAdditionalCharges,
         discount: discountNum,
+        subTotal,
+        salesTax: salesTax15Pct,
         totalAmount,
         paidAmount: paidNum,
         remainingBalance,
         paymentStatus,
         shipmentStatus: formData.shipmentStatus || "BOOKED",
+
         challanId: null,
         notes: formData.notes.trim() || null,
         cargoPhoto: formData.cargoPhoto || null,
@@ -289,7 +514,7 @@ export default function NewBiltyPage() {
             id: `evt-${uniqueId}`,
             status: formData.shipmentStatus || "BOOKED",
             location: formData.origin,
-            notes: `Consignment booked at ${formData.origin} (${finalBiltyNumber}).`,
+            notes: `Booking completed. Bilty #${finalBiltyNumber} issued with ${formData.amountType} terms.`,
             timestamp,
           },
         ],
@@ -297,28 +522,24 @@ export default function NewBiltyPage() {
         updatedAt: timestamp,
       };
 
-      // 1. Immediately persist to localStorage (spd_bilties, spd_local_bilties, spd_local_tracking)
+      // 1. Immediately persist to localStorage
       saveStoredBilty(newBiltyRecord);
 
-      // 2. Try sending to backend API wrapped in try/catch (do NOT rollback or throw on serverless failure)
+      // 2. Background API call
       try {
         await fetch("/api/admin/bilty", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...newBiltyRecord,
-            biltyNumber: finalBiltyNumber,
-            trackingId: finalTrackingId,
-          }),
+          body: JSON.stringify(newBiltyRecord),
         });
       } catch (apiErr) {
-        console.warn("Serverless API fallback active — bilty saved in localStorage:", apiErr);
+        console.warn("Serverless API fallback active — bilty saved in local storage:", apiErr);
       }
 
-      setSuccessMessage(`Record created successfully! Bilty #${finalBiltyNumber} booked.`);
+      setSuccessMessage(`Consignment booked successfully! Bilty #${finalBiltyNumber} ready.`);
       setTimeout(() => {
-        router.push(`/admin/bilty?highlight=${uniqueId}`);
-      }, 900);
+        router.push(`/admin/bilty/${uniqueId}`);
+      }, 700);
     } catch (err: any) {
       console.error("[NewBilty] Error:", err);
       setFormError(err.message || "Failed to create Bilty");
@@ -330,27 +551,13 @@ export default function NewBiltyPage() {
   const customerOptions = customers.map((c) => ({
     value: c.id,
     label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
-    subLabel: `${c.city || "Pakistan"} • ${c.companyName || "Individual"}`,
+    subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
     meta: c,
-  }));
-
-  const vehicleOptions = vehicles.map((v) => ({
-    value: v.id,
-    label: `${v.vehicleNumber || v.registrationNumber} (${v.type || v.make || "Truck"})`,
-    subLabel: `Capacity: ${v.capacity || "N/A"} Tons • Status: ${v.status || "AVAILABLE"}`,
-    meta: v,
-  }));
-
-  const driverOptions = drivers.map((d) => ({
-    value: d.id,
-    label: `${d.name} (${d.phone || d.contact || "No phone"})`,
-    subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status || "AVAILABLE"}`,
-    meta: d,
   }));
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-24">
-      {/* Header / Breadcrumb */}
+      {/* Header / Breadcrumbs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div className="flex items-center gap-3">
           <Link href="/admin/bilty">
@@ -368,11 +575,11 @@ export default function NewBiltyPage() {
                 Consignment Management
               </span>
               <span className="text-slate-300">/</span>
-              <span className="text-xs font-bold text-spd-red">Create Consignment</span>
+              <span className="text-xs font-bold text-red-700">Sheet 1: Booking Workflow</span>
             </div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <Package className="w-6 h-6 text-spd-red" />
-              New Bilty Consignment
+              <Package className="w-6 h-6 text-red-700" />
+              New Bilty & Booking Entry
             </h1>
           </div>
         </div>
@@ -387,10 +594,10 @@ export default function NewBiltyPage() {
             type="submit"
             form="new-bilty-form"
             disabled={submitting}
-            className="bg-spd-red hover:bg-spd-redHover text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-5"
+            className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-5"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>Book Consignment</span>
+            <span>Book Consignment (4 Sheets)</span>
           </Button>
         </div>
       </div>
@@ -410,12 +617,91 @@ export default function NewBiltyPage() {
       )}
 
       <form id="new-bilty-form" onSubmit={handleSubmit} noValidate className="space-y-6">
-        {/* Section 1: Route & Booking Stations */}
+        {/* SHEET 1 CONTROLS: Bill To, Payment Mode, Dispatch Mode & Corridor */}
         <FormSectionCard
-          title="From / To (Booking & Delivery Stations)"
-          badge="Corridor"
-          description="Booking station, destination station, and consignment vouchers"
+          title="Sheet 1: Booking Controls & Corridor"
+          badge="Header Controls"
+          description="Primary billing party, payment terms, dispatch priority, and station routing"
         >
+          {/* Bill To Selector */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Bill To (Debtor) *
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, billTo: "Sender" })}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                  formData.billTo === "Sender"
+                    ? "bg-blue-900 text-white border-blue-900 shadow-sm"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                Sender (Shipper)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, billTo: "Receiver" })}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                  formData.billTo === "Receiver"
+                    ? "bg-red-700 text-white border-red-700 shadow-sm"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                Receiver (Consignee)
+              </button>
+            </div>
+          </div>
+
+          {/* Amount Type / Payment Mode */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Amount Type / Payment Mode *
+            </Label>
+            <select
+              value={formData.amountType}
+              onChange={(e) => setFormData({ ...formData, amountType: e.target.value as any })}
+              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+            >
+              <option value="To Pay">To Pay (Payable at Destination)</option>
+              <option value="Paid">Paid (Cash / Advance Received)</option>
+              <option value="To Be Billed">To Be Billed (Monthly Corporate Credit)</option>
+            </select>
+          </div>
+
+          {/* Dispatch Mode */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Dispatch Mode *
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, dispatchMode: "Normal" })}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                  formData.dispatchMode === "Normal"
+                    ? "bg-slate-800 text-white border-slate-800 shadow-sm"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                Normal Speed
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, dispatchMode: "Urgent" })}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                  formData.dispatchMode === "Urgent"
+                    ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                ⚡ Urgent Express
+              </button>
+            </div>
+          </div>
+
+          {/* Booking Date */}
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
               Booking Date *
@@ -430,23 +716,10 @@ export default function NewBiltyPage() {
             />
           </div>
 
+          {/* Origin Hub */}
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Station *
-            </Label>
-            <select
-              value={formData.warehouse}
-              onChange={(e) => setFormData({ ...formData, warehouse: e.target.value })}
-              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
-            >
-              <option value="LAHORE">Lahore</option>
-              <option value="KARACHI">Karachi</option>
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              From (Booking Station) *
+              From (Loading Hub) *
             </Label>
             <HybridCombobox
               value={formData.origin}
@@ -457,9 +730,10 @@ export default function NewBiltyPage() {
             />
           </div>
 
+          {/* Destination Hub */}
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              To (Delivery Station) *
+              To (Destination Hub) *
             </Label>
             <HybridCombobox
               value={formData.destination}
@@ -470,9 +744,10 @@ export default function NewBiltyPage() {
             />
           </div>
 
+          {/* Custom Bilty # */}
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Custom Bilty # (Optional, leave blank to auto-generate)
+              Bilty # (Leave blank for auto-number)
             </Label>
             <Input
               value={formData.biltyNumber}
@@ -482,9 +757,10 @@ export default function NewBiltyPage() {
             />
           </div>
 
+          {/* Custom Tracking ID */}
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Tracking ID (Optional, leave blank to auto-generate)
+              Tracking ID (Optional)
             </Label>
             <Input
               value={formData.trackingId}
@@ -495,30 +771,45 @@ export default function NewBiltyPage() {
           </div>
         </FormSectionCard>
 
-        {/* Section 2: Sender & Receiver Parties */}
+        {/* SECTION 2: Sender & Receiver Parties with Quick Add Customer Modal */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Sender / Consignor */}
           <FormSectionCard
-            title="Sender / Consignor"
-            badge="Origin"
-            description="Select registered customer or enter consignor contact"
+            title="Consignor / Sender Details"
+            badge="Origin Party"
+            description="Shipper contact, registered customer link, and commercial NTN"
           >
-            <div className="col-span-1 sm:col-span-2 space-y-1.5">
-              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Select Registered Customer (Auto-fills Consignor)
-              </Label>
-              <SearchableSelect
-                options={customerOptions}
-                value={formData.customerId}
-                onChange={handleCustomerSelect}
-                placeholder=""
-                emptyMessage="No registered customers found"
-              />
+            <div className="col-span-1 sm:col-span-2 flex items-end gap-2">
+              <div className="flex-1 space-y-1.5">
+                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                  Select Registered Customer (Auto-fills Shipper)
+                </Label>
+                <SearchableSelect
+                  options={customerOptions}
+                  value={formData.customerId}
+                  onChange={handleCustomerSelect}
+                  placeholder=""
+                  emptyMessage="No registered customers found"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setQuickCustomerTarget("sender");
+                  setQuickCustomerModalOpen(true);
+                }}
+                className="rounded-xl text-xs font-bold gap-1.5 h-10 text-red-700 border-red-200 hover:bg-red-50 shrink-0"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Add Customer</span>
+              </Button>
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Sender / Consignor Name *
+                Sender Name *
               </Label>
               <HybridCombobox
                 required
@@ -534,13 +825,14 @@ export default function NewBiltyPage() {
                       senderName: c.name || c.companyName || prev.senderName,
                       senderPhone: c.phone || prev.senderPhone,
                       senderAddress: c.address || (c.city ? `${c.city}, Pakistan` : prev.senderAddress),
+                      senderNtn: c.ntn || prev.senderNtn,
                     }));
                   }
                 }}
                 options={customers.map((c) => ({
                   value: c.name || c.companyName || "",
                   label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
-                  subLabel: `${c.city || "Pakistan"} • ${c.companyName || "Client"}`,
+                  subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
                   meta: c,
                 }))}
                 inputClassName="h-10 rounded-xl font-semibold"
@@ -549,7 +841,7 @@ export default function NewBiltyPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Sender / Consignor Phone *
+                Sender Phone *
               </Label>
               <Input
                 required
@@ -560,9 +852,21 @@ export default function NewBiltyPage() {
               />
             </div>
 
-            <div className="col-span-1 sm:col-span-2 space-y-1.5">
+            <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Sender / Consignor Address
+                Sender NTN / STRN
+              </Label>
+              <Input
+                value={formData.senderNtn}
+                placeholder=""
+                onChange={(e) => setFormData({ ...formData, senderNtn: e.target.value })}
+                className="rounded-xl h-10 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                Sender Office / Mill Address
               </Label>
               <Input
                 value={formData.senderAddress}
@@ -575,43 +879,59 @@ export default function NewBiltyPage() {
 
           {/* Receiver / Consignee */}
           <FormSectionCard
-            title="Receiver / Consignee"
-            badge="Destination"
-            description="Consignee contact and delivery location details"
+            title="Consignee / Receiver Details"
+            badge="Destination Party"
+            description="Receiver contact, delivery site, and specific factory address"
           >
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Receiver / Consignee Name *
-              </Label>
-              <HybridCombobox
-                required
-                value={formData.receiverName}
-                placeholder=""
-                onChange={(val) => setFormData({ ...formData, receiverName: val })}
-                onSelectOption={(opt) => {
-                  const c = opt.meta;
-                  if (c) {
-                    setFormData((prev) => ({
-                      ...prev,
-                      receiverName: c.name || c.companyName || prev.receiverName,
-                      receiverPhone: c.phone || prev.receiverPhone,
-                      receiverAddress: c.address || (c.city ? `${c.city}, Pakistan` : prev.receiverAddress),
-                    }));
-                  }
+            <div className="col-span-1 sm:col-span-2 flex items-end gap-2">
+              <div className="flex-1 space-y-1.5">
+                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                  Receiver / Consignee Name *
+                </Label>
+                <HybridCombobox
+                  required
+                  value={formData.receiverName}
+                  placeholder=""
+                  onChange={(val) => setFormData({ ...formData, receiverName: val })}
+                  onSelectOption={(opt) => {
+                    const c = opt.meta;
+                    if (c) {
+                      setFormData((prev) => ({
+                        ...prev,
+                        receiverName: c.name || c.companyName || prev.receiverName,
+                        receiverPhone: c.phone || prev.receiverPhone,
+                        receiverAddress: c.address || (c.city ? `${c.city}, Pakistan` : prev.receiverAddress),
+                        receiverNtn: c.ntn || prev.receiverNtn,
+                      }));
+                    }
+                  }}
+                  options={customers.map((c) => ({
+                    value: c.name || c.companyName || "",
+                    label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
+                    subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
+                    meta: c,
+                  }))}
+                  inputClassName="h-10 rounded-xl font-semibold"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setQuickCustomerTarget("receiver");
+                  setQuickCustomerModalOpen(true);
                 }}
-                options={customers.map((c) => ({
-                  value: c.name || c.companyName || "",
-                  label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
-                  subLabel: `${c.city || "Pakistan"} • ${c.companyName || "Client"}`,
-                  meta: c,
-                }))}
-                inputClassName="h-10 rounded-xl font-semibold"
-              />
+                className="rounded-xl text-xs font-bold gap-1.5 h-10 text-blue-800 border-blue-200 hover:bg-blue-50 shrink-0"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Add Customer</span>
+              </Button>
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Receiver / Consignee Phone *
+                Receiver Phone *
               </Label>
               <Input
                 required
@@ -622,9 +942,21 @@ export default function NewBiltyPage() {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                Receiver NTN / STRN
+              </Label>
+              <Input
+                value={formData.receiverNtn}
+                placeholder=""
+                onChange={(e) => setFormData({ ...formData, receiverNtn: e.target.value })}
+                className="rounded-xl h-10 text-xs font-mono"
+              />
+            </div>
+
             <div className="col-span-1 sm:col-span-2 space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Receiver / Consignee Delivery Address *
+                Receiver City Address
               </Label>
               <Input
                 value={formData.receiverAddress}
@@ -633,98 +965,360 @@ export default function NewBiltyPage() {
                 className="rounded-xl h-10 text-xs"
               />
             </div>
+
+            <div className="col-span-1 sm:col-span-2 space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                Specific Factory / Site Drop Address (Delivery Address)
+              </Label>
+              <Input
+                value={formData.deliveryAddress}
+                placeholder=""
+                onChange={(e) => setFormData({ ...formData, deliveryAddress: e.target.value })}
+                className="rounded-xl h-10 text-xs font-medium"
+              />
+            </div>
           </FormSectionCard>
         </div>
 
-        {/* Section 3: Cargo Packages & Specifications */}
+        {/* SECTION 3: Commercial Identifiers */}
         <FormSectionCard
-          title="Cargo Description, Packages & Weight"
-          badge="Cargo"
-          description="Description of merchandise, package counts, weight, and volume"
+          title="Commercial & Customs Identifiers"
+          badge="Identifiers"
+          description="Purchase orders, bill of lading, letters of credit, and container shipping marks"
         >
-          <div className="col-span-1 sm:col-span-2 space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Goods Description *
-            </Label>
-            <Input
-              required
-              value={formData.packageDetails}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, packageDetails: e.target.value })}
-              className="rounded-xl h-10 text-xs font-semibold"
-            />
-          </div>
-
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Quantity / Cartons / Packages *
+              Order / PO #
             </Label>
             <Input
-              type="number"
-              min="1"
-              required
-              value={formData.quantity}
+              value={formData.poNumber}
               placeholder=""
-              onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-              className="rounded-xl h-10 text-xs font-bold"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Gross Weight (Kg)
-            </Label>
-            <Input
-              type="number"
-              step="any"
-              value={formData.weight}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, poNumber: e.target.value })}
               className="rounded-xl h-10 text-xs font-mono"
             />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Volume / CPM (Cubic Meters)
+              B/L # (Bill of Lading)
             </Label>
             <Input
-              type="number"
-              step="any"
-              value={formData.cpm}
+              value={formData.blNumber}
               placeholder=""
-              onChange={(e) => setFormData({ ...formData, cpm: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, blNumber: e.target.value })}
               className="rounded-xl h-10 text-xs font-mono"
             />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Shipment Status
+              LC # (Letter of Credit)
             </Label>
-            <select
-              value={formData.shipmentStatus}
-              onChange={(e) => setFormData({ ...formData, shipmentStatus: e.target.value })}
-              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
-            >
-              <option value="BOOKED">Booked (At Station)</option>
-              <option value="IN_WAREHOUSE">In Warehouse Storage</option>
-              <option value="LOADED">Loaded on Vehicle</option>
-              <option value="DISPATCHED">Dispatched</option>
-              <option value="IN_TRANSIT">In Transit</option>
-            </select>
+            <Input
+              value={formData.lcNumber}
+              placeholder=""
+              onChange={(e) => setFormData({ ...formData, lcNumber: e.target.value })}
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Container #
+            </Label>
+            <Input
+              value={formData.containerNumber}
+              placeholder=""
+              onChange={(e) => setFormData({ ...formData, containerNumber: e.target.value.toUpperCase() })}
+              className="rounded-xl h-10 text-xs font-mono uppercase"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              GD # (Goods Declaration)
+            </Label>
+            <Input
+              value={formData.gdNumber}
+              placeholder=""
+              onChange={(e) => setFormData({ ...formData, gdNumber: e.target.value })}
+              className="rounded-xl h-10 text-xs font-mono"
+            />
           </div>
         </FormSectionCard>
 
-        {/* Section 4: Vehicle & Driver Assignment (Optional) */}
+        {/* SECTION 4: Dynamic Item Details Rows ("+ Add More Bilty Item") */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-red-700" />
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                  Cargo Items & Dynamic Freight Calculation
+                </h3>
+                <span className="text-[10px] font-bold bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
+                  {items.length} {items.length === 1 ? "Item" : "Items"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Calculate freight as per KG, CBM, Quantity, or Fixed Freight
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addItemRow}
+              className="rounded-xl text-xs font-bold gap-1.5 text-red-700 border-red-300 hover:bg-red-50 h-9"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Add More Bilty Item</span>
+            </Button>
+          </div>
+
+          {/* Dynamic Rows */}
+          <div className="space-y-3">
+            {items.map((item, index) => (
+              <div
+                key={index}
+                className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase">
+                    Item #{index + 1}
+                  </span>
+                  {items.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeItemRow(index)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2 text-xs font-bold gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
+                    </Button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                  <div className="sm:col-span-4 space-y-1">
+                    <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Item Description / Marks *
+                    </Label>
+                    <Input
+                      required
+                      value={item.detail}
+                      placeholder=""
+                      onChange={(e) => handleItemChange(index, "detail", e.target.value)}
+                      className="rounded-xl h-9 text-xs font-medium bg-white dark:bg-slate-900"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-1 space-y-1">
+                    <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Qty
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      placeholder=""
+                      onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
+                      className="rounded-xl h-9 text-xs font-mono bg-white dark:bg-slate-900"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Weight (Kg)
+                    </Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={item.weight}
+                      placeholder=""
+                      onChange={(e) => handleItemChange(index, "weight", e.target.value)}
+                      className="rounded-xl h-9 text-xs font-mono bg-white dark:bg-slate-900"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-1 space-y-1">
+                    <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
+                      CBM
+                    </Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={item.volume}
+                      placeholder=""
+                      onChange={(e) => handleItemChange(index, "volume", e.target.value)}
+                      className="rounded-xl h-9 text-xs font-mono bg-white dark:bg-slate-900"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Freight As Per
+                    </Label>
+                    <select
+                      value={item.freightAsPer}
+                      onChange={(e) => handleItemChange(index, "freightAsPer", e.target.value)}
+                      className="w-full h-9 px-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200"
+                    >
+                      <option value="Per KG">Per KG</option>
+                      <option value="Per CBM">Per CBM</option>
+                      <option value="Per Quantity">Per Qty</option>
+                      <option value="Fixed Freight">Fixed</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
+                      {item.freightAsPer === "Fixed Freight" ? "Freight (PKR)" : "Rate (PKR)"}
+                    </Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={item.rate}
+                      placeholder=""
+                      onChange={(e) => handleItemChange(index, "rate", e.target.value)}
+                      className="rounded-xl h-9 text-xs font-mono font-bold bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end text-xs font-bold text-slate-700 dark:text-slate-300 pt-1">
+                  <span>Computed Row Freight: </span>
+                  <span className="font-mono text-red-700 dark:text-red-400 ml-1.5">
+                    {formatCurrency(item.freight || 0)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-xs">
+            <span className="uppercase text-slate-600 dark:text-slate-400">Sum of Items Initial Freight:</span>
+            <span className="font-mono text-sm text-black dark:text-white">
+              {formatCurrency(calculatedItemsFreightSum)}
+            </span>
+          </div>
+        </div>
+
+        {/* SECTION 5: Operational Additional Charges Breakdown */}
         <FormSectionCard
-          title="Vehicle & Driver Assignment (Optional)"
-          badge="Fleet"
-          description="Can be assigned immediately or grouped later in Challan Manifest"
+          title="Operational Additional Charges Breakdown"
+          badge="Surcharges"
+          description="Detailed breakdown matching transport operations (Labour, Crane, Local Cartage, Godown)"
         >
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Assigned Vehicle (Select or Type Truck #)
+              Labour & Handling Charges
+            </Label>
+            <Input
+              type="number"
+              step="any"
+              value={additionalBreakdown.labour}
+              placeholder=""
+              onChange={(e) =>
+                setAdditionalBreakdown({ ...additionalBreakdown, labour: e.target.value })
+              }
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Lifter / Crane / Shifting
+            </Label>
+            <Input
+              type="number"
+              step="any"
+              value={additionalBreakdown.lifterCrane}
+              placeholder=""
+              onChange={(e) =>
+                setAdditionalBreakdown({ ...additionalBreakdown, lifterCrane: e.target.value })
+              }
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Pickup Local Cartage (Origin)
+            </Label>
+            <Input
+              type="number"
+              step="any"
+              value={additionalBreakdown.pickupLocal}
+              placeholder=""
+              onChange={(e) =>
+                setAdditionalBreakdown({ ...additionalBreakdown, pickupLocal: e.target.value })
+              }
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Delivery Local Cartage (Destination)
+            </Label>
+            <Input
+              type="number"
+              step="any"
+              value={additionalBreakdown.deliveryLocal}
+              placeholder=""
+              onChange={(e) =>
+                setAdditionalBreakdown({ ...additionalBreakdown, deliveryLocal: e.target.value })
+              }
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Godown / Storage Charges
+            </Label>
+            <Input
+              type="number"
+              step="any"
+              value={additionalBreakdown.godownStorage}
+              placeholder=""
+              onChange={(e) =>
+                setAdditionalBreakdown({ ...additionalBreakdown, godownStorage: e.target.value })
+              }
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Other Operational Charges
+            </Label>
+            <Input
+              type="number"
+              step="any"
+              value={additionalBreakdown.other}
+              placeholder=""
+              onChange={(e) =>
+                setAdditionalBreakdown({ ...additionalBreakdown, other: e.target.value })
+              }
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+        </FormSectionCard>
+
+        {/* SECTION 6: Fleet Assignment & Linehaul */}
+        <FormSectionCard
+          title="Fleet Vehicle & Driver Assignment (Optional)"
+          badge="Linehaul"
+          description="Can be assigned immediately or grouped in transit challans later"
+        >
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Assigned Truck / Vehicle #
             </Label>
             <HybridCombobox
               value={formData.vehicleNumber}
@@ -754,7 +1348,7 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Assigned Driver (Select or Type Name)
+              Assigned Driver Name
             </Label>
             <HybridCombobox
               value={formData.driverName}
@@ -779,13 +1373,30 @@ export default function NewBiltyPage() {
               inputClassName="h-10 rounded-xl"
             />
           </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Initial Shipment Status
+            </Label>
+            <select
+              value={formData.shipmentStatus}
+              onChange={(e) => setFormData({ ...formData, shipmentStatus: e.target.value })}
+              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
+            >
+              <option value="BOOKED">Booked (At Station)</option>
+              <option value="IN_WAREHOUSE">In Warehouse Storage</option>
+              <option value="LOADED">Loaded on Vehicle</option>
+              <option value="DISPATCHED">Dispatched</option>
+              <option value="IN_TRANSIT">In Transit</option>
+            </select>
+          </div>
         </FormSectionCard>
 
-        {/* Section: Attachments & Photos */}
+        {/* SECTION 7: Multi-Image Proof Attachments */}
         <FormSectionCard
-          title="Attachments & Photos (Up to 3 images)"
+          title="Attachments & Document Proofs (Up to 3 images)"
           badge="Proofs"
-          description="Compact photo attachments for cargo, physical bilty copies, or weight receipts"
+          description="Cargo photos, physical consignment copy scan, or weight slips"
         >
           <div className="col-span-1 sm:col-span-2">
             <TripleImageAttachment
@@ -806,44 +1417,29 @@ export default function NewBiltyPage() {
           </div>
         </FormSectionCard>
 
-        {/* Section 5: Financial Accounting & Live Totals */}
+        {/* SECTION 8: Financial Accounting, Live Totals & Hide Amount Toggle */}
         <FormSectionCard
-          title="Freight Charges & Balance Calculation"
+          title="Financial Accounting & Net Calculation"
           badge="Financials"
-          description="Real-time freight balance with auto-sum total and payment tracking"
+          description="Automatic tax calculations, advance payment tracking, and print confidentiality options"
         >
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Base Freight Amount (PKR) *
+              Base Initial Freight (PKR)
             </Label>
             <Input
               type="number"
               step="any"
-              required
-              value={formData.freight}
+              value={formData.manualBaseFreight !== "" ? formData.manualBaseFreight : baseFreightNum || ""}
               placeholder=""
-              onChange={(e) => setFormData({ ...formData, freight: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, manualBaseFreight: e.target.value })}
               className="rounded-xl h-10 text-xs font-mono font-bold"
             />
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Labour & Additional Charges (PKR)
-            </Label>
-            <Input
-              type="number"
-              step="any"
-              value={formData.additionalCharges}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, additionalCharges: e.target.value })}
-              className="rounded-xl h-10 text-xs font-mono"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Discount (PKR)
+              Contract Discount (PKR)
             </Label>
             <Input
               type="number"
@@ -869,48 +1465,66 @@ export default function NewBiltyPage() {
             />
           </div>
 
+          {/* Hide Amount in Bilty Toggle */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Freight Confidentiality
+            </Label>
+            <label className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.hideAmount}
+                onChange={(e) => setFormData({ ...formData, hideAmount: e.target.checked })}
+                className="w-4 h-4 rounded text-red-700 focus:ring-red-500"
+              />
+              <div>
+                <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                  Hide Amount in Bilty Prints
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  Shows &apos;CONFIDENTIAL / AS PER CONTRACT&apos; on Driver &amp; Customer copies
+                </span>
+              </div>
+            </label>
+          </div>
+
           {/* Live Financial Summary Banner */}
-          <div className="col-span-1 sm:col-span-2 p-4 rounded-xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-4 mt-2">
+          <div className="col-span-1 sm:col-span-2 p-4 rounded-xl bg-slate-900 text-white grid grid-cols-2 sm:grid-cols-4 gap-4 mt-2">
             <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Total Freight Amount
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Subtotal (Excl. Tax)
               </p>
-              <p className="text-2xl font-black text-emerald-400">
+              <p className="text-lg font-black text-white font-mono">
+                {formatCurrency(subTotal)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Sales Tax (15%)
+              </p>
+              <p className="text-lg font-black text-blue-300 font-mono">
+                {formatCurrency(salesTax15Pct)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Grand Total Amount
+              </p>
+              <p className="text-xl font-black text-emerald-400 font-mono">
                 {formatCurrency(totalAmount)}
               </p>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Advance Paid
-              </p>
-              <p className="text-xl font-black text-slate-200">
-                {formatCurrency(paidNum)}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Balance Due
               </p>
               <p
-                className={`text-2xl font-black ${
+                className={`text-xl font-black font-mono ${
                   remainingBalance <= 0 ? "text-emerald-400" : "text-amber-400"
                 }`}
               >
                 {formatCurrency(remainingBalance)}
               </p>
-            </div>
-            <div>
-              <span
-                className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${
-                  remainingBalance <= 0
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                    : paidNum > 0
-                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-                    : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                }`}
-              >
-                {remainingBalance <= 0 ? "Fully Paid" : paidNum > 0 ? "Partially Paid" : "Unpaid"}
-              </span>
             </div>
           </div>
 
@@ -937,13 +1551,106 @@ export default function NewBiltyPage() {
           <Button
             type="submit"
             disabled={submitting}
-            className="bg-spd-red hover:bg-spd-redHover text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-6"
+            className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-6"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>Book Consignment</span>
+            <span>Book Consignment & View Dossier</span>
           </Button>
         </div>
       </form>
+
+      {/* INLINE QUICK ADD CUSTOMER MODAL */}
+      <Dialog open={quickCustomerModalOpen} onOpenChange={setQuickCustomerModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-red-700" />
+              Quick Add Customer ({quickCustomerTarget === "sender" ? "Shipper" : "Consignee"})
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Create a new client profile and auto-select in this booking entry.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleQuickCustomerSave} className="space-y-3.5 py-2">
+            <div className="space-y-1">
+              <Label className="text-xs font-bold">Party / Company Name *</Label>
+              <Input
+                required
+                value={quickCustomerData.name}
+                placeholder=""
+                onChange={(e) => setQuickCustomerData({ ...quickCustomerData, name: e.target.value })}
+                className="rounded-xl h-9 text-xs font-semibold"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-bold">Mobile / Phone Number *</Label>
+              <Input
+                required
+                value={quickCustomerData.phone}
+                placeholder=""
+                onChange={(e) => setQuickCustomerData({ ...quickCustomerData, phone: e.target.value })}
+                className="rounded-xl h-9 text-xs font-mono"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">City *</Label>
+                <HybridCombobox
+                  value={quickCustomerData.city}
+                  onChange={(val) => setQuickCustomerData({ ...quickCustomerData, city: val })}
+                  options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
+                  placeholder=""
+                  inputClassName="h-9 rounded-xl font-semibold text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">NTN (Optional)</Label>
+                <Input
+                  value={quickCustomerData.ntn}
+                  placeholder=""
+                  onChange={(e) => setQuickCustomerData({ ...quickCustomerData, ntn: e.target.value })}
+                  className="rounded-xl h-9 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-bold">Physical Address</Label>
+              <Input
+                value={quickCustomerData.address}
+                placeholder=""
+                onChange={(e) => setQuickCustomerData({ ...quickCustomerData, address: e.target.value })}
+                className="rounded-xl h-9 text-xs"
+              />
+            </div>
+
+            <DialogFooter className="pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setQuickCustomerModalOpen(false)}
+                className="rounded-xl text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={quickCustomerSubmitting}
+                size="sm"
+                className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl"
+              >
+                {quickCustomerSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
+                Save & Select Party
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
