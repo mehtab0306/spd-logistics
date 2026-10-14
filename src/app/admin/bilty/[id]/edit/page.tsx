@@ -59,7 +59,8 @@ export interface BiltyCargoItem {
 export default function EditBiltyPage() {
   const router = useRouter();
   const params = useParams();
-  const biltyId = params?.id as string;
+  const rawId = (params?.id as string) || "";
+  const biltyId = decodeURIComponent(rawId).trim();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -188,13 +189,16 @@ export default function EditBiltyPage() {
 
   const fetchBilty = async () => {
     try {
+      const target = biltyId.toUpperCase();
       let found: any = getStoredBilties().find(
         (b: any) =>
-          String(b.id) === String(biltyId) ||
-          String(b.biltyNumber).toLowerCase() === String(biltyId).toLowerCase()
+          b &&
+          (String(b.id || "").toUpperCase() === target ||
+            String(b.biltyNumber || "").toUpperCase() === target ||
+            String(b.trackingId || "").toUpperCase() === target)
       );
       if (!found) {
-        const res = await fetch(`/api/admin/bilty/${biltyId}`);
+        const res = await fetch(`/api/admin/bilty/${encodeURIComponent(biltyId)}`);
         if (res.ok) {
           const data = await res.json();
           found = data.data || data.consignment || data;

@@ -88,19 +88,73 @@ export async function GET(request: Request) {
     const id = searchParams.get('id');
 
     if (id) {
-      const single = await prisma.consignment.findUnique({
-        where: { id },
-        include: {
-          customer: true,
-          sender: true,
-          receiver: true,
-          driver: true,
-          vehicle: true,
-          challan: true,
-          trackingEvents: { orderBy: { timestamp: 'desc' } },
-          payments: { orderBy: { date: 'desc' } },
-        },
-      });
+      let single: any = null;
+      try {
+        single = await prisma.consignment.findUnique({
+          where: { id },
+          include: {
+            customer: true,
+            sender: true,
+            receiver: true,
+            driver: true,
+            vehicle: true,
+            challan: true,
+            trackingEvents: { orderBy: { timestamp: 'desc' } },
+            payments: { orderBy: { date: 'desc' } },
+          },
+        });
+        if (!single) {
+          single = await prisma.consignment.findUnique({
+            where: { biltyNumber: id },
+            include: {
+              customer: true,
+              sender: true,
+              receiver: true,
+              driver: true,
+              vehicle: true,
+              challan: true,
+              trackingEvents: { orderBy: { timestamp: 'desc' } },
+              payments: { orderBy: { date: 'desc' } },
+            },
+          });
+        }
+        if (!single) {
+          single = await prisma.consignment.findFirst({
+            where: {
+              OR: [
+                { id },
+                { biltyNumber: { equals: id } },
+                { biltyNumber: { equals: id.toUpperCase() } },
+                { trackingId: { equals: id } },
+                { trackingId: { equals: id.toUpperCase() } },
+              ],
+            },
+            include: {
+              customer: true,
+              sender: true,
+              receiver: true,
+              driver: true,
+              vehicle: true,
+              challan: true,
+              trackingEvents: { orderBy: { timestamp: 'desc' } },
+              payments: { orderBy: { date: 'desc' } },
+            },
+          });
+        }
+      } catch (dbErr) {
+        console.warn('Prisma lookup note:', dbErr);
+      }
+
+      if (!single) {
+        const central = getCentralCollection('bilties');
+        single = central.find(
+          (b: any) =>
+            String(b.id) === String(id) ||
+            String(b.biltyNumber || '').toUpperCase() === String(id).toUpperCase() ||
+            String(b.trackingId || '').toUpperCase() === String(id).toUpperCase()
+        );
+      }
+
       if (single) {
         return NextResponse.json({ success: true, data: single });
       }

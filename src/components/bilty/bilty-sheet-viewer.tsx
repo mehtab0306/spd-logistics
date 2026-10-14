@@ -124,7 +124,7 @@ export function BiltySheetViewer({
               title="Export complete 4-sheet multi-tab Excel (.xlsx) workbook"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>Export 4-Sheet Excel</span>
+              <span>Export to Excel (.xlsx)</span>
             </Button>
 
             <Button
@@ -133,7 +133,7 @@ export function BiltySheetViewer({
               className="bg-spd-blue hover:bg-blue-800 text-white font-bold text-xs rounded-xl gap-2 h-9 shadow-sm"
             >
               <Printer className="w-4 h-4" />
-              <span>Print Sheet</span>
+              <span>Print / Save PDF</span>
             </Button>
           </div>
         </div>

@@ -149,21 +149,22 @@ export function export4SheetBiltyExcel(bilty: any): boolean {
   const initialFreight = parseFloat(bilty.freight) || items.reduce((acc, it) => acc + (parseFloat(it.amount) || 0), 0);
   const addl = bilty.additionalChargesBreakdown || {};
   const labour = parseFloat(addl.labour) || 0;
-  const lifter = parseFloat(addl.lifter) || 0;
-  const pickup = parseFloat(addl.pickup) || 0;
-  const delivery = parseFloat(addl.delivery) || 0;
-  const godown = parseFloat(addl.godown) || 0;
+  const lifter = parseFloat(addl.lifterCrane || addl.lifter) || 0;
+  const pickup = parseFloat(addl.pickupLocal || addl.pickup) || 0;
+  const delivery = parseFloat(addl.deliveryLocal || addl.delivery) || 0;
+  const godown = parseFloat(addl.godownStorage || addl.godown) || 0;
   const otherCharges = parseFloat(addl.other) || (parseFloat(bilty.additionalCharges) || 0);
+  const otherRemark = addl.otherRemark || "Other Operational Charges";
   const totalAdditional = labour + lifter + pickup + delivery + godown + otherCharges;
   const discount = parseFloat(bilty.discount) || 0;
   const subTotal = Math.max(0, initialFreight + totalAdditional - discount);
   const paidAmount = parseFloat(bilty.paidAmount) || 0;
-  const balance = Math.max(0, subTotal - paidAmount);
 
   // Taxes
-  const incomeTax = Math.round(subTotal * 0.06);
-  const salesTax = Math.round(subTotal * 0.15);
-  const grandTotal = subTotal + salesTax;
+  const incomeTax = bilty.incomeTax !== undefined ? parseFloat(bilty.incomeTax) || 0 : Math.round(subTotal * 0.06);
+  const salesTax = bilty.salesTax !== undefined ? parseFloat(bilty.salesTax) || 0 : Math.round(subTotal * 0.15);
+  const grandTotal = bilty.totalAmount ? parseFloat(bilty.totalAmount) : subTotal + incomeTax + salesTax;
+  const balance = Math.max(0, grandTotal - paidAmount);
 
   const a = [
     "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",

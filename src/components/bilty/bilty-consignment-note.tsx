@@ -55,9 +55,9 @@ export function BiltyConsignmentNote({
   const initialFreight = parseFloat(bilty.freight) || 0;
   const discount = parseFloat(bilty.discount) || 0;
   const subTotal = Math.max(0, initialFreight + totalAdditional - discount);
-  const incomeTax6Pct = Math.round(subTotal * 0.06);
-  const salesTax15Pct = Math.round(subTotal * 0.15);
-  const grandTotal = bilty.totalAmount ? parseFloat(bilty.totalAmount) : subTotal + salesTax15Pct;
+  const incomeTax6Pct = bilty.incomeTax !== undefined ? (parseFloat(bilty.incomeTax) || 0) : Math.round(subTotal * 0.06);
+  const salesTax15Pct = bilty.salesTax !== undefined ? (parseFloat(bilty.salesTax) || 0) : Math.round(subTotal * 0.15);
+  const grandTotal = bilty.totalAmount ? parseFloat(bilty.totalAmount) : subTotal + incomeTax6Pct + salesTax15Pct;
   const paidAmount = parseFloat(bilty.paidAmount) || 0;
   const remainingBalance = grandTotal - paidAmount;
 

@@ -30,6 +30,11 @@ import {
   UserPlus,
   Receipt,
   FileSpreadsheet,
+  RefreshCw,
+  FileText,
+  ExternalLink,
+  ShieldCheck,
+  Percent,
 } from "lucide-react";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
@@ -55,7 +60,7 @@ export interface BiltyCargoItem {
   weight: string | number;
   volume: string | number;
   rate: string | number;
-  freightAsPer: "Per KG" | "Per CBM" | "Per Quantity" | "Fixed Freight";
+  freightAsPer: "Per KG" | "Per CBM" | "Per Qty" | "Fixed Freight";
   freight: number;
 }
 
@@ -64,6 +69,7 @@ export default function NewBiltyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [savedBilty, setSavedBilty] = useState<any>(null);
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
@@ -85,7 +91,7 @@ export default function NewBiltyPage() {
   // Dynamic Cargo Items Rows
   const [items, setItems] = useState<BiltyCargoItem[]>([
     {
-      detail: "General Commercial Cargo",
+      detail: "General Commercial Merchandise",
       quantity: "1",
       weight: "100",
       volume: "",
@@ -95,7 +101,7 @@ export default function NewBiltyPage() {
     },
   ]);
 
-  // Operational Additional Charges Breakdown
+  // Operational Additional Charges Breakdown (Matching Excel & Transport Operations)
   const [additionalBreakdown, setAdditionalBreakdown] = useState({
     labour: "",
     lifterCrane: "",
@@ -103,6 +109,15 @@ export default function NewBiltyPage() {
     deliveryLocal: "",
     godownStorage: "",
     other: "",
+    otherRemark: "",
+  });
+
+  // Tax Controls (Income Tax 6% & Sales Tax 15%)
+  const [taxSettings, setTaxSettings] = useState({
+    incomeTaxEnabled: false,
+    incomeTaxRate: "6",
+    salesTaxEnabled: true,
+    salesTaxRate: "15",
   });
 
   const [formData, setFormData] = useState({
@@ -157,9 +172,32 @@ export default function NewBiltyPage() {
     weightSlipPhoto: "",
   });
 
+  // Helper to generate sequential Bilty Number
+  const generateBiltyNumberCandidate = (hubCity: string = formData.origin) => {
+    const hub = hubCity.toUpperCase().includes("KARACHI") || hubCity === "KHI" ? "KHI" : "LHR";
+    const year = new Date().getFullYear();
+    const randomSeq = Math.floor(1000 + Math.random() * 9000);
+    return `SPD-${hub}-${year}-${randomSeq}`;
+  };
+
   useEffect(() => {
     fetchPrerequisites();
+    // Auto-generate initial bilty number if empty
+    setFormData((prev) => {
+      if (!prev.biltyNumber) {
+        return {
+          ...prev,
+          biltyNumber: generateBiltyNumberCandidate(prev.origin || "Lahore"),
+        };
+      }
+      return prev;
+    });
   }, []);
+
+  const handleRegenerateBiltyNumber = () => {
+    const newNo = generateBiltyNumberCandidate(formData.origin);
+    setFormData((prev) => ({ ...prev, biltyNumber: newNo }));
+  };
 
   const fetchPrerequisites = async () => {
     try {
@@ -275,7 +313,7 @@ export default function NewBiltyPage() {
         computedFreight = wt * rate;
       } else if (item.freightAsPer === "Per CBM") {
         computedFreight = vol * rate;
-      } else if (item.freightAsPer === "Per Quantity") {
+      } else if (item.freightAsPer === "Per Qty" || (item.freightAsPer as any) === "Per Quantity") {
         computedFreight = qty * rate;
       } else {
         // Fixed Freight
@@ -309,13 +347,15 @@ export default function NewBiltyPage() {
   };
 
   // Financial Calculations
-  const calculatedItemsFreightSum = items.reduce((sum, item) => sum + (parseFloat(String(item.freight)) || 0), 0);
+  const calculatedItemsFreightSum = items.reduce(
+    (sum, item) => sum + (parseFloat(String(item.freight)) || 0),
+    0
+  );
+
   const baseFreightNum =
     formData.manualBaseFreight !== ""
       ? parseFloat(formData.manualBaseFreight) || 0
-      : calculatedItemsFreightSum > 0
-      ? calculatedItemsFreightSum
-      : 0;
+      : calculatedItemsFreightSum;
 
   const labourNum = parseFloat(additionalBreakdown.labour) || 0;
   const lifterNum = parseFloat(additionalBreakdown.lifterCrane) || 0;
@@ -324,19 +364,31 @@ export default function NewBiltyPage() {
   const godownNum = parseFloat(additionalBreakdown.godownStorage) || 0;
   const otherNum = parseFloat(additionalBreakdown.other) || 0;
 
-  const totalAdditionalCharges = labourNum + lifterNum + pickupNum + deliveryNum + godownNum + otherNum;
+  const totalAdditionalCharges =
+    labourNum + lifterNum + pickupNum + deliveryNum + godownNum + otherNum;
   const discountNum = parseFloat(formData.discount) || 0;
   const paidNum = parseFloat(formData.paidAmount) || 0;
 
   const subTotal = Math.max(0, baseFreightNum + totalAdditionalCharges - discountNum);
-  const salesTax15Pct = Math.round(subTotal * 0.15);
-  const totalAmount = subTotal + salesTax15Pct;
-  const remainingBalance = totalAmount - paidNum;
+
+  const incomeTaxRateNum = parseFloat(taxSettings.incomeTaxRate) || 0;
+  const incomeTaxAmount = taxSettings.incomeTaxEnabled
+    ? Math.round(subTotal * (incomeTaxRateNum / 100))
+    : 0;
+
+  const salesTaxRateNum = parseFloat(taxSettings.salesTaxRate) || 0;
+  const salesTaxAmount = taxSettings.salesTaxEnabled
+    ? Math.round(subTotal * (salesTaxRateNum / 100))
+    : 0;
+
+  const grandTotal = subTotal + incomeTaxAmount + salesTaxAmount;
+  const remainingBalance = grandTotal - paidNum;
 
   // Aggregate item quantities & weights for top-level schema compatibility
   const totalQuantity = items.reduce((sum, i) => sum + (parseInt(String(i.quantity)) || 1), 0);
   const totalWeight = items.reduce((sum, i) => sum + (parseFloat(String(i.weight)) || 0), 0);
-  const primaryPackageDetail = items.map((i) => i.detail).filter(Boolean).join(" • ") || "General Commercial Merchandise";
+  const primaryPackageDetail =
+    items.map((i) => i.detail).filter(Boolean).join(" • ") || "General Commercial Merchandise";
 
   const handleCustomerSelect = (customerId: string, meta?: any) => {
     setFormData((prev) => {
@@ -352,30 +404,6 @@ export default function NewBiltyPage() {
         };
       }
       return { ...prev, customerId };
-    });
-  };
-
-  const handleVehicleSelect = (vehicleId: string, meta?: any) => {
-    setFormData((prev) => {
-      const veh = meta || vehicles.find((v) => String(v.id) === String(vehicleId));
-      if (veh) {
-        let matchedDriverId = prev.driverId;
-        let matchedDriverName = prev.driverName;
-        const assignedDrvId = veh.driverId || veh.assignedDriverId;
-        if (assignedDrvId) {
-          matchedDriverId = assignedDrvId;
-          const drv = drivers.find((d) => String(d.id) === String(assignedDrvId));
-          if (drv) matchedDriverName = drv.name;
-        }
-        return {
-          ...prev,
-          vehicleId,
-          vehicleNumber: veh.vehicleNumber || veh.registrationNumber || "",
-          driverId: matchedDriverId,
-          driverName: matchedDriverName,
-        };
-      }
-      return { ...prev, vehicleId, vehicleNumber: "" };
     });
   };
 
@@ -399,20 +427,23 @@ export default function NewBiltyPage() {
 
     setSubmitting(true);
     try {
-      const uniqueId = Date.now().toString();
       const timestamp = new Date().toISOString();
       const year = new Date().getFullYear();
-      const hubCode = formData.warehouse === "KARACHI" ? "KHI" : "LHR";
+      const hubCode = formData.origin.toUpperCase().includes("KARACHI") ? "KHI" : "LHR";
 
       const finalBiltyNumber =
         formData.biltyNumber.trim().toUpperCase() ||
         `SPD-${hubCode}-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
+
       const finalTrackingId =
         formData.trackingId.trim().toUpperCase() ||
         `SPD-${year}-${Math.floor(100000 + Math.random() * 900000)}`;
 
+      // Use clean string biltyNumber as primary ID to ensure route `/admin/bilty/[id]` always resolves
+      const uniqueId = finalBiltyNumber;
+
       const paymentStatus =
-        formData.amountType === "Paid" || (remainingBalance <= 0 && totalAmount > 0)
+        formData.amountType === "Paid" || (remainingBalance <= 0 && grandTotal > 0)
           ? "PAID"
           : formData.amountType === "To Be Billed"
           ? "TO_BE_BILLED"
@@ -429,7 +460,7 @@ export default function NewBiltyPage() {
         biltyNumber: finalBiltyNumber,
         trackingId: finalTrackingId,
         date: formData.date ? new Date(formData.date).toISOString() : timestamp,
-        warehouse: formData.warehouse || "LAHORE",
+        warehouse: formData.warehouse || (formData.origin.toUpperCase().includes("KARACHI") ? "KARACHI" : "LAHORE"),
         origin: formData.origin || "Lahore",
         destination: formData.destination || "Karachi",
 
@@ -460,7 +491,7 @@ export default function NewBiltyPage() {
         receiverNtn: formData.receiverNtn || null,
         deliveryAddress: formData.deliveryAddress.trim() || formData.receiverAddress.trim(),
 
-        // Fleet
+        // Fleet Assignment
         vehicleId: formData.vehicleId || null,
         vehicleNumber: formData.vehicleNumber || selectedVeh?.registrationNumber || selectedVeh?.vehicleNumber || null,
         vehicle: selectedVeh
@@ -486,17 +517,27 @@ export default function NewBiltyPage() {
         additionalChargesBreakdown: {
           labour: labourNum,
           lifterCrane: lifterNum,
+          lifter: lifterNum,
           pickupLocal: pickupNum,
+          pickup: pickupNum,
           deliveryLocal: deliveryNum,
+          delivery: deliveryNum,
           godownStorage: godownNum,
+          godown: godownNum,
           other: otherNum,
+          otherRemark: additionalBreakdown.otherRemark.trim() || "Other Operational Charges",
         },
         freight: baseFreightNum,
         additionalCharges: totalAdditionalCharges,
         discount: discountNum,
         subTotal,
-        salesTax: salesTax15Pct,
-        totalAmount,
+        incomeTax: incomeTaxAmount,
+        incomeTaxRate: incomeTaxRateNum,
+        incomeTaxEnabled: taxSettings.incomeTaxEnabled,
+        salesTax: salesTaxAmount,
+        salesTaxRate: salesTaxRateNum,
+        salesTaxEnabled: taxSettings.salesTaxEnabled,
+        totalAmount: grandTotal,
         paidAmount: paidNum,
         remainingBalance,
         paymentStatus,
@@ -511,10 +552,10 @@ export default function NewBiltyPage() {
         isLocal: true,
         trackingEvents: [
           {
-            id: `evt-${uniqueId}`,
+            id: `evt-${Date.now()}`,
             status: formData.shipmentStatus || "BOOKED",
             location: formData.origin,
-            notes: `Booking completed. Bilty #${finalBiltyNumber} issued with ${formData.amountType} terms.`,
+            notes: `Booking completed. Bilty #${finalBiltyNumber} registered (${formData.amountType}).`,
             timestamp,
           },
         ],
@@ -522,10 +563,17 @@ export default function NewBiltyPage() {
         updatedAt: timestamp,
       };
 
-      // 1. Immediately persist to localStorage
+      // 1. Immediately persist to localStorage (both spd_bilties & spd_local_bilties)
       saveStoredBilty(newBiltyRecord);
 
-      // 2. Background API call
+      // 2. Cache in sessionStorage for instant 0ms retrieval on detail page
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem("last_created_bilty", JSON.stringify(newBiltyRecord));
+        } catch {}
+      }
+
+      // 3. Send to API in background
       try {
         await fetch("/api/admin/bilty", {
           method: "POST",
@@ -533,13 +581,16 @@ export default function NewBiltyPage() {
           body: JSON.stringify(newBiltyRecord),
         });
       } catch (apiErr) {
-        console.warn("Serverless API fallback active — bilty saved in local storage:", apiErr);
+        console.warn("Serverless API fallback active — saved in local storage:", apiErr);
       }
 
-      setSuccessMessage(`Consignment booked successfully! Bilty #${finalBiltyNumber} ready.`);
+      setSavedBilty(newBiltyRecord);
+      setSuccessMessage(`Consignment booked successfully! Bilty #${finalBiltyNumber} generated.`);
+
+      // Immediate redirect to 4-sheet dossier viewer
       setTimeout(() => {
-        router.push(`/admin/bilty/${uniqueId}`);
-      }, 700);
+        router.push(`/admin/bilty/${encodeURIComponent(finalBiltyNumber)}`);
+      }, 500);
     } catch (err: any) {
       console.error("[NewBilty] Error:", err);
       setFormError(err.message || "Failed to create Bilty");
@@ -579,7 +630,7 @@ export default function NewBiltyPage() {
             </div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
               <Package className="w-6 h-6 text-red-700" />
-              New Bilty & Booking Entry
+              New Bilty &amp; Booking Entry
             </h1>
           </div>
         </div>
@@ -610,64 +661,94 @@ export default function NewBiltyPage() {
       )}
 
       {successMessage && (
-        <div className="p-4 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3 animate-in fade-in">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span>{successMessage}</span>
+        <div className="p-4 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600" />
+            <span>{successMessage}</span>
+          </div>
+          {savedBilty && (
+            <Link href={`/admin/bilty/${encodeURIComponent(savedBilty.biltyNumber)}`}>
+              <Button size="sm" variant="outline" className="rounded-xl text-xs font-bold gap-1 h-8 bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-50">
+                <FileText className="w-3.5 h-3.5" />
+                <span>Open 4-Sheet Dossier Now</span>
+              </Button>
+            </Link>
+          )}
         </div>
       )}
 
       <form id="new-bilty-form" onSubmit={handleSubmit} noValidate className="space-y-6">
-        {/* SHEET 1 CONTROLS: Bill To, Payment Mode, Dispatch Mode & Corridor */}
+        {/* SECTION A: TOP CONTROLS & PARTIES */}
         <FormSectionCard
-          title="Sheet 1: Booking Controls & Corridor"
-          badge="Header Controls"
-          description="Primary billing party, payment terms, dispatch priority, and station routing"
+          title="Section A: Top Controls & Routing"
+          badge="Sheet 1 Header"
+          description="Bilty number, payment terms, dispatch priority, and corridor stations"
         >
-          {/* Bill To Selector */}
+          {/* Bilty No (Auto-generated & Editable) */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Bill To (Debtor) *
-            </Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                Bilty No *
+              </Label>
               <button
                 type="button"
-                onClick={() => setFormData({ ...formData, billTo: "Sender" })}
-                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                  formData.billTo === "Sender"
-                    ? "bg-blue-900 text-white border-blue-900 shadow-sm"
-                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
-                }`}
+                onClick={handleRegenerateBiltyNumber}
+                className="text-[11px] font-bold text-red-700 hover:text-red-800 flex items-center gap-1 hover:underline"
               >
-                Sender (Shipper)
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, billTo: "Receiver" })}
-                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                  formData.billTo === "Receiver"
-                    ? "bg-red-700 text-white border-red-700 shadow-sm"
-                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
-                }`}
-              >
-                Receiver (Consignee)
+                <RefreshCw className="w-3 h-3" />
+                <span>Auto-Generate</span>
               </button>
             </div>
+            <Input
+              required
+              value={formData.biltyNumber}
+              placeholder=""
+              onChange={(e) => setFormData({ ...formData, biltyNumber: e.target.value.toUpperCase() })}
+              className="rounded-xl h-10 text-xs uppercase font-mono tracking-wider font-black text-red-700 dark:text-red-400 bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900"
+            />
           </div>
 
-          {/* Amount Type / Payment Mode */}
+          {/* Booking Date */}
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Amount Type / Payment Mode *
+              Date *
             </Label>
-            <select
-              value={formData.amountType}
-              onChange={(e) => setFormData({ ...formData, amountType: e.target.value as any })}
-              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-            >
-              <option value="To Pay">To Pay (Payable at Destination)</option>
-              <option value="Paid">Paid (Cash / Advance Received)</option>
-              <option value="To Be Billed">To Be Billed (Monthly Corporate Credit)</option>
-            </select>
+            <Input
+              type="date"
+              required
+              value={formData.date}
+              placeholder=""
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              className="rounded-xl h-10 text-xs"
+            />
+          </div>
+
+          {/* Loading Hub [From] */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Loading [From] Station *
+            </Label>
+            <HybridCombobox
+              value={formData.origin}
+              onChange={(val) => setFormData({ ...formData, origin: val })}
+              options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
+              placeholder=""
+              inputClassName="h-10 rounded-xl font-semibold"
+            />
+          </div>
+
+          {/* Destination Hub [To] */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Destination [To] Station *
+            </Label>
+            <HybridCombobox
+              value={formData.destination}
+              onChange={(val) => setFormData({ ...formData, destination: val })}
+              options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
+              placeholder=""
+              inputClassName="h-10 rounded-xl font-semibold"
+            />
           </div>
 
           {/* Dispatch Mode */}
@@ -685,7 +766,7 @@ export default function NewBiltyPage() {
                     : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                Normal Speed
+                Normal
               </button>
               <button
                 type="button"
@@ -696,65 +777,56 @@ export default function NewBiltyPage() {
                     : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                ⚡ Urgent Express
+                ⚡ Urgent
               </button>
             </div>
           </div>
 
-          {/* Booking Date */}
+          {/* Payment Type */}
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Booking Date *
+              Payment Type *
             </Label>
-            <Input
-              type="date"
-              required
-              value={formData.date}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              className="rounded-xl h-10 text-xs"
-            />
+            <select
+              value={formData.amountType}
+              onChange={(e) => setFormData({ ...formData, amountType: e.target.value as any })}
+              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+            >
+              <option value="Paid">Paid (Cash / Advance)</option>
+              <option value="To Pay">To Pay (At Destination)</option>
+              <option value="To Be Billed">To Be Billed (Credit Account)</option>
+            </select>
           </div>
 
-          {/* Origin Hub */}
+          {/* Bill To Selector */}
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              From (Loading Hub) *
+              Bill To (Debtor Party) *
             </Label>
-            <HybridCombobox
-              value={formData.origin}
-              onChange={(val) => setFormData({ ...formData, origin: val })}
-              options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
-              placeholder=""
-              inputClassName="h-10 rounded-xl font-semibold"
-            />
-          </div>
-
-          {/* Destination Hub */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              To (Destination Hub) *
-            </Label>
-            <HybridCombobox
-              value={formData.destination}
-              onChange={(val) => setFormData({ ...formData, destination: val })}
-              options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
-              placeholder=""
-              inputClassName="h-10 rounded-xl font-semibold"
-            />
-          </div>
-
-          {/* Custom Bilty # */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Bilty # (Leave blank for auto-number)
-            </Label>
-            <Input
-              value={formData.biltyNumber}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, biltyNumber: e.target.value.toUpperCase() })}
-              className="rounded-xl h-10 text-xs uppercase font-mono tracking-wider font-bold"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, billTo: "Sender" })}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                  formData.billTo === "Sender"
+                    ? "bg-blue-900 text-white border-blue-900 shadow-sm"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                Sender
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, billTo: "Receiver" })}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                  formData.billTo === "Receiver"
+                    ? "bg-red-700 text-white border-red-700 shadow-sm"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                Receiver
+              </button>
+            </div>
           </div>
 
           {/* Custom Tracking ID */}
@@ -771,12 +843,12 @@ export default function NewBiltyPage() {
           </div>
         </FormSectionCard>
 
-        {/* SECTION 2: Sender & Receiver Parties with Quick Add Customer Modal */}
+        {/* PARTIES: Sender Party & Receiver Party with Quick Add Customer Modal */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Sender / Consignor */}
+          {/* Sender Party */}
           <FormSectionCard
-            title="Consignor / Sender Details"
-            badge="Origin Party"
+            title="Sender Party (Consignor)"
+            badge="Origin"
             description="Shipper contact, registered customer link, and commercial NTN"
           >
             <div className="col-span-1 sm:col-span-2 flex items-end gap-2">
@@ -866,7 +938,7 @@ export default function NewBiltyPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Sender Office / Mill Address
+                Sender Address
               </Label>
               <Input
                 value={formData.senderAddress}
@@ -877,11 +949,11 @@ export default function NewBiltyPage() {
             </div>
           </FormSectionCard>
 
-          {/* Receiver / Consignee */}
+          {/* Receiver Party */}
           <FormSectionCard
-            title="Consignee / Receiver Details"
-            badge="Destination Party"
-            description="Receiver contact, delivery site, and specific factory address"
+            title="Receiver Party (Consignee)"
+            badge="Destination"
+            description="Consignee contact, delivery site, and factory warehouse address"
           >
             <div className="col-span-1 sm:col-span-2 flex items-end gap-2">
               <div className="flex-1 space-y-1.5">
@@ -968,7 +1040,7 @@ export default function NewBiltyPage() {
 
             <div className="col-span-1 sm:col-span-2 space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Specific Factory / Site Drop Address (Delivery Address)
+                Specific Factory / Warehouse Delivery Address
               </Label>
               <Input
                 value={formData.deliveryAddress}
@@ -980,15 +1052,15 @@ export default function NewBiltyPage() {
           </FormSectionCard>
         </div>
 
-        {/* SECTION 3: Commercial Identifiers */}
+        {/* SECTION B: COMMERCIAL & SHIPPING DETAILS */}
         <FormSectionCard
-          title="Commercial & Customs Identifiers"
-          badge="Identifiers"
-          description="Purchase orders, bill of lading, letters of credit, and container shipping marks"
+          title="Section B: Commercial & Shipping Details"
+          badge="Commercial Identifiers"
+          description="Purchase orders, bill of lading, container marks, LC and customs Goods Declaration"
         >
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Order / PO #
+              Order / PO # (e.g., RF-12032)
             </Label>
             <Input
               value={formData.poNumber}
@@ -1000,7 +1072,7 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              B/L # (Bill of Lading)
+              B/L No # (e.g., 1282HHJ2929)
             </Label>
             <Input
               value={formData.blNumber}
@@ -1012,19 +1084,7 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              LC # (Letter of Credit)
-            </Label>
-            <Input
-              value={formData.lcNumber}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, lcNumber: e.target.value })}
-              className="rounded-xl h-10 text-xs font-mono"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Container #
+              Container # (e.g., 8303H303)
             </Label>
             <Input
               value={formData.containerNumber}
@@ -1036,7 +1096,19 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              GD # (Goods Declaration)
+              LC No #
+            </Label>
+            <Input
+              value={formData.lcNumber}
+              placeholder=""
+              onChange={(e) => setFormData({ ...formData, lcNumber: e.target.value })}
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              GD No # (Goods Declaration)
             </Label>
             <Input
               value={formData.gdNumber}
@@ -1045,23 +1117,35 @@ export default function NewBiltyPage() {
               className="rounded-xl h-10 text-xs font-mono"
             />
           </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Remarks / Special Instructions
+            </Label>
+            <Input
+              value={formData.notes}
+              placeholder=""
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="rounded-xl h-10 text-xs"
+            />
+          </div>
         </FormSectionCard>
 
-        {/* SECTION 4: Dynamic Item Details Rows ("+ Add More Bilty Item") */}
+        {/* SECTION C: DYNAMIC ITEMS TABLE ("+ Add More Bilty Item") */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
               <div className="flex items-center gap-2">
                 <Package className="w-5 h-5 text-red-700" />
                 <h3 className="font-bold text-base text-slate-900 dark:text-white">
-                  Cargo Items & Dynamic Freight Calculation
+                  Section C: Dynamic Items Table
                 </h3>
                 <span className="text-[10px] font-bold bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
                   {items.length} {items.length === 1 ? "Item" : "Items"}
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Calculate freight as per KG, CBM, Quantity, or Fixed Freight
+                Calculate freight per KG, CBM, Quantity, or Fixed Freight
               </p>
             </div>
 
@@ -1082,11 +1166,11 @@ export default function NewBiltyPage() {
             {items.map((item, index) => (
               <div
                 key={index}
-                className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 space-y-3"
+                className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 space-y-3"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase">
-                    Item #{index + 1}
+                  <span className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase">
+                    Row #{index + 1}
                   </span>
                   {items.length > 1 && (
                     <Button
@@ -1097,7 +1181,7 @@ export default function NewBiltyPage() {
                       className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2 text-xs font-bold gap-1"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Remove</span>
+                      <span>Delete Row</span>
                     </Button>
                   )}
                 </div>
@@ -1105,7 +1189,7 @@ export default function NewBiltyPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
                   <div className="sm:col-span-4 space-y-1">
                     <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
-                      Item Description / Marks *
+                      1. Item Detail / Description *
                     </Label>
                     <Input
                       required
@@ -1118,7 +1202,7 @@ export default function NewBiltyPage() {
 
                   <div className="sm:col-span-1 space-y-1">
                     <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
-                      Qty
+                      2. Quantity
                     </Label>
                     <Input
                       type="number"
@@ -1132,7 +1216,7 @@ export default function NewBiltyPage() {
 
                   <div className="sm:col-span-2 space-y-1">
                     <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
-                      Weight (Kg)
+                      3. Weight (KG)
                     </Label>
                     <Input
                       type="number"
@@ -1146,7 +1230,7 @@ export default function NewBiltyPage() {
 
                   <div className="sm:col-span-1 space-y-1">
                     <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
-                      CBM
+                      4. Vol (CBM)
                     </Label>
                     <Input
                       type="number"
@@ -1160,7 +1244,7 @@ export default function NewBiltyPage() {
 
                   <div className="sm:col-span-2 space-y-1">
                     <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
-                      Freight As Per
+                      6. Freight As Per
                     </Label>
                     <select
                       value={item.freightAsPer}
@@ -1169,14 +1253,14 @@ export default function NewBiltyPage() {
                     >
                       <option value="Per KG">Per KG</option>
                       <option value="Per CBM">Per CBM</option>
-                      <option value="Per Quantity">Per Qty</option>
-                      <option value="Fixed Freight">Fixed</option>
+                      <option value="Per Qty">Per Qty</option>
+                      <option value="Fixed Freight">Fixed Freight</option>
                     </select>
                   </div>
 
                   <div className="sm:col-span-2 space-y-1">
                     <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
-                      {item.freightAsPer === "Fixed Freight" ? "Freight (PKR)" : "Rate (PKR)"}
+                      5. Rate (PKR)
                     </Label>
                     <Input
                       type="number"
@@ -1189,9 +1273,9 @@ export default function NewBiltyPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end text-xs font-bold text-slate-700 dark:text-slate-300 pt-1">
-                  <span>Computed Row Freight: </span>
-                  <span className="font-mono text-red-700 dark:text-red-400 ml-1.5">
+                <div className="flex justify-end items-center text-xs font-bold text-slate-700 dark:text-slate-300 pt-1 border-t border-slate-200 dark:border-slate-700/60">
+                  <span className="text-slate-500">7. Row Freight Total:</span>
+                  <span className="font-mono text-red-700 dark:text-red-400 ml-2 text-sm font-black">
                     {formatCurrency(item.freight || 0)}
                   </span>
                 </div>
@@ -1199,23 +1283,28 @@ export default function NewBiltyPage() {
             ))}
           </div>
 
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-xs">
-            <span className="uppercase text-slate-600 dark:text-slate-400">Sum of Items Initial Freight:</span>
-            <span className="font-mono text-sm text-black dark:text-white">
-              {formatCurrency(calculatedItemsFreightSum)}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-xs gap-2">
+            <span className="uppercase text-slate-600 dark:text-slate-400">
+              Total Items: {items.length} | Packages: {totalQuantity} | Weight: {totalWeight} KG
             </span>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 dark:text-slate-400">SUM OF ROW FREIGHT:</span>
+              <span className="font-mono text-base font-black text-slate-900 dark:text-white">
+                {formatCurrency(calculatedItemsFreightSum)}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* SECTION 5: Operational Additional Charges Breakdown */}
+        {/* SECTION D: ITEMIZED ADDITIONAL CHARGES BREAKDOWN */}
         <FormSectionCard
-          title="Operational Additional Charges Breakdown"
-          badge="Surcharges"
-          description="Detailed breakdown matching transport operations (Labour, Crane, Local Cartage, Godown)"
+          title="Section D: Itemized Additional Charges & Taxes"
+          badge="Surcharges & Taxes"
+          description="Labour, lifter/crane, local cartage, godown storage, other charges with customizable remark, and statutory withholding/sales taxes"
         >
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Labour & Handling Charges
+              Labour Charges (PKR)
             </Label>
             <Input
               type="number"
@@ -1231,7 +1320,7 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Lifter / Crane / Shifting
+              Lifter / Crane / Shifting Charges (PKR)
             </Label>
             <Input
               type="number"
@@ -1247,7 +1336,7 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Pickup Local Cartage (Origin)
+              Pickup Local Charges (Origin)
             </Label>
             <Input
               type="number"
@@ -1263,7 +1352,7 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Delivery Local Cartage (Destination)
+              Delivery Local Charges (Destination)
             </Label>
             <Input
               type="number"
@@ -1279,7 +1368,7 @@ export default function NewBiltyPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Godown / Storage Charges
+              Godown / Storage Charges (PKR)
             </Label>
             <Input
               type="number"
@@ -1293,9 +1382,10 @@ export default function NewBiltyPage() {
             />
           </div>
 
+          {/* Other Charges Amount */}
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Other Operational Charges
+              Other Charges (PKR)
             </Label>
             <Input
               type="number"
@@ -1308,13 +1398,237 @@ export default function NewBiltyPage() {
               className="rounded-xl h-10 text-xs font-mono"
             />
           </div>
+
+          {/* Other Charges Customizable Remark */}
+          <div className="col-span-1 sm:col-span-2 space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Other Charges Remark / Specification
+            </Label>
+            <Input
+              value={additionalBreakdown.otherRemark}
+              placeholder=""
+              onChange={(e) =>
+                setAdditionalBreakdown({ ...additionalBreakdown, otherRemark: e.target.value })
+              }
+              className="rounded-xl h-10 text-xs"
+            />
+          </div>
+
+          {/* Subtotal Calculation Display */}
+          <div className="col-span-1 sm:col-span-2 p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                Subtotal Freight = SUM(Row Freight) + SUM(Additional Charges)
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Initial: {formatCurrency(baseFreightNum)} + Surcharges: {formatCurrency(totalAdditionalCharges)}
+                {discountNum > 0 ? ` - Discount: ${formatCurrency(discountNum)}` : ""}
+              </p>
+            </div>
+            <p className="text-xl font-black font-mono text-slate-900 dark:text-white">
+              {formatCurrency(subTotal)}
+            </p>
+          </div>
+
+          {/* Income Tax 6% Toggle & Input */}
+          <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={taxSettings.incomeTaxEnabled}
+                  onChange={(e) =>
+                    setTaxSettings({ ...taxSettings, incomeTaxEnabled: e.target.checked })
+                  }
+                  className="w-4 h-4 rounded text-red-700 focus:ring-red-500"
+                />
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  Income Tax (WHT 6%)
+                </span>
+              </label>
+              <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                {formatCurrency(incomeTaxAmount)}
+              </span>
+            </div>
+            {taxSettings.incomeTaxEnabled && (
+              <div className="flex items-center gap-2 pt-1">
+                <Label className="text-[11px] font-semibold text-slate-500">Rate (%):</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  value={taxSettings.incomeTaxRate}
+                  placeholder=""
+                  onChange={(e) =>
+                    setTaxSettings({ ...taxSettings, incomeTaxRate: e.target.value })
+                  }
+                  className="rounded-xl h-8 w-24 text-xs font-mono font-bold"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Sales Tax 15% Toggle & Input */}
+          <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={taxSettings.salesTaxEnabled}
+                  onChange={(e) =>
+                    setTaxSettings({ ...taxSettings, salesTaxEnabled: e.target.checked })
+                  }
+                  className="w-4 h-4 rounded text-blue-800 focus:ring-blue-500"
+                />
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  Sales Tax (PRA / SRB 15%)
+                </span>
+              </label>
+              <span className="font-mono text-xs font-bold text-blue-700 dark:text-blue-300">
+                {formatCurrency(salesTaxAmount)}
+              </span>
+            </div>
+            {taxSettings.salesTaxEnabled && (
+              <div className="flex items-center gap-2 pt-1">
+                <Label className="text-[11px] font-semibold text-slate-500">Rate (%):</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  value={taxSettings.salesTaxRate}
+                  placeholder=""
+                  onChange={(e) =>
+                    setTaxSettings({ ...taxSettings, salesTaxRate: e.target.value })
+                  }
+                  className="rounded-xl h-8 w-24 text-xs font-mono font-bold"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Contract Discount */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Contract Discount (PKR)
+            </Label>
+            <Input
+              type="number"
+              step="any"
+              value={formData.discount}
+              placeholder=""
+              onChange={(e) => setFormData({ ...formData, discount: e.target.value })}
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+
+          {/* Advance Paid */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Advance Paid (PKR)
+            </Label>
+            <Input
+              type="number"
+              step="any"
+              value={formData.paidAmount}
+              placeholder=""
+              onChange={(e) => setFormData({ ...formData, paidAmount: e.target.value })}
+              className="rounded-xl h-10 text-xs font-mono"
+            />
+          </div>
+
+          {/* Live Financial Summary Banner */}
+          <div className="col-span-1 sm:col-span-2 p-4 rounded-2xl bg-slate-900 text-white grid grid-cols-2 sm:grid-cols-4 gap-4 mt-2 shadow-inner">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Subtotal
+              </p>
+              <p className="text-lg font-black text-white font-mono">
+                {formatCurrency(subTotal)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Taxes (WHT + GST)
+              </p>
+              <p className="text-lg font-black text-blue-300 font-mono">
+                {formatCurrency(incomeTaxAmount + salesTaxAmount)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Grand Total = Subtotal + Taxes
+              </p>
+              <p className="text-xl font-black text-emerald-400 font-mono">
+                {formatCurrency(grandTotal)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Remaining Balance
+              </p>
+              <p
+                className={`text-xl font-black font-mono ${
+                  remainingBalance <= 0 ? "text-emerald-400" : "text-amber-400"
+                }`}
+              >
+                {formatCurrency(remainingBalance)}
+              </p>
+            </div>
+          </div>
         </FormSectionCard>
 
-        {/* SECTION 6: Fleet Assignment & Linehaul */}
+        {/* SECTION E: OPTIONS & ATTACHMENTS */}
         <FormSectionCard
-          title="Fleet Vehicle & Driver Assignment (Optional)"
-          badge="Linehaul"
-          description="Can be assigned immediately or grouped in transit challans later"
+          title="Section E: Options & Attachments"
+          badge="Proofs & Options"
+          description="Confidentiality masking on prints and up to 3 image attachment proofs"
+        >
+          {/* Hide Amount in Bilty Toggle */}
+          <div className="col-span-1 sm:col-span-2">
+            <label className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 transition-colors">
+              <input
+                type="checkbox"
+                checked={formData.hideAmount}
+                onChange={(e) => setFormData({ ...formData, hideAmount: e.target.checked })}
+                className="w-4 h-4 rounded text-red-700 focus:ring-red-500"
+              />
+              <div>
+                <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                  &ldquo;Hide Amount in Bilty&rdquo; Toggle (ON / OFF)
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  Masks freight figures and rates on driver and customer copies (shows &apos;CONFIDENTIAL — AS PER CONTRACT&apos;)
+                </span>
+              </div>
+            </label>
+          </div>
+
+          {/* Photo Attachments (up to 3 images) */}
+          <div className="col-span-1 sm:col-span-2">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300 block mb-2">
+              Photo Attachments (Cargo Photo, Consignment Copy, Weight Slip)
+            </Label>
+            <TripleImageAttachment
+              attachments={{
+                cargoPhoto: formData.cargoPhoto,
+                biltyPhoto: formData.biltyPhoto,
+                weightSlipPhoto: formData.weightSlipPhoto,
+              }}
+              onChange={(updated) =>
+                setFormData({
+                  ...formData,
+                  cargoPhoto: updated.cargoPhoto || "",
+                  biltyPhoto: updated.biltyPhoto || "",
+                  weightSlipPhoto: updated.weightSlipPhoto || "",
+                })
+              }
+            />
+          </div>
+        </FormSectionCard>
+
+        {/* FLEET ASSIGNMENT (OPTIONAL) */}
+        <FormSectionCard
+          title="Fleet Assignment (Optional)"
+          badge="Fleet"
+          description="Truck vehicle number and driver assignment for linehaul transit"
         >
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
@@ -1373,172 +1687,6 @@ export default function NewBiltyPage() {
               inputClassName="h-10 rounded-xl"
             />
           </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Initial Shipment Status
-            </Label>
-            <select
-              value={formData.shipmentStatus}
-              onChange={(e) => setFormData({ ...formData, shipmentStatus: e.target.value })}
-              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
-            >
-              <option value="BOOKED">Booked (At Station)</option>
-              <option value="IN_WAREHOUSE">In Warehouse Storage</option>
-              <option value="LOADED">Loaded on Vehicle</option>
-              <option value="DISPATCHED">Dispatched</option>
-              <option value="IN_TRANSIT">In Transit</option>
-            </select>
-          </div>
-        </FormSectionCard>
-
-        {/* SECTION 7: Multi-Image Proof Attachments */}
-        <FormSectionCard
-          title="Attachments & Document Proofs (Up to 3 images)"
-          badge="Proofs"
-          description="Cargo photos, physical consignment copy scan, or weight slips"
-        >
-          <div className="col-span-1 sm:col-span-2">
-            <TripleImageAttachment
-              attachments={{
-                cargoPhoto: formData.cargoPhoto,
-                biltyPhoto: formData.biltyPhoto,
-                weightSlipPhoto: formData.weightSlipPhoto,
-              }}
-              onChange={(updated) =>
-                setFormData({
-                  ...formData,
-                  cargoPhoto: updated.cargoPhoto || "",
-                  biltyPhoto: updated.biltyPhoto || "",
-                  weightSlipPhoto: updated.weightSlipPhoto || "",
-                })
-              }
-            />
-          </div>
-        </FormSectionCard>
-
-        {/* SECTION 8: Financial Accounting, Live Totals & Hide Amount Toggle */}
-        <FormSectionCard
-          title="Financial Accounting & Net Calculation"
-          badge="Financials"
-          description="Automatic tax calculations, advance payment tracking, and print confidentiality options"
-        >
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Base Initial Freight (PKR)
-            </Label>
-            <Input
-              type="number"
-              step="any"
-              value={formData.manualBaseFreight !== "" ? formData.manualBaseFreight : baseFreightNum || ""}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, manualBaseFreight: e.target.value })}
-              className="rounded-xl h-10 text-xs font-mono font-bold"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Contract Discount (PKR)
-            </Label>
-            <Input
-              type="number"
-              step="any"
-              value={formData.discount}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, discount: e.target.value })}
-              className="rounded-xl h-10 text-xs font-mono"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Advance Paid (PKR)
-            </Label>
-            <Input
-              type="number"
-              step="any"
-              value={formData.paidAmount}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, paidAmount: e.target.value })}
-              className="rounded-xl h-10 text-xs font-mono"
-            />
-          </div>
-
-          {/* Hide Amount in Bilty Toggle */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Freight Confidentiality
-            </Label>
-            <label className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.hideAmount}
-                onChange={(e) => setFormData({ ...formData, hideAmount: e.target.checked })}
-                className="w-4 h-4 rounded text-red-700 focus:ring-red-500"
-              />
-              <div>
-                <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                  Hide Amount in Bilty Prints
-                </span>
-                <span className="text-[10px] text-slate-500 block">
-                  Shows &apos;CONFIDENTIAL / AS PER CONTRACT&apos; on Driver &amp; Customer copies
-                </span>
-              </div>
-            </label>
-          </div>
-
-          {/* Live Financial Summary Banner */}
-          <div className="col-span-1 sm:col-span-2 p-4 rounded-xl bg-slate-900 text-white grid grid-cols-2 sm:grid-cols-4 gap-4 mt-2">
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Subtotal (Excl. Tax)
-              </p>
-              <p className="text-lg font-black text-white font-mono">
-                {formatCurrency(subTotal)}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Sales Tax (15%)
-              </p>
-              <p className="text-lg font-black text-blue-300 font-mono">
-                {formatCurrency(salesTax15Pct)}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Grand Total Amount
-              </p>
-              <p className="text-xl font-black text-emerald-400 font-mono">
-                {formatCurrency(totalAmount)}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Balance Due
-              </p>
-              <p
-                className={`text-xl font-black font-mono ${
-                  remainingBalance <= 0 ? "text-emerald-400" : "text-amber-400"
-                }`}
-              >
-                {formatCurrency(remainingBalance)}
-              </p>
-            </div>
-          </div>
-
-          <div className="col-span-1 sm:col-span-2 space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Special Handling Instructions & Delivery Notes
-            </Label>
-            <Input
-              value={formData.notes}
-              placeholder=""
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="rounded-xl h-10 text-xs"
-            />
-          </div>
         </FormSectionCard>
 
         {/* Bottom Actions */}
@@ -1551,10 +1699,10 @@ export default function NewBiltyPage() {
           <Button
             type="submit"
             disabled={submitting}
-            className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-6"
+            className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-11 px-6"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>Book Consignment & View Dossier</span>
+            <span>Book Consignment &amp; View 4-Sheet Dossier</span>
           </Button>
         </div>
       </form>
@@ -1645,7 +1793,7 @@ export default function NewBiltyPage() {
                 className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl"
               >
                 {quickCustomerSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
-                Save & Select Party
+                Save &amp; Select Party
               </Button>
             </DialogFooter>
           </form>

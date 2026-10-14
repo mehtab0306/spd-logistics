@@ -11,17 +11,21 @@ export default function BiltySalesTaxInvoicePrintPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const biltyId = params?.id as string;
+  const rawId = (params?.id as string) || "";
+  const biltyId = decodeURIComponent(rawId).trim();
   const autoPrint = searchParams.get("autoprint") === "true";
 
   const [bilty, setBilty] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const target = biltyId.toUpperCase();
     let found = getStoredBilties().find(
       (b: any) =>
-        String(b.id) === String(biltyId) ||
-        String(b.biltyNumber).toLowerCase() === String(biltyId).toLowerCase()
+        b &&
+        (String(b.id || "").toUpperCase() === target ||
+          String(b.biltyNumber || "").toUpperCase() === target ||
+          String(b.trackingId || "").toUpperCase() === target)
     );
 
     if (found) {
@@ -29,7 +33,7 @@ export default function BiltySalesTaxInvoicePrintPage() {
       setLoading(false);
     }
 
-    fetch(`/api/admin/bilty/${biltyId}`)
+    fetch(`/api/admin/bilty/${encodeURIComponent(biltyId)}`)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         const record = data?.data || data?.consignment || data;

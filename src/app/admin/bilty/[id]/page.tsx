@@ -10,7 +10,8 @@ import { BiltySheetViewer } from "@/components/bilty/bilty-sheet-viewer";
 export default function BiltyDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const biltyId = params?.id as string;
+  const rawId = (params?.id as string) || "";
+  const biltyId = decodeURIComponent(rawId).trim();
 
   const [bilty, setBilty] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -21,46 +22,92 @@ export default function BiltyDetailPage() {
 
     let isMounted = true;
 
+    const findMatchInList = (list: any[]) => {
+      const target = biltyId.toUpperCase();
+      return list.find(
+        (b: any) =>
+          b &&
+          (String(b.id || "").toUpperCase() === target ||
+            String(b.biltyNumber || "").toUpperCase() === target ||
+            String(b.trackingId || "").toUpperCase() === target)
+      );
+    };
+
     const loadBilty = async () => {
       try {
-        // 1. Try local storage first for instant load
-        const stored = getStoredBilties();
-        let found = stored.find(
-          (b: any) =>
-            String(b.id) === String(biltyId) ||
-            String(b.biltyNumber).toLowerCase() === String(biltyId).toLowerCase()
-        );
+        let matchedRecord: any = null;
 
-        if (found && isMounted) {
-          setBilty(found);
+        // 1. Check sessionStorage for instant post-booking load
+        if (typeof window !== "undefined") {
+          try {
+            const lastCreated = sessionStorage.getItem("last_created_bilty");
+            if (lastCreated) {
+              const parsed = JSON.parse(lastCreated);
+              if (
+                parsed &&
+                (String(parsed.id || "").toUpperCase() === biltyId.toUpperCase() ||
+                  String(parsed.biltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
+                  String(parsed.trackingId || "").toUpperCase() === biltyId.toUpperCase())
+              ) {
+                matchedRecord = parsed;
+              }
+            }
+          } catch {}
+        }
+
+        // 2. Check local storage
+        if (!matchedRecord) {
+          const stored = getStoredBilties();
+          matchedRecord = findMatchInList(stored);
+        }
+
+        // 3. Fallback check raw localStorage keys directly
+        if (!matchedRecord && typeof window !== "undefined") {
+          try {
+            const raw1 = JSON.parse(localStorage.getItem("spd_bilties") || "[]");
+            const raw2 = JSON.parse(localStorage.getItem("spd_local_bilties") || "[]");
+            matchedRecord = findMatchInList([...(Array.isArray(raw1) ? raw1 : []), ...(Array.isArray(raw2) ? raw2 : [])]);
+          } catch {}
+        }
+
+        if (matchedRecord && isMounted) {
+          setBilty(matchedRecord);
           setLoading(false);
         }
 
-        // 2. Fetch fresh from API
+        // 4. Fetch fresh record from API in background or fallback
         try {
-          const res = await fetch(`/api/admin/bilty/${biltyId}`);
+          const res = await fetch(`/api/admin/bilty/${encodeURIComponent(biltyId)}`);
           if (res.ok) {
             const data = await res.json();
             const record = data.data || data.consignment || data;
             if (record && record.biltyNumber && isMounted) {
+              matchedRecord = record;
               setBilty(record);
+            }
+          } else {
+            // Also try query param fallback
+            const resParam = await fetch(`/api/admin/bilty?id=${encodeURIComponent(biltyId)}`);
+            if (resParam.ok) {
+              const dataParam = await resParam.json();
+              const recordParam = dataParam.data || dataParam.consignment || dataParam;
+              if (recordParam && recordParam.biltyNumber && isMounted) {
+                matchedRecord = recordParam;
+                setBilty(recordParam);
+              }
             }
           }
         } catch (apiErr) {
-          console.warn("API load fallback:", apiErr);
+          console.warn("API bilty load notice:", apiErr);
         }
 
-        if (!found && isMounted && !bilty) {
-          // If still not found after check
-          const recheck = getStoredBilties().find(
-            (b: any) =>
-              String(b.id) === String(biltyId) ||
-              String(b.biltyNumber).toLowerCase() === String(biltyId).toLowerCase()
-          );
-          if (recheck) {
-            setBilty(recheck);
+        if (!matchedRecord && isMounted) {
+          // Final retry from local storage
+          const finalCheck = findMatchInList(getStoredBilties());
+          if (finalCheck) {
+            setBilty(finalCheck);
           } else {
-            setError(`Bilty record #${biltyId} could not be located.`);
+            setError(`Bilty record #${biltyId} could not be located in local records or central database.`);
           }
         }
       } catch (err: any) {
