@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Package, LogOut, User, Menu, X, Shield, ArrowRight } from "lucide-react";
+import { Package, LogOut, User, Menu, X, Shield, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -11,28 +11,115 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
-  React.useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.data) {
-          setCurrentUser(data.data);
+  useEffect(() => {
+    let isMounted = true;
+
+    const verifyCustomerAuth = () => {
+      try {
+        // 1. Check cookies for spd-auth-token
+        const cookies = typeof document !== "undefined" ? document.cookie.split(";").map((c) => c.trim()) : [];
+        const authCookie = cookies.find((c) => c.startsWith("spd-auth-token="));
+        const tokenValue = authCookie ? authCookie.split("=")[1] : null;
+        const hasValidCookie = Boolean(
+          tokenValue &&
+          tokenValue !== "" &&
+          tokenValue !== "null" &&
+          tokenValue !== "undefined"
+        );
+
+        // 2. Check localStorage for user profile
+        let parsedUser: any = null;
+        try {
+          const rawUser = localStorage.getItem("spd_user");
+          if (rawUser) {
+            parsedUser = JSON.parse(rawUser);
+          }
+        } catch {}
+
+        // If user is logged in with a non-customer role (e.g. DRIVER), reject
+        if (parsedUser && parsedUser.role && parsedUser.role !== "CUSTOMER" && parsedUser.role !== "SUPER_ADMIN" && parsedUser.role !== "ADMIN") {
+          if (isMounted) setIsAuthorized(false);
+          const redirectTarget = pathname ? `?redirect=${encodeURIComponent(pathname)}` : "";
+          window.location.replace(`/customer-login${redirectTarget}`);
+          return;
         }
-      })
-      .catch(() => {});
-  }, []);
+
+        // Check customer authentication
+        const hasCustomerSession = hasValidCookie || (parsedUser && (parsedUser.role === "CUSTOMER" || parsedUser.customer));
+
+        if (hasCustomerSession) {
+          if (isMounted) {
+            setIsAuthorized(true);
+            if (parsedUser) setCurrentUser(parsedUser);
+          }
+
+          // Background verification against API
+          fetch("/api/auth/me")
+            .then(async (res) => {
+              if (res.status === 401 || res.status === 403) {
+                try {
+                  localStorage.removeItem("spd_user");
+                  document.cookie = "spd-auth-token=; path=/; max-age=0";
+                } catch {}
+                const redirectTarget = pathname ? `?redirect=${encodeURIComponent(pathname)}` : "";
+                window.location.replace(`/customer-login${redirectTarget}`);
+                return;
+              }
+              const data = await res.json().catch(() => ({}));
+              if (data.success && data.data && isMounted) {
+                setCurrentUser(data.data);
+              }
+            })
+            .catch(() => {});
+          return;
+        }
+
+        // Unauthenticated — immediately eject to /customer-login without flashing UI
+        if (isMounted) setIsAuthorized(false);
+        const redirectTarget = pathname ? `?redirect=${encodeURIComponent(pathname)}` : "";
+        window.location.replace(`/customer-login${redirectTarget}`);
+      } catch {
+        if (isMounted) setIsAuthorized(false);
+        window.location.replace("/customer-login");
+      }
+    };
+
+    verifyCustomerAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pathname]);
 
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/customer-login");
-      router.refresh();
     } catch (err) {
-      console.error("Logout error:", err);
-      router.push("/customer-login");
+      console.warn("Logout error:", err);
+    } finally {
+      try {
+        localStorage.removeItem("spd_user");
+        document.cookie = "spd-auth-token=; path=/; max-age=0";
+      } catch {}
+      window.location.replace("/customer-login");
     }
   };
+
+  // Zero-Data-Leak Guard: Block rendering until authorized
+  if (!isAuthorized) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-950 text-slate-100">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Verifying Customer Authentication...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0b0f19] flex flex-col text-slate-900 dark:text-slate-100">
@@ -53,7 +140,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 <span className="text-spd-red">SPD </span>
                 <span className="text-spd-blue">CUSTOMER PORTAL</span>
               </span>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mt-0.5">Dealer & Consignee Hub</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                Dealer & Consignee Hub
+              </p>
             </div>
           </Link>
 
@@ -95,10 +184,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                   )}
                 </div>
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 hidden sm:inline truncate max-w-[120px]">
-                  {currentUser.name || "Customer"}
+                  {currentUser.name || currentUser.companyName || "Customer"}
                 </span>
               </div>
             )}
+
             <Button
               onClick={handleLogout}
               variant="outline"
@@ -117,7 +207,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       </main>
 
       <footer className="border-t border-slate-200 dark:border-slate-800/80 py-4 bg-white dark:bg-slate-900 text-center text-xs text-slate-400">
-        <p>&copy; {new Date().getFullYear()} SPD Logistics &bull; Super Pak Data Goods Transport Co. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} SPD Logistics &bull; Valued Client Portal</p>
       </footer>
     </div>
   );

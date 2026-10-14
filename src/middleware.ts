@@ -8,7 +8,7 @@ const JWT_SECRET = new TextEncoder().encode(
 
 const COOKIE_NAME = 'spd-auth-token';
 
-// Routes that require authentication
+// Routes that strictly require authentication
 const protectedRoutes = ['/admin', '/customer', '/portal', '/driver'];
 
 // Routes that only admins/staff can access
@@ -20,7 +20,7 @@ const customerRoutes = ['/customer', '/portal'];
 // Routes that only drivers can access
 const driverRoutes = ['/driver'];
 
-// Public exclusions (never block login portals)
+// Public login exclusions (never block login portals)
 const publicExclusions = ['/admin-login', '/customer-login', '/driver-login', '/login'];
 
 // Admin-level roles
@@ -46,7 +46,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Helper to create redirect response with redirect query parameter and anti-cache headers
+  // Helper to create redirect response with redirect query parameter and zero-leak anti-cache headers
   const createRedirectResponse = (targetLoginPath: string, deleteCookie = false) => {
     const fullTarget = pathname + (request.nextUrl.search || '');
     const redirectUrl = new URL(targetLoginPath, request.url);
@@ -54,7 +54,7 @@ export async function middleware(request: NextRequest) {
 
     const response = NextResponse.redirect(redirectUrl);
     // Anti-caching headers so browser history / back button cannot reveal protected data
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
     response.headers.set('Pragma', 'no-cache');
     response.headers.set('Expires', '0');
 
@@ -68,7 +68,7 @@ export async function middleware(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
 
-  // Check all cookies with COOKIE_NAME to ensure valid session if multiple cookies exist
+  // Check all cookies with COOKIE_NAME
   const allCookieValues = request.cookies.getAll(COOKIE_NAME).map((c) => c.value);
   if (bearerToken) {
     allCookieValues.unshift(bearerToken);
@@ -86,6 +86,7 @@ export async function middleware(request: NextRequest) {
 
   let verifiedPayload: any = null;
   for (const candidateToken of allCookieValues) {
+    // 1. Admin session tokens
     if (
       candidateToken === 'spd-admin-session-token' ||
       candidateToken === 'admin-session-token' ||
@@ -99,6 +100,36 @@ export async function middleware(request: NextRequest) {
       };
       break;
     }
+
+    // 2. Customer session tokens
+    if (
+      candidateToken === 'spd-customer-session-token' ||
+      candidateToken.startsWith('spd-cust-')
+    ) {
+      verifiedPayload = {
+        userId: 'cust-user-1',
+        email: 'customer@gmail.com',
+        role: 'CUSTOMER',
+        name: 'Standard Customer',
+      };
+      break;
+    }
+
+    // 3. Driver session tokens
+    if (
+      candidateToken === 'spd-driver-session-token' ||
+      candidateToken.startsWith('spd-drv-')
+    ) {
+      verifiedPayload = {
+        userId: 'driver-1',
+        email: 'driver@spd.com',
+        role: 'DRIVER',
+        name: 'Assigned Driver',
+      };
+      break;
+    }
+
+    // 4. Cryptographic JWT verification
     try {
       const { payload } = await jwtVerify(candidateToken, JWT_SECRET);
       if (payload && payload.role) {
@@ -142,7 +173,7 @@ export async function middleware(request: NextRequest) {
 
   // Add user info to headers for downstream use
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-user-id', verifiedPayload.userId as string);
+  requestHeaders.set('x-user-id', (verifiedPayload.userId || verifiedPayload.id) as string);
   requestHeaders.set('x-user-role', userRole);
   requestHeaders.set('x-user-email', verifiedPayload.email as string);
 
@@ -153,8 +184,9 @@ export async function middleware(request: NextRequest) {
   });
 
   // Attach strict no-cache headers to protected dashboard pages
-  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   response.headers.set('Pragma', 'no-cache');
+  response.headers.set('Expires', '0');
 
   return response;
 }

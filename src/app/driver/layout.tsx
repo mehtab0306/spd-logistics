@@ -1,36 +1,124 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Truck, LogOut, ShieldCheck, MapPin } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { Truck, LogOut, ShieldCheck, MapPin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function DriverLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = React.useState<any>(null);
+  const pathname = usePathname();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
-  React.useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.data) {
-          setCurrentUser(data.data);
+  useEffect(() => {
+    let isMounted = true;
+
+    const verifyDriverAuth = () => {
+      try {
+        // 1. Check cookies for spd-auth-token
+        const cookies = typeof document !== "undefined" ? document.cookie.split(";").map((c) => c.trim()) : [];
+        const authCookie = cookies.find((c) => c.startsWith("spd-auth-token="));
+        const tokenValue = authCookie ? authCookie.split("=")[1] : null;
+        const hasValidCookie = Boolean(
+          tokenValue &&
+          tokenValue !== "" &&
+          tokenValue !== "null" &&
+          tokenValue !== "undefined"
+        );
+
+        // 2. Check localStorage for user profile
+        let parsedUser: any = null;
+        try {
+          const rawUser = localStorage.getItem("spd_user");
+          if (rawUser) {
+            parsedUser = JSON.parse(rawUser);
+          }
+        } catch {}
+
+        // If user is logged in with a non-driver role (e.g. CUSTOMER), reject
+        if (parsedUser && parsedUser.role && parsedUser.role !== "DRIVER" && parsedUser.role !== "SUPER_ADMIN" && parsedUser.role !== "ADMIN") {
+          if (isMounted) setIsAuthorized(false);
+          const redirectTarget = pathname ? `?redirect=${encodeURIComponent(pathname)}` : "";
+          window.location.replace(`/driver-login${redirectTarget}`);
+          return;
         }
-      })
-      .catch(() => {});
-  }, []);
+
+        // Check driver authentication
+        const hasDriverSession = hasValidCookie || (parsedUser && (parsedUser.role === "DRIVER" || parsedUser.driver));
+
+        if (hasDriverSession) {
+          if (isMounted) {
+            setIsAuthorized(true);
+            if (parsedUser) setCurrentUser(parsedUser);
+          }
+
+          // Background verification against API
+          fetch("/api/auth/me")
+            .then(async (res) => {
+              if (res.status === 401 || res.status === 403) {
+                try {
+                  localStorage.removeItem("spd_user");
+                  document.cookie = "spd-auth-token=; path=/; max-age=0";
+                } catch {}
+                const redirectTarget = pathname ? `?redirect=${encodeURIComponent(pathname)}` : "";
+                window.location.replace(`/driver-login${redirectTarget}`);
+                return;
+              }
+              const data = await res.json().catch(() => ({}));
+              if (data.success && data.data && isMounted) {
+                setCurrentUser(data.data);
+              }
+            })
+            .catch(() => {});
+          return;
+        }
+
+        // Unauthenticated — immediately eject to /driver-login without flashing UI
+        if (isMounted) setIsAuthorized(false);
+        const redirectTarget = pathname ? `?redirect=${encodeURIComponent(pathname)}` : "";
+        window.location.replace(`/driver-login${redirectTarget}`);
+      } catch {
+        if (isMounted) setIsAuthorized(false);
+        window.location.replace("/driver-login");
+      }
+    };
+
+    verifyDriverAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pathname]);
 
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/driver-login");
-      router.refresh();
     } catch (err) {
-      console.error("Driver logout error:", err);
-      router.push("/driver-login");
+      console.warn("Driver logout error:", err);
+    } finally {
+      try {
+        localStorage.removeItem("spd_user");
+        document.cookie = "spd-auth-token=; path=/; max-age=0";
+      } catch {}
+      window.location.replace("/driver-login");
     }
   };
+
+  // Zero-Data-Leak Guard: Block rendering until authorized
+  if (!isAuthorized) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-950 text-slate-100">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Verifying Driver Fleet Authentication...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0b0f19] flex flex-col text-slate-900 dark:text-slate-100">
