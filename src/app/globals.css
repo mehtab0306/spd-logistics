@@ -154,6 +154,11 @@
   }
 
   /* Universal Corporate A4 Print styles */
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+
   @media print {
     @page {
       size: A4 portrait;
@@ -162,14 +167,15 @@
 
     /* Universal Web Clutter Removal */
     aside,
-    nav,
     header,
-    [role="navigation"],
-    .no-print,
-    .print\:hidden,
+    nav,
     button,
     input,
     select,
+    textarea,
+    .no-print,
+    .print\:hidden,
+    [role="navigation"],
     .pagination,
     [data-radix-portal] > div[data-state="open"] > button,
     .theme-toggle,
@@ -180,15 +186,15 @@
     }
 
     /* Reset Body and Canvas to Full A4 Width */
-    html, body {
-      background: #ffffff !important;
-      color: #000000 !important;
+    html,
+    body,
+    main,
+    .print-container {
+      width: 100% !important;
       margin: 0 !important;
       padding: 0 !important;
-      width: 100% !important;
-      min-width: 100% !important;
-      height: auto !important;
-      overflow: visible !important;
+      background: #ffffff !important;
+      color: #000000 !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
       font-size: 10pt !important;
@@ -237,12 +243,13 @@
       display: table-footer-group !important;
     }
 
-    th, td,
+    th,
+    td,
     .print-table th,
     .print-table td {
       border: 1px solid #000000 !important;
       color: #000000 !important;
-      padding: 4px 6px !important;
+      padding: 6px 8px !important;
     }
 
     th,

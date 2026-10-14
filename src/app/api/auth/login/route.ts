@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     }
 
     // Find user by email, username, or phone
-    let user = null;
+    let user: any = null;
     try {
       user = await prisma.user.findFirst({
         where: {
@@ -155,11 +155,44 @@ export async function POST(request: Request) {
 
     if (!user) {
       try {
+        const cleanPhoneId = lowerIdentifier.replace(/[\s\-\(\)]/g, '');
+        const dbCustomer = await prisma.customer.findFirst({
+          where: {
+            OR: [
+              { email: lowerIdentifier },
+              { email: identifier },
+              { phone: { contains: cleanPhoneId } },
+              { whatsapp: { contains: cleanPhoneId } },
+            ],
+          },
+          include: {
+            user: true,
+          },
+        });
+        if (dbCustomer && dbCustomer.user) {
+          user = dbCustomer.user;
+          (user as any).customer = dbCustomer;
+        }
+      } catch (custDbErr) {
+        console.warn('Customer lookup in DB fallback:', custDbErr);
+      }
+    }
+
+    if (!user) {
+      try {
         const centralCustomers = getCentralCollection('customers') || [];
+        const cleanPhoneId = lowerIdentifier.replace(/[\s\-\(\)]/g, '');
         const matchedCentralCust = centralCustomers.find(
-          (c: any) =>
-            (c.email && c.email.toLowerCase() === lowerIdentifier) ||
-            (c.phone && c.phone.replace(/[\s\-\(\)]/g, '') === lowerIdentifier.replace(/[\s\-\(\)]/g, ''))
+          (c: any) => {
+            const cEmail = (c.email || c.user?.email || '').toLowerCase().trim();
+            const cPhone = (c.phone || c.whatsapp || '').replace(/[\s\-\(\)]/g, '');
+            const cName = (c.name || '').toLowerCase().trim();
+            return (
+              (cEmail && cEmail === lowerIdentifier) ||
+              (cleanPhoneId && cPhone && (cPhone === cleanPhoneId || cPhone.endsWith(cleanPhoneId) || cleanPhoneId.endsWith(cPhone))) ||
+              (cName && cName === lowerIdentifier)
+            );
+          }
         );
         if (
           matchedCentralCust &&

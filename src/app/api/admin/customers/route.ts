@@ -280,6 +280,9 @@ export async function POST(request: Request) {
     }
 
     if (result?.customer) {
+      const rawPassword = password || 'spd12345';
+      result.customer.loginPassword = rawPassword;
+      result.customer.password = rawPassword;
       saveCentralRecord('customers', result.customer);
     }
 
