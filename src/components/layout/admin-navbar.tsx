@@ -117,9 +117,12 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
     }
     try {
       localStorage.removeItem('spd_user');
+      localStorage.removeItem('spd_admin_auth');
       sessionStorage.removeItem('spd_auth_token');
+      document.cookie = 'spd-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      document.cookie = 'spd-auth-token=; path=/admin; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
     } catch {}
-    window.location.href = '/admin-login';
+    window.location.replace('/admin-login');
   };
 
   return (

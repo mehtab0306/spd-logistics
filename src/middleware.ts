@@ -20,20 +20,49 @@ const customerRoutes = ['/customer', '/portal'];
 // Routes that only drivers can access
 const driverRoutes = ['/driver'];
 
+// Public exclusions (never block login portals)
+const publicExclusions = ['/admin-login', '/customer-login', '/driver-login', '/login'];
+
 // Admin-level roles
 const adminRoles = ['SUPER_ADMIN', 'ADMIN', 'STAFF'];
+
+// Helper to strictly match exact route or any subpath
+function isRouteMatch(routes: string[], path: string): boolean {
+  return routes.some((route) => path === route || path.startsWith(`${route}/`));
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Never block public login routes
+  if (publicExclusions.some((pub) => pathname === pub || pathname.startsWith(`${pub}/`))) {
+    return NextResponse.next();
+  }
+
   // Check if the route needs protection
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  const isProtectedRoute = isRouteMatch(protectedRoutes, pathname);
 
   if (!isProtectedRoute) {
     return NextResponse.next();
   }
+
+  // Helper to create redirect response with redirect query parameter and anti-cache headers
+  const createRedirectResponse = (targetLoginPath: string, deleteCookie = false) => {
+    const fullTarget = pathname + (request.nextUrl.search || '');
+    const redirectUrl = new URL(targetLoginPath, request.url);
+    redirectUrl.searchParams.set('redirect', fullTarget);
+
+    const response = NextResponse.redirect(redirectUrl);
+    // Anti-caching headers so browser history / back button cannot reveal protected data
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+
+    if (deleteCookie) {
+      response.cookies.delete(COOKIE_NAME);
+    }
+    return response;
+  };
 
   // Get the auth token from cookie or Authorization header
   const authHeader = request.headers.get('authorization');
@@ -46,13 +75,13 @@ export async function middleware(request: NextRequest) {
   }
 
   if (allCookieValues.length === 0) {
-    // Redirect to appropriate login page
-    const loginUrl = (pathname.startsWith('/portal') || pathname.startsWith('/customer'))
+    // Redirect to appropriate login page with return url
+    const loginPath = isRouteMatch(customerRoutes, pathname)
       ? '/customer-login'
-      : pathname.startsWith('/driver')
+      : isRouteMatch(driverRoutes, pathname)
       ? '/driver-login'
       : '/admin-login';
-    return NextResponse.redirect(new URL(loginUrl, request.url));
+    return createRedirectResponse(loginPath);
   }
 
   let verifiedPayload: any = null;
@@ -83,40 +112,32 @@ export async function middleware(request: NextRequest) {
 
   if (!verifiedPayload) {
     // Invalid token — redirect to login and clean corrupt/expired cookies
-    const loginUrl = (pathname.startsWith('/portal') || pathname.startsWith('/customer'))
+    const loginPath = isRouteMatch(customerRoutes, pathname)
       ? '/customer-login'
-      : pathname.startsWith('/driver')
+      : isRouteMatch(driverRoutes, pathname)
       ? '/driver-login'
       : '/admin-login';
-    const redirectResponse = NextResponse.redirect(new URL(loginUrl, request.url));
-    redirectResponse.cookies.delete(COOKIE_NAME);
-    return redirectResponse;
+    return createRedirectResponse(loginPath, true);
   }
 
   const userRole = verifiedPayload.role as string;
 
   // Check admin route access
-  const isAdminRoute = adminRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  const isAdminRoute = isRouteMatch(adminRoutes, pathname);
   if (isAdminRoute && !adminRoles.includes(userRole)) {
-    return NextResponse.redirect(new URL('/admin-login', request.url));
+    return createRedirectResponse('/admin-login', false);
   }
 
   // Check customer route access
-  const isCustomerRoute = customerRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  const isCustomerRoute = isRouteMatch(customerRoutes, pathname);
   if (isCustomerRoute && userRole !== 'CUSTOMER' && !adminRoles.includes(userRole)) {
-    return NextResponse.redirect(new URL('/customer-login', request.url));
+    return createRedirectResponse('/customer-login', false);
   }
 
   // Check driver route access
-  const isDriverRoute = driverRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  const isDriverRoute = isRouteMatch(driverRoutes, pathname);
   if (isDriverRoute && userRole !== 'DRIVER' && !adminRoles.includes(userRole)) {
-    return NextResponse.redirect(new URL('/driver-login', request.url));
+    return createRedirectResponse('/driver-login', false);
   }
 
   // Add user info to headers for downstream use
@@ -125,13 +146,28 @@ export async function middleware(request: NextRequest) {
   requestHeaders.set('x-user-role', userRole);
   requestHeaders.set('x-user-email', verifiedPayload.email as string);
 
-  return NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
   });
+
+  // Attach strict no-cache headers to protected dashboard pages
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  response.headers.set('Pragma', 'no-cache');
+
+  return response;
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/customer/:path*', '/portal/:path*', '/driver/:path*'],
+  matcher: [
+    '/admin',
+    '/admin/:path*',
+    '/customer',
+    '/customer/:path*',
+    '/portal',
+    '/portal/:path*',
+    '/driver',
+    '/driver/:path*',
+  ],
 };

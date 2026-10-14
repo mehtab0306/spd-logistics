@@ -49,9 +49,21 @@ export default function AdminLoginPage() {
         token: 'spd-admin-session-token',
       };
 
+      const getAdminRedirectUrl = () => {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const redirectParam = params.get('redirect');
+          if (redirectParam && (redirectParam === '/admin' || redirectParam.startsWith('/admin/'))) {
+            return redirectParam;
+          }
+        } catch {}
+        return '/admin';
+      };
+
       // 1. Save session to localStorage and sessionStorage
       try {
         localStorage.setItem('spd_user', JSON.stringify(adminSession));
+        localStorage.setItem('spd_admin_auth', JSON.stringify(adminSession));
         sessionStorage.setItem('spd_auth_token', adminSession.token);
       } catch (storageErr) {
         console.warn('Storage unavailable:', storageErr);
@@ -81,7 +93,7 @@ export default function AdminLoginPage() {
       // 4. Success state and direct redirect to Admin Dashboard
       setStatus('SUCCESS');
       setTimeout(() => {
-        window.location.replace('/admin');
+        window.location.replace(getAdminRedirectUrl());
       }, 200);
       return;
     }
@@ -117,8 +129,20 @@ export default function AdminLoginPage() {
           token: data.data?.token || 'spd-admin-session-token',
         };
 
+        const getAdminRedirectUrl = () => {
+          try {
+            const params = new URLSearchParams(window.location.search);
+            const redirectParam = params.get('redirect');
+            if (redirectParam && (redirectParam === '/admin' || redirectParam.startsWith('/admin/'))) {
+              return redirectParam;
+            }
+          } catch {}
+          return '/admin';
+        };
+
         try {
           localStorage.setItem('spd_user', JSON.stringify(userSession));
+          localStorage.setItem('spd_admin_auth', JSON.stringify(userSession));
           sessionStorage.setItem('spd_auth_token', userSession.token);
           document.cookie = `spd-auth-token=${userSession.token}; path=/; max-age=604800; SameSite=Lax`;
         } catch (storageErr) {
@@ -127,7 +151,7 @@ export default function AdminLoginPage() {
 
         setStatus('SUCCESS');
         setTimeout(() => {
-          window.location.replace('/admin');
+          window.location.replace(getAdminRedirectUrl());
         }, 200);
         return;
       }

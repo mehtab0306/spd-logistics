@@ -129,6 +129,20 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     localStorage.setItem("spd_sidebar_collapsed", String(!collapsed));
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
+    try {
+      localStorage.removeItem("spd_user");
+      localStorage.removeItem("spd_admin_auth");
+      sessionStorage.removeItem("spd_auth_token");
+      document.cookie = "spd-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+      document.cookie = "spd-auth-token=; path=/admin; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+    } catch {}
+    window.location.replace("/admin-login");
+  };
+
   if (!mounted) {
     return <aside className="w-64 border-r bg-background hidden lg:flex flex-col h-screen" />;
   }
@@ -253,6 +267,19 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
               )}
             </div>
           </Link>
+
+          <Button
+            variant="ghost"
+            onClick={handleLogout}
+            className={cn(
+              "w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold gap-2.5 mt-1 rounded-md transition-colors",
+              collapsed && "justify-center px-0"
+            )}
+            title="Logout"
+          >
+            <LogOut className="h-4 w-4 shrink-0 text-red-600" />
+            {!collapsed && <span>Logout</span>}
+          </Button>
         </div>
       </aside>
     </>
