@@ -17,7 +17,13 @@ function TrackingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
-  const initialQuery = searchParams.get('id') || searchParams.get('query') || searchParams.get('trackingId') || '';
+  const initialQuery =
+    searchParams.get('id') ||
+    searchParams.get('track') ||
+    searchParams.get('bilty') ||
+    searchParams.get('query') ||
+    searchParams.get('trackingId') ||
+    '';
   const [query, setQuery] = useState(initialQuery);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -52,7 +58,22 @@ function TrackingContent() {
         if (match) return match;
       }
 
-      // 3. Fallback for pre-seeded active bilties
+      // 3. Check spd_deliveries
+      const rawDeliveries = localStorage.getItem("spd_deliveries");
+      if (rawDeliveries) {
+        const deliveryList: any[] = JSON.parse(rawDeliveries);
+        const match = Array.isArray(deliveryList)
+          ? deliveryList.find(
+              (b: any) =>
+                b.trackingId?.trim().toUpperCase() === clean ||
+                b.biltyNumber?.trim().toUpperCase() === clean ||
+                b.id?.toString().trim().toUpperCase() === clean
+            )
+          : null;
+        if (match) return match;
+      }
+
+      // 4. Fallback for pre-seeded active bilties
       const SEEDED_FALLBACK: Record<string, any> = {
         'SPD-2026-00101': {
           id: "bilty-cust-101",
@@ -190,38 +211,99 @@ function TrackingContent() {
   };
 
   const formatConsignmentForDisplay = (c: any) => {
+    const items = Array.isArray(c.items) && c.items.length > 0 ? c.items : [];
+    const commodity =
+      c.packageDetails ||
+      c.goodsDescription ||
+      (items[0]?.detail) ||
+      "General Commercial Cargo";
+    const totalQty =
+      c.quantity ||
+      (items.length > 0
+        ? items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0)
+        : 1);
+    const totalWeight =
+      c.weight ||
+      (items.length > 0
+        ? items.reduce((s: number, i: any) => s + (Number(i.weight) || 0), 0)
+        : 0);
+
+    const status = (c.shipmentStatus || c.status || "BOOKED").toUpperCase();
+    const origin = c.origin || "Lahore";
+    const destination = c.destination || "Karachi";
+    const createdAtTime = c.createdAt || c.date || new Date().toISOString();
+
+    let events: any[] =
+      Array.isArray(c.trackingEvents) && c.trackingEvents.length > 0
+        ? c.trackingEvents
+        : Array.isArray(c.events) && c.events.length > 0
+        ? c.events
+        : [];
+
+    if (events.length === 0) {
+      events = [
+        {
+          id: `te-${c.id || Date.now()}-curr`,
+          status: status,
+          location:
+            status === "DELIVERED"
+              ? `${destination} Final Destination`
+              : status === "OUT_FOR_DELIVERY"
+              ? `${destination} City Station`
+              : status === "ARRIVED_AT_DESTINATION"
+              ? `${destination} Central Terminal`
+              : status === "IN_TRANSIT"
+              ? `National Highway Corridor towards ${destination}`
+              : `${origin} Station Terminal`,
+          description:
+            status === "DELIVERED"
+              ? "Cargo delivered successfully. Consignee signature obtained."
+              : status === "OUT_FOR_DELIVERY"
+              ? "Out for final destination delivery."
+              : status === "ARRIVED_AT_DESTINATION"
+              ? `Safely arrived at ${destination} distribution hub.`
+              : status === "IN_TRANSIT"
+              ? `In transit to ${destination} via Linehaul Fleet.`
+              : `Consignment booked and verified under Tracking ID ${c.trackingId || c.biltyNumber || c.id}.`,
+          timestamp: c.updatedAt || createdAtTime,
+        },
+      ];
+
+      if (status !== "BOOKED") {
+        events.push({
+          id: `te-${c.id || Date.now()}-init`,
+          status: "BOOKED",
+          location: `${origin} Logistics Station`,
+          description: `Consignment registered and booking note created.`,
+          timestamp: createdAtTime,
+        });
+      }
+    }
+
     return {
       id: c.id,
-      trackingId: c.trackingId || c.biltyNumber,
-      biltyNumber: c.biltyNumber,
-      status: c.shipmentStatus || c.status || "BOOKED",
-      origin: c.origin || "Origin Terminal",
-      destination: c.destination || "Destination Drop",
-      warehouse: c.warehouse || "MAIN",
-      packageDetails: c.packageDetails || "Commercial Consignment",
-      quantity: c.quantity || 1,
-      weight: c.weight || 0,
-      senderName: c.senderName,
-      senderPhone: c.senderPhone,
-      receiverName: c.receiverName,
-      receiverPhone: c.receiverPhone,
+      trackingId: c.trackingId || c.biltyNumber || c.id,
+      biltyNumber: c.biltyNumber || c.id,
+      status: status,
+      origin: origin,
+      destination: destination,
+      warehouse: c.warehouse || origin,
+      packageDetails: commodity,
+      quantity: totalQty,
+      weight: totalWeight,
+      senderName: c.senderName || "Valued Consignor",
+      senderPhone: c.senderPhone || "-",
+      senderAddress: c.senderAddress || `${origin}, Pakistan`,
+      receiverName: c.receiverName || "Valued Consignee",
+      receiverPhone: c.receiverPhone || "-",
+      receiverAddress: c.receiverAddress || `${destination}, Pakistan`,
+      deliveryAddress: c.deliveryAddress,
+      vehicleNumber: c.vehicleNumber,
+      driverName: c.driverName,
       deliveryDate: c.deliveryDate,
       deliveryTime: c.deliveryTime,
-      createdAt: c.createdAt || new Date().toISOString(),
-      events:
-        Array.isArray(c.trackingEvents) && c.trackingEvents.length > 0
-          ? c.trackingEvents
-          : Array.isArray(c.events) && c.events.length > 0
-          ? c.events
-          : [
-              {
-                id: `te-${c.id || Date.now()}`,
-                status: c.shipmentStatus || c.status || "BOOKED",
-                location: `${c.origin || "Origin"} Dispatch Center`,
-                description: `Consignment registered with Tracking ID ${c.trackingId || c.biltyNumber}.`,
-                timestamp: c.createdAt || new Date().toISOString(),
-              },
-            ],
+      createdAt: createdAtTime,
+      events: events,
     };
   };
 
@@ -276,10 +358,16 @@ function TrackingContent() {
   };
 
   useEffect(() => {
-    const qParam = searchParams.get('id') || searchParams.get('query') || searchParams.get('trackingId');
+    const qParam =
+      searchParams.get('id') ||
+      searchParams.get('track') ||
+      searchParams.get('bilty') ||
+      searchParams.get('query') ||
+      searchParams.get('trackingId');
     if (qParam) {
-      setQuery(qParam);
-      handleSearch(undefined, qParam);
+      const cleanParam = qParam.trim();
+      setQuery(cleanParam);
+      handleSearch(undefined, cleanParam);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);

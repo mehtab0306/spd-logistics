@@ -3,6 +3,7 @@
 import React from "react";
 import { formatCurrency, formatDate, numberToWordsPKR } from "@/lib/utils";
 import { BiltyTransportHeader } from "./bilty-transport-header";
+import { BiltyQrCode } from "./bilty-qr-code";
 
 interface BiltyFreightBillProps {
   bilty: any;
@@ -91,8 +92,8 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
 
         {/* Bill To & Invoice Metadata Row */}
         <div className="grid grid-cols-12 gap-3">
-          {/* Bill To Box (7 cols) */}
-          <div className="col-span-7 p-3 border-2 border-black rounded bg-slate-50">
+          {/* Bill To Box (6 cols) */}
+          <div className="col-span-6 p-3 border-2 border-black rounded bg-slate-50">
             <div className="flex items-center justify-between border-b border-black pb-1 mb-1.5">
               <span className="font-black uppercase text-[11px] text-blue-900">
                 Bill To / Debtor: {billToParty.role}
@@ -115,8 +116,8 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
             </div>
           </div>
 
-          {/* Invoice Summary Box (5 cols) */}
-          <div className="col-span-5 p-3 border-2 border-black rounded bg-white space-y-1 text-[10.5px]">
+          {/* Invoice Summary Box (4 cols) */}
+          <div className="col-span-4 p-3 border-2 border-black rounded bg-white space-y-1 text-[10.5px]">
             <div className="flex justify-between">
               <span className="text-slate-500 uppercase text-[9px] font-bold">Bill Reference:</span>
               <span className="font-mono font-black text-red-700">{billNumber}</span>
@@ -139,6 +140,17 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
                 {bilty.origin || "Lahore"} &rarr; {bilty.destination || "Karachi"}
               </span>
             </div>
+          </div>
+
+          {/* Tracking QR Box (2 cols) */}
+          <div className="col-span-2 flex flex-col items-center justify-center p-2 border-2 border-black rounded bg-white">
+            <BiltyQrCode
+              value={`https://spd-logistics-live.netlify.app/tracking?id=${encodeURIComponent(bilty.biltyNumber || bilty.id)}`}
+              size={90}
+              level="M"
+              label="SCAN TO TRACK"
+              trackingId={bilty.biltyNumber || bilty.id}
+            />
           </div>
         </div>
 

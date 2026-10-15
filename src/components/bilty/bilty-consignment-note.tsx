@@ -21,8 +21,8 @@ export function BiltyConsignmentNote({
   if (!bilty) return null;
 
   const biltyNumber = bilty.biltyNumber || "BLT-PENDING";
-  const trackingId = bilty.trackingId || biltyNumber;
-  const trackingUrl = `https://spd-logistics.netlify.app/track?bilty=${encodeURIComponent(biltyNumber)}`;
+  const trackingId = bilty.trackingId || bilty.biltyNumber || bilty.id;
+  const trackingUrl = `https://spd-logistics-live.netlify.app/tracking?id=${encodeURIComponent(bilty.biltyNumber || bilty.id || trackingId)}`;
 
   // Parse items
   const items: any[] = Array.isArray(bilty.items) && bilty.items.length > 0
@@ -210,8 +210,13 @@ export function BiltyConsignmentNote({
 
           {/* Tracking QR Box (2 cols) */}
           <div className="col-span-2 flex flex-col items-center justify-center">
-            <BiltyQrCode value={trackingUrl} size={76} label="SCAN FOR TRACKING" />
-            <span className="text-[8px] font-mono text-slate-600 mt-0.5 text-center">{trackingId}</span>
+            <BiltyQrCode
+              value={trackingUrl}
+              size={100}
+              level="M"
+              label="SCAN FOR TRACKING"
+              trackingId={bilty.biltyNumber || bilty.id || trackingId}
+            />
           </div>
         </div>
 

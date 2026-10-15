@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -352,11 +352,19 @@ const FALLBACK_CONSIGNMENTS = [
   },
 ];
 
-export default function TrackingPage() {
+function AdminTrackingContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const qParam =
+    searchParams.get("id") ||
+    searchParams.get("track") ||
+    searchParams.get("bilty") ||
+    searchParams.get("query") ||
+    searchParams.get("trackingId");
+
   const [consignments, setConsignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(qParam ? qParam.trim() : "");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [selectedConsignment, setSelectedConsignment] = useState<any | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -419,6 +427,21 @@ export default function TrackingPage() {
               items[idx] = { ...items[idx], ...tb };
             } else {
               items.unshift(tb);
+            }
+          }
+        }
+
+        const rawDeliveries = localStorage.getItem("spd_deliveries");
+        if (rawDeliveries) {
+          const deliveryItems: any[] = JSON.parse(rawDeliveries);
+          for (const db of deliveryItems) {
+            const idx = items.findIndex(
+              (b) => b.id === db.id || (db.biltyNumber && b.biltyNumber === db.biltyNumber) || (db.trackingId && b.trackingId === db.trackingId)
+            );
+            if (idx >= 0) {
+              items[idx] = { ...items[idx], ...db };
+            } else {
+              items.unshift(db);
             }
           }
         }
@@ -527,6 +550,26 @@ export default function TrackingPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Auto-fill and auto-open tracking lookup when id or track query param is provided
+  useEffect(() => {
+    if (qParam) {
+      const cleanParam = qParam.trim();
+      setSearchQuery(cleanParam);
+      if (consignments.length > 0) {
+        const cleanUpper = cleanParam.toUpperCase();
+        const found = consignments.find(
+          (c) =>
+            c.id?.toString().trim().toUpperCase() === cleanUpper ||
+            c.biltyNumber?.trim().toUpperCase() === cleanUpper ||
+            c.trackingId?.trim().toUpperCase() === cleanUpper
+        );
+        if (found) {
+          setSelectedConsignment(found);
+        }
+      }
+    }
+  }, [qParam, consignments]);
 
   const handleCopy = (text: string) => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -1186,5 +1229,19 @@ export default function TrackingPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function TrackingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 flex items-center justify-center min-h-[50vh] text-slate-500 font-bold">
+          Loading Tracking Portal...
+        </div>
+      }
+    >
+      <AdminTrackingContent />
+    </Suspense>
   );
 }
