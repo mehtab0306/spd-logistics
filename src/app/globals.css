@@ -191,7 +191,18 @@
     }
 
     body:has(.printable-document) > *:not(:has(.printable-document)),
-    body:has([data-print-target="true"]) > *:not(:has([data-print-target="true"])) {
+    body:has([data-print-target="true"]) > *:not(:has([data-print-target="true"])),
+    body:has(.challan-print-single[data-active="true"]) > *:not(:has(.challan-print-single[data-active="true"])),
+    body:has(#challan-printable-content) > *:not(:has(#challan-printable-content)) {
+      display: none !important;
+    }
+
+    /* Specific Single Challan Print Isolation */
+    body:has(.challan-print-single[data-active="true"]) .trip-card,
+    body:has(.challan-print-single[data-active="true"]) [data-record-id],
+    body:has(.challan-print-single[data-active="true"]) form,
+    body:has(.challan-print-single[data-active="true"]) .challan-form-section,
+    body:has(.challan-print-single[data-active="true"]) .page-header-actions {
       display: none !important;
     }
 
@@ -259,6 +270,8 @@
     #printable-freight-bill,
     #printable-sales-tax-invoice,
     #challan-printable-content,
+    .challan-print-single[data-active="true"],
+    .challan-single-manifest,
     #cash-book-printable,
     #party-statement-printable,
     #payables-printable,

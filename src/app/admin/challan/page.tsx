@@ -448,8 +448,10 @@ export default function ChallanPage() {
         />
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+      {/* Form Content - Strictly Hidden in Print to Prevent Any Parameter Leaks */}
+      <div className="space-y-6 challan-form-section print:hidden">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -1092,6 +1094,7 @@ export default function ChallanPage() {
             </Button>
           </form>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { PrintableChallan } from "@/components/challan/printable-challan";
+import { BatchChallanPrint } from "@/components/challan/batch-challan-print";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import {
@@ -44,8 +45,10 @@ export default function ChallanInTransitPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Print modal
+  // Single Challan Print modal
   const [printChallan, setPrintChallan] = useState<any>(null);
+  // Batch Challan Print modal
+  const [printBatchManifests, setPrintBatchManifests] = useState(false);
 
   useEffect(() => {
     fetchChallans();
@@ -182,13 +185,21 @@ export default function ChallanInTransitPage() {
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Printable Challan Modal */}
+      {/* Isolated Single Challan Print Modal */}
       {printChallan && (
         <PrintableChallan challan={printChallan} onClose={() => setPrintChallan(null)} />
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+      {/* Batch All Manifests Print Modal */}
+      {printBatchManifests && (
+        <BatchChallanPrint
+          challans={filteredChallans}
+          onClose={() => setPrintBatchManifests(false)}
+        />
+      )}
+
+      {/* Header - Hidden in Print */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5 print:hidden">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -217,6 +228,16 @@ export default function ChallanInTransitPage() {
             <span>Export Excel</span>
           </Button>
 
+          <Button
+            variant="outline"
+            onClick={() => setPrintBatchManifests(true)}
+            disabled={!filteredChallans.length}
+            className="bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300 font-bold text-xs rounded-xl shadow-xs gap-2 h-10 px-4"
+          >
+            <Printer className="w-4 h-4 text-blue-600" />
+            <span>Print All Manifests (PDF)</span>
+          </Button>
+
           <Link href="/admin/challan">
             <Button className="bg-spd-blue hover:bg-spd-blueHover text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-4">
               <FileSpreadsheet className="w-4 h-4" />
@@ -228,7 +249,7 @@ export default function ChallanInTransitPage() {
 
       {feedback && (
         <div
-          className={`p-4 rounded-xl text-xs font-bold flex items-center justify-between gap-3 border ${
+          className={`p-4 rounded-xl text-xs font-bold flex items-center justify-between gap-3 border print:hidden ${
             feedback.type === "success"
               ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
               : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
@@ -248,8 +269,8 @@ export default function ChallanInTransitPage() {
         </div>
       )}
 
-      {/* Filter / Search Bar */}
-      <div className="p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+      {/* Filter / Search Bar - Hidden in Print */}
+      <div className="p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between print:hidden">
         <div className="relative w-full md:w-96">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input
@@ -274,14 +295,14 @@ export default function ChallanInTransitPage() {
         </div>
       </div>
 
-      {/* Trips Grid */}
+      {/* Trips Grid - Hidden in Print when Printing Single or Batch Manifest */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 print:hidden">
           <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
           <p className="text-xs font-semibold text-slate-500">Loading trips in transit...</p>
         </div>
       ) : filteredChallans.length === 0 ? (
-        <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+        <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 print:hidden">
           <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 mx-auto flex items-center justify-center text-slate-400">
             <Truck className="w-6 h-6" />
           </div>
@@ -298,7 +319,7 @@ export default function ChallanInTransitPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 print:hidden">
           {filteredChallans.map((c) => {
             const bilties = c.consignments || [];
             const waMsg = `Assalam-o-Alaikum ${c.driverName || "Driver"}, regarding Challan ${c.challanNumber} (${c.truckNumber}) on route ${c.origin} to ${c.destination}. Please provide current checkpoint update.`;
@@ -310,7 +331,7 @@ export default function ChallanInTransitPage() {
                 id={`record-${c.id}`}
                 data-record-id={c.id}
                 className={cn(
-                  "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs p-5 space-y-4 hover:shadow-md transition-all",
+                  "trip-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs p-5 space-y-4 hover:shadow-md transition-all print:hidden",
                   highlightClass(c.id) || highlightClass(c.challanNumber)
                 )}
               >
