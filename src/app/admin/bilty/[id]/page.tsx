@@ -37,12 +37,12 @@ export default function BiltyDetailPage() {
       try {
         let matchedRecord: any = null;
 
-        // 1. Check sessionStorage for instant post-booking load
+        // 1. Check spd_selected_bilty & sessionStorage for instant load
         if (typeof window !== "undefined") {
           try {
-            const lastCreated = sessionStorage.getItem("last_created_bilty");
-            if (lastCreated) {
-              const parsed = JSON.parse(lastCreated);
+            const selected = localStorage.getItem("spd_selected_bilty");
+            if (selected) {
+              const parsed = JSON.parse(selected);
               if (
                 parsed &&
                 (String(parsed.id || "").toUpperCase() === biltyId.toUpperCase() ||
@@ -53,6 +53,23 @@ export default function BiltyDetailPage() {
               }
             }
           } catch {}
+
+          if (!matchedRecord) {
+            try {
+              const lastCreated = sessionStorage.getItem("last_created_bilty");
+              if (lastCreated) {
+                const parsed = JSON.parse(lastCreated);
+                if (
+                  parsed &&
+                  (String(parsed.id || "").toUpperCase() === biltyId.toUpperCase() ||
+                    String(parsed.biltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
+                    String(parsed.trackingId || "").toUpperCase() === biltyId.toUpperCase())
+                ) {
+                  matchedRecord = parsed;
+                }
+              }
+            } catch {}
+          }
         }
 
         // 2. Check local storage

@@ -47,6 +47,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { exportToExcel } from "@/lib/export-excel";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
+import { MonthlyBillStatementModal } from "@/components/customers/monthly-bill-statement-modal";
 
 interface BiltyDetail {
   id: string;
@@ -97,6 +98,7 @@ interface CustomerReceivable {
 
 export default function ReceivablesPage() {
   const [customers, setCustomers] = useState<CustomerReceivable[]>([]);
+  const [monthlyBillCustomer, setMonthlyBillCustomer] = useState<any | null>(null);
   const [summary, setSummary] = useState({
     totalInvoiced: 0,
     totalReceived: 0,
@@ -713,7 +715,26 @@ export default function ReceivablesPage() {
                           title="View Payment History"
                         >
                           <FileText className="h-3.5 w-3.5" />
-                          Ledger
+                          <span>Ledger</span>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setMonthlyBillCustomer({
+                              id: customer.customerId,
+                              name: customer.customerName,
+                              companyName: customer.companyName,
+                              phone: customer.phone,
+                              city: customer.city,
+                            });
+                          }}
+                          className="h-8 text-xs gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800"
+                          title="Monthly Freight Bill Statement (A4 & Excel)"
+                        >
+                          <FileSpreadsheet className="h-3.5 w-3.5" />
+                          <span>Bill</span>
                         </Button>
 
                         <Button
@@ -875,16 +896,38 @@ export default function ReceivablesPage() {
             >
               Close
             </Button>
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={() => window.print()}
-              className="bg-spd-blue hover:bg-blue-700 text-white font-bold text-xs rounded-xl gap-2 shadow-sm"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print Statement</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedCustomer) {
+                    setMonthlyBillCustomer({
+                      id: selectedCustomer.customerId,
+                      name: selectedCustomer.customerName,
+                      companyName: selectedCustomer.companyName,
+                      phone: selectedCustomer.phone,
+                      city: selectedCustomer.city,
+                    });
+                  }
+                }}
+                className="font-bold text-xs rounded-xl gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Monthly Bill (A4)</span>
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={() => window.print()}
+                className="bg-spd-blue hover:bg-blue-700 text-white font-bold text-xs rounded-xl gap-2 shadow-sm"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Statement</span>
+              </Button>
+            </div>
           </DialogFooter>
 
           {/* DEDICATED A4 PRINTABLE RECEIVABLES STATEMENT */}
@@ -1058,6 +1101,50 @@ export default function ReceivablesPage() {
                 </Table>
               </div>
             )}
+
+            <DialogFooter className="shrink-0 border-t pt-3 mt-2 flex flex-row items-center justify-between print:hidden">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setViewLedgerOpen(false)}
+                className="rounded-xl text-xs font-semibold"
+              >
+                Close
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (selectedCustomer) {
+                      setMonthlyBillCustomer({
+                        id: selectedCustomer.customerId,
+                        name: selectedCustomer.customerName,
+                        companyName: selectedCustomer.companyName,
+                        phone: selectedCustomer.phone,
+                        city: selectedCustomer.city,
+                      });
+                    }
+                  }}
+                  className="font-bold text-xs rounded-xl gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Monthly Bill (A4)</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={() => window.print()}
+                  className="bg-spd-blue hover:bg-blue-700 text-white font-bold text-xs rounded-xl gap-2 shadow-sm"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Statement</span>
+                </Button>
+              </div>
+            </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
@@ -1227,6 +1314,13 @@ export default function ReceivablesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL 4: CUSTOMER MONTHLY FREIGHT BILL STATEMENT (A4 & EXCEL) */}
+      <MonthlyBillStatementModal
+        customer={monthlyBillCustomer}
+        isOpen={!!monthlyBillCustomer}
+        onClose={() => setMonthlyBillCustomer(null)}
+      />
     </div>
   );
 }

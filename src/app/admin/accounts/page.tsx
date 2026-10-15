@@ -520,6 +520,55 @@ export default function AccountsPage() {
     exportToExcel(data, "SPD_Accounts_Ledgers");
   };
 
+  // Individual Per-Account / Party Ledger Export to Excel
+  const handleExportSingleAccountExcel = (account: AccountItem) => {
+    if (!account) return;
+    const txList = account.transactions || [];
+    let running = account.openingBalance || 0;
+    const data = txList.map((tx: any, idx: number) => {
+      const dr = Number(tx.debit) || 0;
+      const cr = Number(tx.credit) || 0;
+      running += (dr - cr);
+      return {
+        "S.No": idx + 1,
+        "Date": tx.date ? new Date(tx.date).toLocaleDateString("en-GB") : "",
+        "Voucher #": tx.voucherNumber || tx.reference || "",
+        "Account Name": account.accountName,
+        "Account #": account.accountNumber,
+        "Description": tx.description || "",
+        "Debit (خرچہ/بل)": dr,
+        "Credit (آمد/وصولی)": cr,
+        "Running Balance": tx.balance !== undefined ? tx.balance : running,
+      };
+    });
+
+    if (data.length === 0) {
+      data.push({
+        "S.No": 1,
+        "Date": new Date().toLocaleDateString("en-GB"),
+        "Voucher #": "OPENING",
+        "Account Name": account.accountName,
+        "Account #": account.accountNumber,
+        "Description": "Opening Balance Record",
+        "Debit (خرچہ/بل)": 0,
+        "Credit (آمد/وصولی)": 0,
+        "Running Balance": account.openingBalance || 0,
+      } as any);
+    }
+
+    const safeName = account.accountName.replace(/[^a-zA-Z0-9_-]/g, "_");
+    exportToExcel(data, `Ledger_Statement_${safeName}`);
+    setFeedback({ type: "success", message: `Exported ledger for "${account.accountName}" to Excel (.xlsx)` });
+  };
+
+  // Individual Per-Account / Party Print Statement
+  const handlePrintSingleAccount = (account: AccountItem) => {
+    setViewLedgerAccount(account);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
   // Handle Create Account
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1078,15 +1127,33 @@ export default function AccountsPage() {
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1.5">
+                    <div className="flex items-center justify-center gap-1">
                       <Button
                         size="sm"
                         variant="default"
                         onClick={() => setViewLedgerAccount(a)}
-                        className="h-7 px-3 text-xs font-bold gap-1 rounded-xl bg-spd-blue hover:bg-spd-blueHover text-white shadow-xs"
+                        className="h-7 px-2.5 text-xs font-bold gap-1 rounded-xl bg-spd-blue hover:bg-spd-blueHover text-white shadow-xs"
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        <span>View Ledger</span>
+                        <span>Ledger</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handlePrintSingleAccount(a)}
+                        className="h-7 px-2 text-xs font-bold rounded-xl border-slate-200 dark:border-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-200"
+                        title="Print Statement (PDF)"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-spd-blue" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleExportSingleAccountExcel(a)}
+                        className="h-7 px-2 text-xs font-bold rounded-xl border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 text-emerald-700 dark:text-emerald-400"
+                        title="Export Excel (.xlsx)"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         size="sm"
@@ -1140,6 +1207,16 @@ export default function AccountsPage() {
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Add Payment / Adjustment</span>
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => viewLedgerAccount && handleExportSingleAccountExcel(viewLedgerAccount)}
+                  className="rounded-xl text-xs font-bold gap-1.5 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Export Excel</span>
                 </Button>
 
                 <Button

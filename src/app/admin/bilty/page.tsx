@@ -2122,16 +2122,26 @@ export default function BiltyPage() {
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" /> 4-Sheet Excel
               </Button>
-              {viewDetailsBilty?.id && (
-                <Link href={`/admin/bilty/${viewDetailsBilty.id}`}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-xl text-xs font-semibold gap-1.5"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Full Page View
-                  </Button>
-                </Link>
+              {viewDetailsBilty && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const targetId = viewDetailsBilty.id || viewDetailsBilty.biltyNumber || viewDetailsBilty.trackingId;
+                    if (!targetId) return;
+                    if (typeof window !== "undefined") {
+                      try {
+                        localStorage.setItem("spd_selected_bilty", JSON.stringify(viewDetailsBilty));
+                        sessionStorage.setItem("last_created_bilty", JSON.stringify(viewDetailsBilty));
+                      } catch {}
+                    }
+                    setViewDetailsBilty(null);
+                    router.push(`/admin/bilty/${encodeURIComponent(targetId)}`);
+                  }}
+                  className="rounded-xl text-xs font-semibold gap-1.5"
+                >
+                  <Eye className="w-3.5 h-3.5" /> Full Page View
+                </Button>
               )}
             </div>
             <Button

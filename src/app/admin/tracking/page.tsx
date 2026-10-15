@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import {
   MessageSquare,
   Sparkles,
   Navigation,
+  Eye,
 } from "lucide-react";
 import { formatDateTime, formatDate, cn } from "@/lib/utils";
 import { SHIPMENT_STATUS_LABELS, SHIPMENT_STATUS_COLORS } from "@/lib/constants";
@@ -351,6 +353,7 @@ const FALLBACK_CONSIGNMENTS = [
 ];
 
 export default function TrackingPage() {
+  const router = useRouter();
   const [consignments, setConsignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1146,6 +1149,28 @@ export default function TrackingPage() {
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>Public View</span>
                 </Link>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!selectedConsignment) return;
+                  const targetId = selectedConsignment.id || selectedConsignment.biltyNumber || selectedConsignment.trackingId;
+                  if (!targetId) return;
+                  if (typeof window !== "undefined") {
+                    try {
+                      localStorage.setItem("spd_selected_bilty", JSON.stringify(selectedConsignment));
+                      sessionStorage.setItem("last_created_bilty", JSON.stringify(selectedConsignment));
+                    } catch {}
+                  }
+                  setSelectedConsignment(null);
+                  router.push(`/admin/bilty/${encodeURIComponent(targetId)}`);
+                }}
+                className="rounded-xl text-xs font-semibold gap-1.5"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Full Page View</span>
               </Button>
             </div>
 

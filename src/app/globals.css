@@ -156,13 +156,13 @@
   /* Universal Corporate A4 Print styles */
   @page {
     size: A4 portrait;
-    margin: 15mm;
+    margin: 10mm;
   }
 
   @media print {
     @page {
       size: A4 portrait;
-      margin: 15mm;
+      margin: 10mm;
     }
 
     /* Universal Web Clutter Removal */
@@ -176,6 +176,7 @@
     .no-print,
     .print\:hidden,
     [role="navigation"],
+    .chakra-portal,
     .pagination,
     [data-radix-portal] > div[data-state="open"] > button,
     .theme-toggle,
@@ -189,6 +190,7 @@
     html,
     body,
     main,
+    .print-page,
     .print-container {
       width: 100% !important;
       margin: 0 !important;
@@ -197,7 +199,6 @@
       color: #000000 !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
-      font-size: 10pt !important;
     }
 
     /* Reset Layout Containers */
@@ -223,9 +224,10 @@
     .print-table {
       width: 100% !important;
       border-collapse: collapse !important;
+      font-size: 11px !important;
       border: 1px solid #000000 !important;
-      margin-top: 8px !important;
-      margin-bottom: 8px !important;
+      margin-top: 6px !important;
+      margin-bottom: 6px !important;
       page-break-inside: auto !important;
       background: #ffffff !important;
     }
@@ -249,7 +251,7 @@
     .print-table td {
       border: 1px solid #000000 !important;
       color: #000000 !important;
-      padding: 6px 8px !important;
+      padding: 4px 6px !important;
     }
 
     th,
@@ -261,13 +263,18 @@
 
     /* Full A4 Width & Centered print containers */
     .print-container,
+    .print-page,
     .print\:block,
+    #customer-monthly-bill-printable,
     #printable-statement,
     #printable-bilty,
     #challan-printable-content,
     #cash-book-printable,
+    #party-statement-printable,
     #payables-printable,
-    #receivables-printable {
+    #receivables-printable,
+    #gate-pass-printable,
+    #pod-receipt-printable {
       display: block !important;
       width: 100% !important;
       max-width: 100% !important;
@@ -309,6 +316,21 @@
 
   .print-only {
     display: none;
+  }
+
+  /* Multi-Device Responsive Engine */
+  .overflow-x-auto,
+  .responsive-table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Fluid wide layout container */
+  .fluid-desktop-container {
+    width: 100%;
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 

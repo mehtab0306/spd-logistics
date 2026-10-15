@@ -40,6 +40,7 @@ import {
   Camera,
   Upload,
   MessageSquare,
+  FileText,
   X,
 } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ import {
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
+import { MonthlyBillStatementModal } from "@/components/customers/monthly-bill-statement-modal";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -63,6 +65,7 @@ export default function CustomersPage() {
   const { highlightClass } = useSmartHighlight(customers);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [monthlyBillCustomer, setMonthlyBillCustomer] = useState<any | null>(null);
   const [warehouseFilter, setWarehouseFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
@@ -767,6 +770,15 @@ export default function CustomersPage() {
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="h-8 w-8 rounded-lg text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                        title="Monthly Freight Bill Statement (A4 & Excel)"
+                        onClick={() => setMonthlyBillCustomer(c)}
+                      >
+                        <FileText className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         className="h-8 w-8 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50"
                         title="Edit Customer & Photo"
                         onClick={() => router.push(`/admin/customers/${c.id}/edit`)}
@@ -935,16 +947,31 @@ export default function CustomersPage() {
             >
               Close
             </Button>
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={() => window.print()}
-              className="bg-spd-blue hover:bg-blue-700 text-white font-bold text-xs rounded-xl gap-2 shadow-sm"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print Statement</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const cust = viewCustomer;
+                  setMonthlyBillCustomer(cust);
+                }}
+                className="font-bold text-xs rounded-xl gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Monthly Bill (A4)</span>
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={() => window.print()}
+                className="bg-spd-blue hover:bg-blue-700 text-white font-bold text-xs rounded-xl gap-2 shadow-sm"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Statement</span>
+              </Button>
+            </div>
           </DialogFooter>
 
           {/* DEDICATED A4 PRINTABLE CUSTOMER STATEMENT */}
@@ -1183,6 +1210,13 @@ export default function CustomersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL 5: CUSTOMER MONTHLY FREIGHT BILL STATEMENT (A4 & EXCEL) */}
+      <MonthlyBillStatementModal
+        customer={monthlyBillCustomer}
+        isOpen={!!monthlyBillCustomer}
+        onClose={() => setMonthlyBillCustomer(null)}
+      />
     </div>
   );
 }
