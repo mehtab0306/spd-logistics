@@ -647,7 +647,7 @@ export default function CustomerPortalPage() {
 
       {/* TAB 3: MY LEDGER */}
       {activeTab === "ledger" && (
-        <div className="space-y-4">
+        <div data-print-target="true" className="printable-document space-y-4">
           <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
             <div>
               <h2 className="text-base font-black text-slate-900 dark:text-white">

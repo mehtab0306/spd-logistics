@@ -50,7 +50,7 @@ export function PrintableChallan({ challan, onClose }: PrintableChallanProps) {
         </div>
 
         {/* PRINTABLE DOCUMENT BODY */}
-        <div id="challan-printable-content" className="space-y-4 text-xs font-sans">
+        <div id="challan-printable-content" data-print-target="true" className="printable-document space-y-4 text-xs font-sans">
           {/* Official Letterhead Header */}
           <PrintHeader
             title="Trip Dispatch Manifest & Fleet Challan"

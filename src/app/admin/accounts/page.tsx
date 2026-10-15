@@ -1348,7 +1348,11 @@ export default function AccountsPage() {
           {/* ========================================================================= */}
           {/* DEDICATED A4 PRINTABLE ACCOUNT STATEMENT (Strict Single-Page Engine) */}
           {/* ========================================================================= */}
-          <div id="printable-statement" className="hidden print:block font-sans text-black p-4 space-y-3 bg-white">
+          <div
+            id="printable-statement"
+            data-print-target="true"
+            className="printable-document hidden print:block font-sans text-black p-4 space-y-3 bg-white"
+          >
             {/* Header */}
             <div className="flex items-center justify-between border-b-2 border-slate-900 pb-3">
               <div className="flex items-center gap-3">

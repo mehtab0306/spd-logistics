@@ -99,7 +99,11 @@ export function BiltyConsignmentNote({
       )}
 
       {/* A4 PRINT CONTAINER */}
-      <div className="p-5 border-2 border-black rounded-lg print:border-none print:p-0 space-y-3">
+      <div
+        id="printable-bilty"
+        data-print-target="true"
+        className="printable-document p-5 border-2 border-black rounded-lg print:border-none print:p-0 space-y-3"
+      >
         {/* Official Header */}
         <BiltyTransportHeader
           title="Consignment Note / Bilty"

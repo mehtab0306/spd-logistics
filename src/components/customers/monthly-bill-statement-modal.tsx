@@ -450,7 +450,11 @@ export function MonthlyBillStatementModal({
         {/* ======================================================== */}
         {/* A4 CORPORATE LETTERHEAD & PRINTABLE STATEMENT CONTAINER */}
         {/* ======================================================== */}
-        <div id="customer-monthly-bill-printable" className="font-sans text-black p-2 sm:p-4 bg-white space-y-3">
+        <div
+          id="customer-monthly-bill-printable"
+          data-print-target="true"
+          className="printable-document font-sans text-black p-2 sm:p-4 bg-white space-y-3"
+        >
           {/* Official Letterhead Header */}
           <div className="border-b-2 border-black pb-2 text-center text-black font-sans">
             <h1 className="text-lg sm:text-xl font-black tracking-tight text-red-600 uppercase">

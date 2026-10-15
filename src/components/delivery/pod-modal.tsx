@@ -103,7 +103,7 @@ export function PodModal({ item, onClose, onSavePod }: PodModalProps) {
         </div>
 
         {/* Printable POD Voucher Sheet */}
-        <div id="pod-print-area" className="border-2 border-black rounded-lg p-5 space-y-4 font-sans text-xs bg-white">
+        <div id="pod-print-area" data-print-target="true" className="printable-document border-2 border-black rounded-lg p-5 space-y-4 font-sans text-xs bg-white">
           {/* Header */}
           <div className="border-b-2 border-black pb-2 text-center space-y-1">
             <h1 className="text-lg font-black uppercase text-red-600">

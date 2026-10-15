@@ -140,7 +140,11 @@ function ChallanPrintContent() {
       </div>
 
       {/* A4 PRINTABLE DOCUMENT BODY */}
-      <div id="challan-printable-content" className="p-6 border-2 border-black rounded-xl bg-white text-black space-y-4 font-sans text-xs print:border-none print:p-0">
+      <div
+        id="challan-printable-content"
+        data-print-target="true"
+        className="printable-document p-6 border-2 border-black rounded-xl bg-white text-black space-y-4 font-sans text-xs print:border-none print:p-0"
+      >
         {/* Official Letterhead Header */}
         <PrintHeader
           title="Trip Dispatch Manifest & Fleet Challan"

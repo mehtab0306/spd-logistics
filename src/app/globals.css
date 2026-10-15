@@ -155,50 +155,79 @@
 
   /* Universal Corporate A4 Print styles */
   @page {
-    size: A4 portrait;
-    margin: 10mm;
+    size: A4 portrait !important;
+    margin: 10mm !important;
   }
 
   @media print {
     @page {
-      size: A4 portrait;
-      margin: 10mm;
+      size: A4 portrait !important;
+      margin: 10mm !important;
     }
 
-    /* Universal Web Clutter Removal */
-    aside,
-    header,
-    nav,
-    button,
-    input,
-    select,
-    textarea,
-    .no-print,
-    .print\:hidden,
-    [role="navigation"],
-    .chakra-portal,
-    .pagination,
-    [data-radix-portal] > div[data-state="open"] > button,
-    .theme-toggle,
-    .notification-bell,
-    .toast,
-    [data-sonner-toaster] {
+    /* 1. Global Reset & Body Protection */
+    html, body {
+      width: 100% !important;
+      height: auto !important;
+      background: #ffffff !important;
+      color: #000000 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* 2. Strictly hide all background dashboard wrappers, directory tables, sidebars, headers, and UI elements */
+    header, aside, nav, footer, button, input, select, textarea, .no-print, .print\:hidden,
+    [role="navigation"], [role="banner"], [role="search"], [role="tablist"],
+    .chakra-portal:not(.print-target-portal), .pagination, .theme-toggle,
+    .notification-bell, .toast, [data-sonner-toaster], [aria-label="Close"] {
       display: none !important;
     }
 
-    /* Reset Body and Canvas to Full A4 Width */
-    html,
-    body,
-    main,
-    .print-page,
-    .print-container {
+    /* When a printable modal or document is open, hide the parent page completely */
+    body:has(.printable-document) > *:not(:has(.printable-document)),
+    body:has([data-print-target="true"]) > *:not(:has([data-print-target="true"])) {
+      display: none !important;
+    }
+
+    /* Radix Dialog Backdrop Overlay & Portal Isolation */
+    div[data-state="open"][aria-hidden="true"],
+    [data-radix-portal] > div[class*="fixed"][class*="inset-0"],
+    .fixed.inset-0.bg-black\/70,
+    .fixed.inset-0.bg-black\/80,
+    .fixed.inset-0.bg-background\/80 {
+      display: none !important;
+      background: transparent !important;
+    }
+
+    [data-radix-portal]:has(.printable-document),
+    [data-radix-portal]:has([data-print-target="true"]) {
+      position: static !important;
+      display: block !important;
       width: 100% !important;
       margin: 0 !important;
       padding: 0 !important;
+    }
+
+    div[role="dialog"]:has(.printable-document),
+    div[role="dialog"]:has([data-print-target="true"]),
+    [data-radix-portal] div[role="dialog"] {
+      position: static !important;
+      top: auto !important;
+      left: auto !important;
+      transform: none !important;
+      max-width: 100% !important;
+      width: 100% !important;
+      height: auto !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
       background: #ffffff !important;
-      color: #000000 !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
+      box-shadow: none !important;
+      border: none !important;
+      overflow: visible !important;
     }
 
     /* Reset Layout Containers */
@@ -219,52 +248,8 @@
       border: none !important;
     }
 
-    /* Clean Structured Tables: High-contrast black borders, clean numeric alignment */
-    table,
-    .print-table {
-      width: 100% !important;
-      border-collapse: collapse !important;
-      font-size: 11px !important;
-      border: 1px solid #000000 !important;
-      margin-top: 6px !important;
-      margin-bottom: 6px !important;
-      page-break-inside: auto !important;
-      background: #ffffff !important;
-    }
-
-    tr {
-      page-break-inside: avoid !important;
-      page-break-after: auto !important;
-    }
-
-    thead {
-      display: table-header-group !important;
-    }
-
-    tfoot {
-      display: table-footer-group !important;
-    }
-
-    th,
-    td,
-    .print-table th,
-    .print-table td {
-      border: 1px solid #000000 !important;
-      color: #000000 !important;
-      padding: 4px 6px !important;
-    }
-
-    th,
-    .print-table th {
-      background-color: #f1f5f9 !important;
-      font-weight: 700 !important;
-      text-transform: uppercase !important;
-    }
-
-    /* Full A4 Width & Centered print containers */
-    .print-container,
-    .print-page,
-    .print\:block,
+    /* 3. Pure A4 Portrait Document Isolation */
+    .printable-document, [data-print-target="true"], .print-page-target,
     #customer-monthly-bill-printable,
     #printable-statement,
     #printable-bilty,
@@ -276,41 +261,52 @@
     #gate-pass-printable,
     #pod-receipt-printable {
       display: block !important;
+      position: static !important;
       width: 100% !important;
       max-width: 100% !important;
       margin: 0 auto !important;
       padding: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      visibility: visible !important;
+      page-break-after: avoid !important;
+      page-break-before: avoid !important;
       background: #ffffff !important;
       color: #000000 !important;
-      box-shadow: none !important;
-      border: none !important;
     }
 
-    /* Modal Dialog reset for printable modals */
-    [role="dialog"],
-    [data-radix-portal] > div,
-    [data-radix-portal] div[role="dialog"] {
-      position: static !important;
-      max-height: none !important;
-      max-width: 100% !important;
+    /* 4. Crisp Corporate Tables (No Awkward Page Breaks) */
+    table, .print-table {
       width: 100% !important;
-      height: auto !important;
-      overflow: visible !important;
-      box-shadow: none !important;
-      border: none !important;
-      background: white !important;
-      color: black !important;
-      padding: 0 !important;
-      margin: 0 !important;
-      transform: none !important;
+      border-collapse: collapse !important;
+      font-size: 10px !important;
+      table-layout: auto !important;
+      border: 1px solid #111111 !important;
+      background: #ffffff !important;
     }
 
-    /* Hide background backdrop overlay */
-    div[data-state="open"][aria-hidden="true"],
-    .fixed.inset-0.bg-black\/70,
-    .fixed.inset-0.bg-black\/80,
-    .fixed.inset-0.bg-background\/80 {
-      display: none !important;
+    thead {
+      display: table-header-group !important;
+    }
+
+    tfoot {
+      display: table-footer-group !important;
+    }
+
+    th, td, .print-table th, .print-table td {
+      border: 1px solid #111111 !important;
+      padding: 4px 6px !important;
+      color: #000000 !important;
+    }
+
+    th, .print-table th {
+      background-color: #f1f5f9 !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+    }
+
+    tr {
+      page-break-inside: avoid !important;
     }
   }
 

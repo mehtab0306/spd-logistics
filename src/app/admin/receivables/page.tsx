@@ -931,7 +931,11 @@ export default function ReceivablesPage() {
           </DialogFooter>
 
           {/* DEDICATED A4 PRINTABLE RECEIVABLES STATEMENT */}
-          <div id="printable-statement" className="hidden print:block font-sans text-black p-4 space-y-3 bg-white">
+          <div
+            id="printable-statement"
+            data-print-target="true"
+            className="printable-document hidden print:block font-sans text-black p-4 space-y-3 bg-white"
+          >
             {/* Header */}
             <PrintHeader
               title="Customer Consignment & Receivable Statement"

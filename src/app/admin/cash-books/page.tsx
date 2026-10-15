@@ -1470,9 +1470,10 @@ function CashBooksContent() {
       {/* DEDICATED A4 PRINTABLE CASH BOOK DAY LEDGER */}
       <div
         id="cash-book-printable"
+        data-print-target="true"
         className={cn(
           printTarget === "BOOK" ? "print:block" : "print:hidden",
-          "hidden font-sans text-black p-4 space-y-3 bg-white"
+          "printable-document hidden font-sans text-black p-4 space-y-3 bg-white"
         )}
       >
         <PrintHeader
@@ -1635,9 +1636,10 @@ function CashBooksContent() {
       {/* ======================================================== */}
       <div 
         id="party-statement-printable" 
+        data-print-target="true"
         className={cn(
           printTarget === "PARTY" && partyStatementModal ? "print:block" : "print:hidden",
-          "hidden font-sans text-black p-4 space-y-3 bg-white"
+          "printable-document hidden font-sans text-black p-4 space-y-3 bg-white"
         )}
       >
         {partyStatementModal && (

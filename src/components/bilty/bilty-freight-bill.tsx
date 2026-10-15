@@ -74,7 +74,11 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
   const amountInWords = numberToWordsPKR(totalInvoiceAmount);
 
   return (
-    <div className="bg-white text-black font-sans text-xs selection:bg-red-100 max-w-4xl mx-auto print:max-w-none print:w-full">
+    <div
+      id="printable-freight-bill"
+      data-print-target="true"
+      className="printable-document bg-white text-black font-sans text-xs selection:bg-red-100 max-w-4xl mx-auto print:max-w-none print:w-full"
+    >
       <div className="p-5 border-2 border-black rounded-lg print:border-none print:p-0 space-y-3">
         {/* Official Header matching Excel BILL */}
         <BiltyTransportHeader

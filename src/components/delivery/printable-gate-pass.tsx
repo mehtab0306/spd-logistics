@@ -60,7 +60,7 @@ export function PrintableGatePass({ item, onClose }: PrintableGatePassProps) {
         </div>
 
         {/* Printable Gate Pass Voucher */}
-        <div id="gate-pass-print-area" className="border-2 border-black rounded-lg p-5 space-y-4 font-sans text-xs bg-white">
+        <div id="gate-pass-print-area" data-print-target="true" className="printable-document border-2 border-black rounded-lg p-5 space-y-4 font-sans text-xs bg-white">
           {/* Header */}
           <div className="border-b-2 border-black pb-3 text-center space-y-1">
             <h1 className="text-xl font-black uppercase text-red-600 tracking-tight">
