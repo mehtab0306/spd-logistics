@@ -990,51 +990,63 @@ export default function ReceivablesPage() {
               </div>
             </div>
 
-            {/* Bilty Breakdown Table */}
-            <div>
+            {/* Bilty Breakdown Table - 100% fixed auto-fit */}
+            <div className="w-full overflow-hidden">
               <p className="text-[11px] font-black uppercase text-slate-800 mb-1">
                 Consignment Bilty Itemized Ledger Breakdown
               </p>
-              <table className="w-full border-collapse border border-slate-300 text-[10px]">
+              <table
+                className="w-full border-collapse border border-black text-[9px] table-fixed"
+                style={{ width: "100%", tableLayout: "fixed" }}
+              >
+                <colgroup>
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "26%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "10%" }} />
+                </colgroup>
                 <thead>
-                  <tr className="bg-slate-100 text-slate-800">
-                    <th className="border border-slate-300 p-1.5 text-left">Bilty / Tracking #</th>
-                    <th className="border border-slate-300 p-1.5 text-left">Date</th>
-                    <th className="border border-slate-300 p-1.5 text-left">Receiver & Route</th>
-                    <th className="border border-slate-300 p-1.5 text-right">Freight (PKR)</th>
-                    <th className="border border-slate-300 p-1.5 text-right">Paid (PKR)</th>
-                    <th className="border border-slate-300 p-1.5 text-right font-black text-red-700">Balance</th>
-                    <th className="border border-slate-300 p-1.5 text-center">Status</th>
+                  <tr className="bg-slate-100 text-black font-bold text-center">
+                    <th className="border border-black p-1">Bilty #</th>
+                    <th className="border border-black p-1">Date</th>
+                    <th className="border border-black p-1 text-left">Receiver & Route</th>
+                    <th className="border border-black p-1 text-right">Freight</th>
+                    <th className="border border-black p-1 text-right">Paid</th>
+                    <th className="border border-black p-1 text-right font-black text-red-700">Balance</th>
+                    <th className="border border-black p-1">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(selectedCustomer?.bilties || []).slice(0, 8).map((b: any, i: number) => (
                     <tr key={b.id || i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                      <td className="border border-slate-300 p-1 font-mono font-bold text-red-700">
+                      <td className="border border-black p-1 font-mono font-bold text-red-700 truncate">
                         {b.biltyNumber}
-                        <div className="text-[9px] text-slate-500 font-normal">{b.trackingId}</div>
+                        <div className="text-[8px] text-slate-500 font-normal truncate">{b.trackingId}</div>
                       </td>
-                      <td className="border border-slate-300 p-1 whitespace-nowrap">{formatDate(b.date)}</td>
-                      <td className="border border-slate-300 p-1">
-                        <div className="font-semibold text-slate-900">{b.receiverName}</div>
-                        <div className="text-[9px] text-slate-500">{b.origin} &rarr; {b.destination}</div>
+                      <td className="border border-black p-1 text-center whitespace-nowrap font-mono truncate">{formatDate(b.date)}</td>
+                      <td className="border border-black p-1 truncate">
+                        <div className="font-semibold text-slate-900 truncate">{b.receiverName}</div>
+                        <div className="text-[8px] text-slate-500 truncate">{b.origin} &rarr; {b.destination}</div>
                       </td>
-                      <td className="border border-slate-300 p-1 text-right font-medium">{formatCurrency(b.totalAmount)}</td>
-                      <td className="border border-slate-300 p-1 text-right font-semibold text-emerald-700">{formatCurrency(b.paidAmount)}</td>
-                      <td className="border border-slate-300 p-1 text-right font-black text-red-700">{formatCurrency(b.remainingBalance)}</td>
-                      <td className="border border-slate-300 p-1 text-center font-bold uppercase">{b.paymentStatus}</td>
+                      <td className="border border-black p-1 text-right font-medium font-mono truncate">{formatCurrency(b.totalAmount)}</td>
+                      <td className="border border-black p-1 text-right font-semibold text-emerald-700 font-mono truncate">{formatCurrency(b.paidAmount)}</td>
+                      <td className="border border-black p-1 text-right font-black text-red-700 font-mono truncate">{formatCurrency(b.remainingBalance)}</td>
+                      <td className="border border-black p-1 text-center font-bold uppercase text-[8.5px] truncate">{b.paymentStatus}</td>
                     </tr>
                   ))}
                   {(selectedCustomer?.bilties?.length || 0) > 8 && (
-                    <tr className="bg-slate-50 text-[9px] text-slate-600 italic font-medium">
-                      <td colSpan={7} className="border border-slate-300 p-1 text-center">
+                    <tr className="bg-slate-50 text-[8.5px] text-slate-600 italic font-medium">
+                      <td colSpan={7} className="border border-black p-1 text-center">
                         (+ {(selectedCustomer?.bilties?.length || 0) - 8} additional bilties recorded in SPD Portal)
                       </td>
                     </tr>
                   )}
                   {(!selectedCustomer?.bilties || selectedCustomer?.bilties?.length === 0) && (
                     <tr>
-                      <td colSpan={7} className="border border-slate-300 p-2 text-center text-slate-400 italic">
+                      <td colSpan={7} className="border border-black p-3 text-center text-slate-400 italic">
                         No bilties recorded for this customer yet.
                       </td>
                     </tr>

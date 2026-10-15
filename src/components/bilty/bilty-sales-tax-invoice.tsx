@@ -136,16 +136,25 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
 
         {/* Structured Sales Tax Calculation Table matching Excel Sheet1 */}
         <div className="border border-black rounded overflow-hidden">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse table-fixed">
+            <colgroup>
+              <col style={{ width: "5%" }} />
+              <col style={{ width: "35%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "14%" }} />
+            </colgroup>
             <thead className="bg-slate-100 text-[9px] font-black uppercase border-b border-black">
               <tr>
-                <th className="p-2 border-r border-black text-center w-10">S#</th>
+                <th className="p-2 border-r border-black text-center">S#</th>
                 <th className="p-2 border-r border-black">Description of Goods / Taxable Logistics Services</th>
-                <th className="p-2 border-r border-black text-center w-24">Tariff / Heading</th>
-                <th className="p-2 border-r border-black text-right w-28">Taxable Value (Excl. Tax)</th>
-                <th className="p-2 border-r border-black text-center w-20">Rate (%)</th>
-                <th className="p-2 border-r border-black text-right w-28">Sales Tax Payable</th>
-                <th className="p-2 text-right w-32">Total Value (Incl. Tax)</th>
+                <th className="p-2 border-r border-black text-center">Tariff / Heading</th>
+                <th className="p-2 border-r border-black text-right">Taxable Value (Excl. Tax)</th>
+                <th className="p-2 border-r border-black text-center">Rate (%)</th>
+                <th className="p-2 border-r border-black text-right">Sales Tax Payable</th>
+                <th className="p-2 text-right">Total Value (Incl. Tax)</th>
               </tr>
             </thead>
             <tbody className="text-[10px]">

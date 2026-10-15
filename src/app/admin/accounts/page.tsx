@@ -1461,51 +1461,62 @@ export default function AccountsPage() {
               </div>
             </div>
 
-            {/* Itemized Ledger Table */}
-            <div>
+            {/* Itemized Ledger Table - 100% fixed auto-fit */}
+            <div className="w-full overflow-hidden">
               <p className="text-[11px] font-black uppercase text-slate-800 mb-1">
                 Itemized Transaction Ledger Postings
               </p>
-              <table className="w-full border-collapse border border-slate-300 text-[10px]">
+              <table
+                className="w-full border-collapse border border-black text-[9px] table-fixed"
+                style={{ width: "100%", tableLayout: "fixed" }}
+              >
+                <colgroup>
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "15%" }} />
+                  <col style={{ width: "34%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "13%" }} />
+                </colgroup>
                 <thead>
-                  <tr className="bg-slate-100 text-slate-800">
-                    <th className="border border-slate-300 p-1.5 text-left">Date</th>
-                    <th className="border border-slate-300 p-1.5 text-left">Ref / Voucher #</th>
-                    <th className="border border-slate-300 p-1.5 text-left">Description / Particulars</th>
-                    <th className="border border-slate-300 p-1.5 text-right text-red-700">Debit (Billed)</th>
-                    <th className="border border-slate-300 p-1.5 text-right text-emerald-700">Credit (Paid)</th>
-                    <th className="border border-slate-300 p-1.5 text-right font-black">Balance</th>
+                  <tr className="bg-slate-100 text-black font-bold text-center">
+                    <th className="border border-black p-1">Date</th>
+                    <th className="border border-black p-1">Ref / Voucher #</th>
+                    <th className="border border-black p-1 text-left">Description / Particulars</th>
+                    <th className="border border-black p-1 text-right text-red-700">Debit (Billed)</th>
+                    <th className="border border-black p-1 text-right text-emerald-700">Credit (Paid)</th>
+                    <th className="border border-black p-1 text-right font-black">Balance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(viewLedgerAccount?.transactions || []).slice(0, 8).map((tx, i) => (
                     <tr key={tx.id || i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                      <td className="border border-slate-300 p-1 whitespace-nowrap">{formatDate(tx.date)}</td>
-                      <td className="border border-slate-300 p-1 font-mono font-bold text-spd-blue">
+                      <td className="border border-black p-1 text-center whitespace-nowrap font-mono truncate">{formatDate(tx.date)}</td>
+                      <td className="border border-black p-1 font-mono font-bold text-spd-blue truncate">
                         {tx.voucherNumber || tx.reference || "-"}
                       </td>
-                      <td className="border border-slate-300 p-1 font-medium">{tx.description}</td>
-                      <td className="border border-slate-300 p-1 text-right font-bold text-red-700">
+                      <td className="border border-black p-1 font-medium truncate">{tx.description}</td>
+                      <td className="border border-black p-1 text-right font-bold text-red-700 font-mono truncate">
                         {tx.debit > 0 ? formatCurrency(tx.debit) : "-"}
                       </td>
-                      <td className="border border-slate-300 p-1 text-right font-bold text-emerald-700">
+                      <td className="border border-black p-1 text-right font-bold text-emerald-700 font-mono truncate">
                         {tx.credit > 0 ? formatCurrency(tx.credit) : "-"}
                       </td>
-                      <td className="border border-slate-300 p-1 text-right font-black">
+                      <td className="border border-black p-1 text-right font-black font-mono truncate">
                         {formatCurrency(tx.balance)}
                       </td>
                     </tr>
                   ))}
                   {(viewLedgerAccount?.transactions?.length || 0) > 8 && (
-                    <tr className="bg-slate-50 text-[9px] text-slate-600 italic font-medium">
-                      <td colSpan={6} className="border border-slate-300 p-1 text-center">
+                    <tr className="bg-slate-50 text-[8.5px] text-slate-600 italic font-medium">
+                      <td colSpan={6} className="border border-black p-1 text-center">
                         (+ {(viewLedgerAccount?.transactions?.length || 0) - 8} additional ledger entries recorded in SPD Portal)
                       </td>
                     </tr>
                   )}
                   {(!viewLedgerAccount?.transactions || viewLedgerAccount.transactions.length === 0) && (
                     <tr>
-                      <td colSpan={6} className="border border-slate-300 p-2 text-center text-slate-400 italic">
+                      <td colSpan={6} className="border border-black p-3 text-center text-slate-400 italic">
                         No transactions on record for this account.
                       </td>
                     </tr>

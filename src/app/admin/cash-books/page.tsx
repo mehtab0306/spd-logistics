@@ -1535,63 +1535,75 @@ function CashBooksContent() {
           );
         })()}
 
-        {/* Transactions Table */}
-        <div>
+        {/* Transactions Table - 100% fixed auto-fit */}
+        <div className="w-full overflow-hidden">
           <p className="text-[11px] font-black uppercase text-slate-800 mb-1">
             Day Book Itemized Transaction Register ({filteredTransactions.length} Entries)
           </p>
-          <table className="w-full border-collapse border border-slate-300 text-[10px]">
+          <table
+            className="w-full border-collapse border border-black text-[9px] table-fixed"
+            style={{ width: "100%", tableLayout: "fixed" }}
+          >
+            <colgroup>
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "23%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "10%" }} />
+            </colgroup>
             <thead>
-              <tr className="bg-slate-100 text-slate-800">
-                <th className="border border-slate-300 p-1.5 text-left w-20">Date</th>
-                <th className="border border-slate-300 p-1.5 text-left w-24">Voucher #</th>
-                <th className="border border-slate-300 p-1.5 text-left">Description & Category</th>
-                <th className="border border-slate-300 p-1.5 text-left">Party / Vendor</th>
-                <th className="border border-slate-300 p-1.5 text-left">Vehicle / Driver</th>
-                <th className="border border-slate-300 p-1.5 text-right text-emerald-700 font-bold w-24">Cash IN</th>
-                <th className="border border-slate-300 p-1.5 text-right text-rose-700 font-bold w-24">Cash OUT</th>
-                <th className="border border-slate-300 p-1.5 text-right font-black text-slate-900 w-24">Balance</th>
+              <tr className="bg-slate-100 text-black text-center font-bold">
+                <th className="border border-black p-1">Date</th>
+                <th className="border border-black p-1">Voucher #</th>
+                <th className="border border-black p-1 text-left">Description</th>
+                <th className="border border-black p-1 text-left">Party / Vendor</th>
+                <th className="border border-black p-1">Vehicle / Ref</th>
+                <th className="border border-black p-1 text-right text-emerald-700">Cash IN</th>
+                <th className="border border-black p-1 text-right text-rose-700">Cash OUT</th>
+                <th className="border border-black p-1 text-right">Balance</th>
               </tr>
             </thead>
             <tbody>
               {filteredTransactions.map((tx: any, idx: number) => (
                 <tr key={tx.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                  <td className="border border-slate-300 p-1 whitespace-nowrap font-mono text-[9px]">
+                  <td className="border border-black p-1 text-center whitespace-nowrap font-mono text-[8.5px] truncate">
                     {tx.date ? new Date(tx.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
                   </td>
-                  <td className="border border-slate-300 p-1 font-mono font-bold text-slate-800">
+                  <td className="border border-black p-1 font-mono font-bold text-slate-800 truncate">
                     {tx.voucherNumber || tx.id?.slice(0, 8)}
                   </td>
-                  <td className="border border-slate-300 p-1">
-                    <div className="font-semibold text-slate-900">{tx.description || tx.category}</div>
-                    <div className="text-[9px] text-slate-500">{tx.category} • {tx.paymentMethod || "CASH"}</div>
+                  <td className="border border-black p-1 truncate">
+                    <div className="font-semibold text-slate-900 truncate">{tx.description || tx.category}</div>
+                    <div className="text-[8px] text-slate-500 truncate">{tx.category} • {tx.paymentMethod || "CASH"}</div>
                   </td>
-                  <td className="border border-slate-300 p-1 font-medium">
+                  <td className="border border-black p-1 font-medium truncate">
                     {tx.party || tx.accountPerson || "—"}
                   </td>
-                  <td className="border border-slate-300 p-1 font-mono text-[9px]">
+                  <td className="border border-black p-1 font-mono text-[8.5px] truncate">
                     {tx.vehicleNumber || tx.driverName || tx.challanNumber ? (
-                      <div>
+                      <div className="truncate">
                         {tx.vehicleNumber && <span className="font-bold">{tx.vehicleNumber} </span>}
                         {tx.driverName && <span>({tx.driverName}) </span>}
-                        {tx.challanNumber && <span className="text-blue-700 block">Challan: {tx.challanNumber}</span>}
                       </div>
                     ) : "—"}
                   </td>
-                  <td className="border border-slate-300 p-1 text-right font-mono font-bold text-emerald-700">
+                  <td className="border border-black p-1 text-right font-mono font-bold text-emerald-700 truncate">
                     {tx.credit > 0 ? formatCurrency(tx.credit) : "—"}
                   </td>
-                  <td className="border border-slate-300 p-1 text-right font-mono font-bold text-rose-700">
+                  <td className="border border-black p-1 text-right font-mono font-bold text-rose-700 truncate">
                     {tx.debit > 0 ? formatCurrency(tx.debit) : "—"}
                   </td>
-                  <td className="border border-slate-300 p-1 text-right font-mono font-black text-slate-900">
+                  <td className="border border-black p-1 text-right font-mono font-black text-slate-900 truncate">
                     {formatCurrency(tx.balance || 0)}
                   </td>
                 </tr>
               ))}
               {filteredTransactions.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="border border-slate-300 p-3 text-center text-slate-400 italic">
+                  <td colSpan={8} className="border border-black p-3 text-center text-slate-400 italic">
                     No cash transactions recorded for this period.
                   </td>
                 </tr>
@@ -1603,17 +1615,17 @@ function CashBooksContent() {
                 const totalOut = filteredTransactions.reduce((acc, t) => acc + (Number(t.debit) || 0), 0);
                 const netBal = (Number(selectedBook?.openingBalance) || 0) + totalIn - totalOut;
                 return (
-                  <tr className="bg-slate-100 font-black border-t-2 border-slate-400">
-                    <td colSpan={5} className="p-1.5 text-right uppercase text-[10px] text-slate-700">
-                      Register Totals ({filteredTransactions.length} Transactions):
+                  <tr className="bg-slate-100 font-black border-t-2 border-black text-[9px]">
+                    <td colSpan={5} className="p-1 text-right uppercase text-black">
+                      Register Totals ({filteredTransactions.length}):
                     </td>
-                    <td className="p-1.5 text-right font-mono text-emerald-700">
+                    <td className="p-1 text-right font-mono text-emerald-700 truncate">
                       +{formatCurrency(totalIn)}
                     </td>
-                    <td className="p-1.5 text-right font-mono text-rose-700">
+                    <td className="p-1 text-right font-mono text-rose-700 truncate">
                       -{formatCurrency(totalOut)}
                     </td>
-                    <td className="p-1.5 text-right font-mono text-slate-900">
+                    <td className="p-1 text-right font-mono text-slate-900 truncate">
                       {formatCurrency(netBal)}
                     </td>
                   </tr>
@@ -1701,70 +1713,90 @@ function CashBooksContent() {
               </div>
             </div>
 
-            {/* Itemized Party Transactions */}
-            <div>
+            {/* Itemized Party Transactions - 100% fixed auto-fit */}
+            <div className="w-full overflow-hidden">
               <p className="text-[11px] font-black uppercase text-slate-800 mb-1">
                 Itemized Chronological Transaction History ({partyStatementModal.transactions.length} Records)
               </p>
-              <table className="w-full border-collapse border border-slate-300 text-[10px]">
+              <table
+                className="w-full border-collapse border border-black text-[9px] table-fixed"
+                style={{ width: "100%", tableLayout: "fixed" }}
+              >
+                <colgroup>
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "23%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "12%" }} />
+                </colgroup>
                 <thead>
-                  <tr className="bg-slate-100 text-slate-800">
-                    <th className="border border-slate-300 p-1.5 text-left w-20">Date</th>
-                    <th className="border border-slate-300 p-1.5 text-left w-24">Voucher #</th>
-                    <th className="border border-slate-300 p-1.5 text-left">Description & Category</th>
-                    <th className="border border-slate-300 p-1.5 text-left w-28">Transport / Ref</th>
-                    <th className="border border-slate-300 p-1.5 text-center w-20">Payment Mode</th>
-                    <th className="border border-slate-300 p-1.5 text-right text-emerald-700 font-bold w-24">Cash IN (آمد)</th>
-                    <th className="border border-slate-300 p-1.5 text-right text-rose-700 font-bold w-24">Cash OUT (خرچہ)</th>
-                    <th className="border border-slate-300 p-1.5 text-right font-black text-slate-900 w-24">Running Balance</th>
+                  <tr className="bg-slate-100 text-black text-center font-bold">
+                    <th className="border border-black p-1">Date</th>
+                    <th className="border border-black p-1">Voucher #</th>
+                    <th className="border border-black p-1 text-left">Description</th>
+                    <th className="border border-black p-1">Transport / Ref</th>
+                    <th className="border border-black p-1">Mode</th>
+                    <th className="border border-black p-1 text-right text-emerald-700">Cash IN (آمد)</th>
+                    <th className="border border-black p-1 text-right text-rose-700">Cash OUT (خرچہ)</th>
+                    <th className="border border-black p-1 text-right">Running Balance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {partyStatementModal.transactions.map((tx: any, idx: number) => (
                     <tr key={tx.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                      <td className="border border-slate-300 p-1 whitespace-nowrap font-mono text-[9px]">
+                      <td className="border border-black p-1 text-center whitespace-nowrap font-mono text-[8.5px] truncate">
                         {tx.date ? new Date(tx.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
                       </td>
-                      <td className="border border-slate-300 p-1 font-mono font-bold text-slate-800">
+                      <td className="border border-black p-1 font-mono font-bold text-slate-800 truncate">
                         {tx.voucherNumber || tx.id?.slice(0, 8)}
                       </td>
-                      <td className="border border-slate-300 p-1">
-                        <div className="font-semibold text-slate-900">{tx.description || tx.category}</div>
-                        <div className="text-[9px] text-slate-500">{tx.category}</div>
+                      <td className="border border-black p-1 truncate">
+                        <div className="font-semibold text-slate-900 truncate">{tx.description || tx.category}</div>
+                        <div className="text-[8px] text-slate-500 truncate">{tx.category}</div>
                       </td>
-                      <td className="border border-slate-300 p-1 font-mono text-[9px]">
-                        {tx.biltyNumber && <div>Bilty: <span className="font-bold">{tx.biltyNumber}</span></div>}
-                        {tx.challanNumber && <div>Challan: <span className="font-bold">{tx.challanNumber}</span></div>}
-                        {tx.vehicleNumber && <div>Vehicle: {tx.vehicleNumber}</div>}
+                      <td className="border border-black p-1 font-mono text-[8.5px] truncate">
+                        {tx.biltyNumber && <span className="block truncate">Bilty: <strong>{tx.biltyNumber}</strong></span>}
+                        {tx.challanNumber && <span className="block truncate">Chl: <strong>{tx.challanNumber}</strong></span>}
+                        {tx.vehicleNumber && <span className="block truncate">Veh: {tx.vehicleNumber}</span>}
                         {!tx.biltyNumber && !tx.challanNumber && !tx.vehicleNumber && "—"}
                       </td>
-                      <td className="border border-slate-300 p-1 text-center font-mono uppercase text-[9px]">
+                      <td className="border border-black p-1 text-center font-mono uppercase text-[8.5px] truncate">
                         {tx.paymentMethod || "CASH"}
                       </td>
-                      <td className="border border-slate-300 p-1 text-right font-mono font-bold text-emerald-700">
+                      <td className="border border-black p-1 text-right font-mono font-bold text-emerald-700 truncate">
                         {tx.credit > 0 ? formatCurrency(tx.credit) : "—"}
                       </td>
-                      <td className="border border-slate-300 p-1 text-right font-mono font-bold text-rose-700">
+                      <td className="border border-black p-1 text-right font-mono font-bold text-rose-700 truncate">
                         {tx.debit > 0 ? formatCurrency(tx.debit) : "—"}
                       </td>
-                      <td className="border border-slate-300 p-1 text-right font-mono font-black text-slate-900">
+                      <td className="border border-black p-1 text-right font-mono font-black text-slate-900 truncate">
                         {formatCurrency(tx.partyRunningBalance || 0)}
                       </td>
                     </tr>
                   ))}
+                  {partyStatementModal.transactions.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="border border-black p-3 text-center text-slate-400 italic">
+                        No transactions recorded for this party.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-slate-100 font-black border-t-2 border-slate-400">
-                    <td colSpan={5} className="p-1.5 text-right uppercase text-[10px] text-slate-700">
-                      Party Totals ({partyStatementModal.transactions.length} Transactions):
+                  <tr className="bg-slate-100 font-black border-t-2 border-black text-[9px]">
+                    <td colSpan={5} className="p-1 text-right uppercase text-black">
+                      Party Totals ({partyStatementModal.transactions.length}):
                     </td>
-                    <td className="p-1.5 text-right font-mono text-emerald-700">
+                    <td className="p-1 text-right font-mono text-emerald-700 truncate">
                       +{formatCurrency(partyStatementModal.totalIn)}
                     </td>
-                    <td className="p-1.5 text-right font-mono text-rose-700">
+                    <td className="p-1 text-right font-mono text-rose-700 truncate">
                       -{formatCurrency(partyStatementModal.totalOut)}
                     </td>
-                    <td className="p-1.5 text-right font-mono text-slate-900">
+                    <td className="p-1 text-right font-mono text-slate-900 truncate">
                       {formatCurrency(partyStatementModal.balance)}
                     </td>
                   </tr>

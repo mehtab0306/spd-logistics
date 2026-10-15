@@ -168,15 +168,23 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
 
         {/* Commercial Items & Freight Charges Table */}
         <div className="border border-black rounded overflow-hidden">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse table-fixed">
+            <colgroup>
+              <col style={{ width: "5%" }} />
+              <col style={{ width: "45%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "15%" }} />
+            </colgroup>
             <thead className="bg-slate-100 text-[9.5px] font-black uppercase border-b border-black">
               <tr>
-                <th className="p-2 border-r border-black text-center w-10">S#</th>
+                <th className="p-2 border-r border-black text-center">S#</th>
                 <th className="p-2 border-r border-black">Description of Transport & Freight Services</th>
-                <th className="p-2 border-r border-black text-center w-16">Qty</th>
-                <th className="p-2 border-r border-black text-right w-24">Weight (KG)</th>
-                <th className="p-2 border-r border-black text-center w-24">Basis</th>
-                <th className="p-2 text-right w-28">Amount (PKR)</th>
+                <th className="p-2 border-r border-black text-center">Qty</th>
+                <th className="p-2 border-r border-black text-right">Weight (KG)</th>
+                <th className="p-2 border-r border-black text-center">Basis</th>
+                <th className="p-2 text-right">Amount (PKR)</th>
               </tr>
             </thead>
             <tbody className="text-[10px]">

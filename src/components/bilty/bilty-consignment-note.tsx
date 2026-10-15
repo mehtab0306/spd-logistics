@@ -217,16 +217,25 @@ export function BiltyConsignmentNote({
 
         {/* Dynamic Cargo Items Table */}
         <div className="border border-black rounded overflow-hidden">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse table-fixed">
+            <colgroup>
+              <col style={{ width: "5%" }} />
+              <col style={{ width: "37%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "12%" }} />
+            </colgroup>
             <thead className="bg-slate-100 text-[9.5px] font-black uppercase border-b border-black">
               <tr>
-                <th className="p-1.5 border-r border-black text-center w-10">S#</th>
+                <th className="p-1.5 border-r border-black text-center">S#</th>
                 <th className="p-1.5 border-r border-black">Description of Goods / Packaging Marks</th>
-                <th className="p-1.5 border-r border-black text-center w-16">Quantity</th>
-                <th className="p-1.5 border-r border-black text-right w-24">Weight (KG)</th>
-                <th className="p-1.5 border-r border-black text-right w-24">Volume (CBM)</th>
-                <th className="p-1.5 border-r border-black text-center w-24">Freight Basis</th>
-                <th className="p-1.5 text-right w-28">Rate / Amount</th>
+                <th className="p-1.5 border-r border-black text-center">Quantity</th>
+                <th className="p-1.5 border-r border-black text-right">Weight (KG)</th>
+                <th className="p-1.5 border-r border-black text-right">Volume (CBM)</th>
+                <th className="p-1.5 border-r border-black text-center">Freight Basis</th>
+                <th className="p-1.5 text-right">Rate / Amount</th>
               </tr>
             </thead>
             <tbody className="text-[10px]">

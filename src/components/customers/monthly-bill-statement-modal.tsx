@@ -453,102 +453,144 @@ export function MonthlyBillStatementModal({
         <div
           id="customer-monthly-bill-printable"
           data-print-target="true"
-          className="printable-document font-sans text-black p-2 sm:p-4 bg-white space-y-3"
+          className="printable-document font-sans text-black p-3 sm:p-5 bg-white space-y-2.5 max-w-[194mm] mx-auto box-border"
         >
-          {/* Official Letterhead Header */}
-          <div className="border-b-2 border-black pb-2 text-center text-black font-sans">
-            <h1 className="text-lg sm:text-xl font-black tracking-tight text-red-600 uppercase">
-              SUPER PAK DATA WALE GOODS TRANSPORT CO.®
-            </h1>
-            <div className="mt-1 text-[10px] sm:text-[11px] leading-tight space-y-0.5 text-slate-800">
-              <p className="font-bold">
-                <span className="font-black text-black">HEAD OFFICE:</span> Plot No. 9, Gate No. 1, Street No. 4, Truck Stand Hawksbay Road, Karachi.
-              </p>
-              <p className="text-[10px] text-slate-700 font-mono">
-                Phones: 0300-2024433, 0321-2024433, 0312-2024433, 0302-2314433, 021-32351333
-              </p>
-              <p className="font-bold">
-                <span className="font-black text-black">BRANCH OFFICE:</span> Saggian Bypass, Near IGG House, Hazrat Ali Road Lahore.
-              </p>
-              <p className="text-[10px] text-slate-700 font-mono">
-                Phones: 0325-2024433, 0301-8264433, 0300-2928633
-              </p>
-              <p className="text-[9.5px] font-medium text-slate-600">
-                Email: superpakdatawale@gmail.com &bull; Website: superpakdata.com &bull; <strong className="text-black">IT NTN: 4774077-5</strong>
-              </p>
+          {/* Official Letterhead Header: Left-aligned oval SPD Logo with red/navy typography */}
+          <div className="border-b-2 border-black pb-2 text-black font-sans">
+            <div className="flex items-center gap-3">
+              <div className="shrink-0">
+                <img
+                  src="/images/spd-logo.jpg"
+                  alt="SPD Logo"
+                  className="w-16 h-16 sm:w-20 sm:h-20 object-contain rounded-full border-2 border-red-600 p-0.5 shadow-xs"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-base sm:text-lg font-black tracking-tight text-red-600 uppercase leading-none">
+                  SUPER PAK DATA WALE GOODS TRANSPORT CO.®
+                </h1>
+                <div className="mt-1 text-[9px] sm:text-[9.5px] leading-tight space-y-0.5 text-slate-800">
+                  <p className="font-bold text-slate-900">
+                    <span className="font-black text-blue-950">HEAD OFFICE:</span> Plot No.9, Gate No.1 Street No.4 Truck Stand, Hawksbay Road, Karachi.
+                  </p>
+                  <p className="font-semibold text-slate-800">
+                    <span className="font-bold text-blue-950">PHONE:</span> 0300-2024433, 0321-2024433, 0312-2024433, 0302-2314433, 021-32351333
+                  </p>
+                  <p className="font-bold text-slate-900">
+                    <span className="font-black text-blue-950">BRANCH OFFICE:</span> Saggian Bypass, Near IGG House, Hazrat Ali Road Lahore.
+                  </p>
+                  <p className="font-semibold text-slate-800">
+                    <span className="font-bold text-blue-950">Phone:</span> 0325-2024433, 0301-8264433, 0300-2928633
+                  </p>
+                  <p className="text-[8.5px] font-medium text-slate-700">
+                    Email: superpakdatawale@gmail.com &bull; Website: superpakdata.com &bull; <strong className="text-black">IT NTN: 4774077-5</strong>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Document Title Banner */}
-          <div className="flex items-center justify-between border-b border-black pb-1.5 pt-0.5">
-            <div>
-              <p className="text-[9px] font-bold uppercase text-slate-600">BILL TO:</p>
-              <h2 className="text-xs sm:text-sm font-black text-black uppercase">
+          {/* Centered Underlined Title */}
+          <div className="text-center py-0.5">
+            <h2 className="text-base font-black tracking-widest text-black uppercase underline decoration-2 underline-offset-4">
+              BILL
+            </h2>
+          </div>
+
+          {/* Client Block & Billing Metadata */}
+          <div className="flex items-start justify-between border-y border-black py-1.5 px-1 text-xs">
+            <div className="space-y-0.5 max-w-[65%]">
+              <p className="text-[9px] font-black uppercase text-slate-600 tracking-wider">
+                BILL TO,
+              </p>
+              <h3 className="text-xs sm:text-sm font-black text-black uppercase">
                 M/S {customer.companyName || customer.name}
-              </h2>
+              </h3>
               {customer.address && (
-                <p className="text-[10px] text-slate-600 font-medium">{customer.address}</p>
+                <p className="text-[9.5px] text-slate-700 font-medium leading-snug">
+                  {customer.address}
+                </p>
               )}
               {customer.phone && (
-                <p className="text-[10px] text-slate-600 font-mono">Ph: {customer.phone}</p>
+                <p className="text-[9.5px] text-slate-800 font-mono font-bold">
+                  Ph: {customer.phone}
+                </p>
               )}
             </div>
 
-            <div className="text-right">
-              <div className="inline-block px-3 py-1 bg-black text-white font-black text-sm uppercase rounded-xs tracking-wider">
-                BILL
-              </div>
-              <p className="text-[10px] font-bold text-slate-800 mt-1 uppercase">
-                Period: <span className="font-black text-black">{statementPeriodLabel}</span>
+            <div className="text-right space-y-0.5">
+              <p className="text-[9.5px] font-bold text-slate-800 uppercase">
+                Statement Period: <span className="font-black text-black">{statementPeriodLabel}</span>
               </p>
-              <p className="text-[9px] text-slate-600">
+              <p className="text-[9.5px] font-mono text-slate-700">
                 Date: {new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" })}
+              </p>
+              <p className="text-[9px] font-mono text-slate-500">
+                Total Consignments: <strong className="text-black">{parsedRows.length}</strong>
               </p>
             </div>
           </div>
 
-          {/* Structured Statement Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-black text-[9.5px] sm:text-[10px]">
+          {/* Structured Statement Table - Strictly 100% width with fixed percentages */}
+          <div className="w-full overflow-hidden">
+            <table
+              className="w-full border-collapse border border-black text-[9px] table-fixed"
+              style={{ width: "100%", tableLayout: "fixed" }}
+            >
+              <colgroup>
+                <col style={{ width: "4%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "8%" }} />
+                <col style={{ width: "9%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
               <thead>
                 <tr className="bg-slate-100 font-black text-black text-center uppercase tracking-tight">
-                  <th className="border border-black p-1 w-8">S.NO</th>
-                  <th className="border border-black p-1 w-16">DATE</th>
-                  <th className="border border-black p-1 w-24">BILTY NO</th>
-                  <th className="border border-black p-1 w-12 bg-amber-50">QTY</th>
-                  <th className="border border-black p-1 w-12">PIPE</th>
-                  <th className="border border-black p-1 w-12">PATI</th>
-                  <th className="border border-black p-1 w-12">BORA</th>
-                  <th className="border border-black p-1 w-12">CTN L</th>
-                  <th className="border border-black p-1 w-12">CTN S</th>
-                  <th className="border border-black p-1 text-right w-24">FREIGHT AMOUNT</th>
-                  <th className="border border-black p-1 text-right w-16">GODOWN</th>
-                  <th className="border border-black p-1 text-right w-16">LABOUR</th>
-                  <th className="border border-black p-1 text-right w-24 bg-slate-200">TOTAL</th>
+                  <th className="border border-black p-1">S.NO</th>
+                  <th className="border border-black p-1">DATE</th>
+                  <th className="border border-black p-1">BILTY NO</th>
+                  <th className="border border-black p-1 bg-amber-50">QTY</th>
+                  <th className="border border-black p-1">PIPE</th>
+                  <th className="border border-black p-1">PATI</th>
+                  <th className="border border-black p-1">BORA</th>
+                  <th className="border border-black p-1">CTN L</th>
+                  <th className="border border-black p-1">CTN S</th>
+                  <th className="border border-black p-1 text-right">AMOUNT</th>
+                  <th className="border border-black p-1 text-right">GODOWN</th>
+                  <th className="border border-black p-1 text-right">LABOUR</th>
+                  <th className="border border-black p-1 text-right bg-slate-200">TOTAL</th>
                 </tr>
               </thead>
               <tbody>
                 {parsedRows.map((row) => (
                   <tr key={row.sNo} className="hover:bg-slate-50 transition-colors">
-                    <td className="border border-black p-1 text-center font-mono font-bold">{row.sNo}</td>
-                    <td className="border border-black p-1 text-center whitespace-nowrap font-mono">{row.date}</td>
-                    <td className="border border-black p-1 font-mono font-bold text-slate-900">{row.biltyNo}</td>
+                    <td className="border border-black p-1 text-center font-mono font-bold truncate">{row.sNo}</td>
+                    <td className="border border-black p-1 text-center whitespace-nowrap font-mono truncate">{row.date}</td>
+                    <td className="border border-black p-1 font-mono font-bold text-slate-900 truncate">{row.biltyNo}</td>
                     <td className="border border-black p-1 text-center font-bold bg-amber-50/40">{row.qty}</td>
                     <td className="border border-black p-1 text-center font-mono">{row.pipe || "—"}</td>
                     <td className="border border-black p-1 text-center font-mono">{row.pati || "—"}</td>
                     <td className="border border-black p-1 text-center font-mono">{row.bora || "—"}</td>
                     <td className="border border-black p-1 text-center font-mono">{row.ctnL || "—"}</td>
                     <td className="border border-black p-1 text-center font-mono">{row.ctnS || "—"}</td>
-                    <td className="border border-black p-1 text-right font-mono font-semibold">
+                    <td className="border border-black p-1 text-right font-mono font-semibold truncate">
                       {row.freightAmount > 0 ? formatCurrency(row.freightAmount) : "—"}
                     </td>
-                    <td className="border border-black p-1 text-right font-mono">
+                    <td className="border border-black p-1 text-right font-mono truncate">
                       {row.godown > 0 ? formatCurrency(row.godown) : "—"}
                     </td>
-                    <td className="border border-black p-1 text-right font-mono">
+                    <td className="border border-black p-1 text-right font-mono truncate">
                       {row.labour > 0 ? formatCurrency(row.labour) : "—"}
                     </td>
-                    <td className="border border-black p-1 text-right font-mono font-black text-black bg-slate-100/50">
+                    <td className="border border-black p-1 text-right font-mono font-black text-black bg-slate-100/50 truncate">
                       {formatCurrency(row.total)}
                     </td>
                   </tr>
@@ -564,8 +606,8 @@ export function MonthlyBillStatementModal({
               </tbody>
               <tfoot>
                 <tr className="bg-slate-100 font-black border-t-2 border-black text-black">
-                  <td colSpan={3} className="border border-black p-1.5 text-center font-black uppercase text-[10px]">
-                    TOTAL ({parsedRows.length} BILTIES):
+                  <td colSpan={3} className="border border-black p-1.5 text-center font-black uppercase text-[9px]">
+                    TOTAL ({parsedRows.length}):
                   </td>
                   <td className="border border-black p-1.5 text-center font-black text-black bg-amber-100">
                     {totals.qty}
@@ -575,16 +617,16 @@ export function MonthlyBillStatementModal({
                   <td className="border border-black p-1.5 text-center font-mono">{totals.bora || 0}</td>
                   <td className="border border-black p-1.5 text-center font-mono">{totals.ctnL || 0}</td>
                   <td className="border border-black p-1.5 text-center font-mono">{totals.ctnS || 0}</td>
-                  <td className="border border-black p-1.5 text-right font-mono font-black">
+                  <td className="border border-black p-1.5 text-right font-mono font-black truncate">
                     {formatCurrency(totals.freightAmount)}
                   </td>
-                  <td className="border border-black p-1.5 text-right font-mono font-bold">
+                  <td className="border border-black p-1.5 text-right font-mono font-bold truncate">
                     {formatCurrency(totals.godown)}
                   </td>
-                  <td className="border border-black p-1.5 text-right font-mono font-bold">
+                  <td className="border border-black p-1.5 text-right font-mono font-bold truncate">
                     {formatCurrency(totals.labour)}
                   </td>
-                  <td className="border border-black p-1.5 text-right font-mono font-black text-black bg-slate-200">
+                  <td className="border border-black p-1.5 text-right font-mono font-black text-black bg-slate-200 truncate">
                     {formatCurrency(totals.total)}
                   </td>
                 </tr>
@@ -593,26 +635,26 @@ export function MonthlyBillStatementModal({
           </div>
 
           {/* Official Signatures & Stamp Box Footer */}
-          <div className="pt-6 mt-4 border-t border-black break-inside-avoid">
+          <div className="pt-4 mt-3 border-t border-black break-inside-avoid">
             <div className="flex items-end justify-between text-xs">
-              <div className="space-y-1">
-                <p className="text-[10px] text-slate-600 font-medium">
-                  Terms: Payment strictly due upon receipt of this official freight bill statement.
+              <div className="space-y-1 max-w-[55%]">
+                <p className="text-[9.5px] text-slate-700 font-medium leading-tight">
+                  <strong className="text-black uppercase">Notice:</strong> Payment strictly due upon receipt of this official freight bill statement.
                 </p>
-                <p className="text-[10px] text-slate-600 font-medium">
-                  All cargo delivered subject to Super Pak Data standard goods transport carriage conditions.
+                <p className="text-[9px] text-slate-600 font-medium leading-tight">
+                  All consignments delivered subject to Super Pak Data standard goods transport carriage terms and conditions.
                 </p>
               </div>
 
-              <div className="text-center min-w-[240px]">
-                <div className="h-14 border border-dashed border-slate-400 rounded-sm mb-1 flex items-center justify-center text-[10px] text-slate-400 italic">
-                  Official Transport Stamp Placement
+              <div className="text-center min-w-[220px]">
+                <div className="h-12 border border-dashed border-slate-400 rounded-sm mb-1 flex items-center justify-center text-[9px] text-slate-400 italic">
+                  Official Transport Stamp
                 </div>
                 <div className="border-t-2 border-black pt-1">
-                  <p className="font-black text-xs uppercase tracking-tight text-black">
+                  <p className="font-black text-[11px] uppercase tracking-tight text-black">
                     PROPRIETOR
                   </p>
-                  <p className="font-bold text-[10px] uppercase text-red-600">
+                  <p className="font-bold text-[9px] uppercase text-red-600">
                     SUPER PAK DATA WALE GOODS TRANSPORT CO.
                   </p>
                 </div>

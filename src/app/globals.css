@@ -155,30 +155,34 @@
 
   /* Universal Corporate A4 Print styles */
   @page {
-    size: A4 portrait !important;
-    margin: 10mm !important;
+    size: A4 portrait;
+    margin: 8mm 8mm 8mm 8mm; /* Clean uniform 8mm margin */
   }
 
   @media print {
     @page {
-      size: A4 portrait !important;
-      margin: 10mm !important;
+      size: A4 portrait;
+      margin: 8mm 8mm 8mm 8mm;
     }
 
-    /* 1. Global Reset & Body Protection */
+    *, *::before, *::after {
+      box-sizing: border-box !important;
+    }
+
     html, body {
       width: 100% !important;
-      height: auto !important;
-      background: #ffffff !important;
-      color: #000000 !important;
+      max-width: 100% !important;
       margin: 0 !important;
       padding: 0 !important;
-      overflow: visible !important;
+      background: #ffffff !important;
+      color: #000000 !important;
+      font-family: Arial, Helvetica, sans-serif !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      overflow: visible !important;
     }
 
-    /* 2. Strictly hide all background dashboard wrappers, directory tables, sidebars, headers, and UI elements */
+    /* 1. Hide everything except printable targets */
     header, aside, nav, footer, button, input, select, textarea, .no-print, .print\:hidden,
     [role="navigation"], [role="banner"], [role="search"], [role="tablist"],
     .chakra-portal:not(.print-target-portal), .pagination, .theme-toggle,
@@ -186,7 +190,6 @@
       display: none !important;
     }
 
-    /* When a printable modal or document is open, hide the parent page completely */
     body:has(.printable-document) > *:not(:has(.printable-document)),
     body:has([data-print-target="true"]) > *:not(:has([data-print-target="true"])) {
       display: none !important;
@@ -218,11 +221,11 @@
       top: auto !important;
       left: auto !important;
       transform: none !important;
-      max-width: 100% !important;
+      max-width: 194mm !important;
       width: 100% !important;
       height: auto !important;
       max-height: none !important;
-      margin: 0 !important;
+      margin: 0 auto !important;
       padding: 0 !important;
       background: #ffffff !important;
       box-shadow: none !important;
@@ -248,41 +251,54 @@
       border: none !important;
     }
 
-    /* 3. Pure A4 Portrait Document Isolation */
+    /* 2. Container strict constraint - Never overflow A4 */
     .printable-document, [data-print-target="true"], .print-page-target,
     #customer-monthly-bill-printable,
     #printable-statement,
     #printable-bilty,
+    #printable-freight-bill,
+    #printable-sales-tax-invoice,
     #challan-printable-content,
     #cash-book-printable,
     #party-statement-printable,
     #payables-printable,
     #receivables-printable,
+    #gate-pass-print-area,
+    #pod-print-area,
     #gate-pass-printable,
     #pod-receipt-printable {
       display: block !important;
       position: static !important;
       width: 100% !important;
-      max-width: 100% !important;
+      max-width: 194mm !important; /* Strictly fits printable width of A4 portrait (210mm - 16mm margins = 194mm) */
       margin: 0 auto !important;
       padding: 0 !important;
+      background: #ffffff !important;
+      color: #000000 !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important; /* Prevents edge spilling */
       box-shadow: none !important;
       border: none !important;
       visibility: visible !important;
       page-break-after: avoid !important;
       page-break-before: avoid !important;
-      background: #ffffff !important;
-      color: #000000 !important;
     }
 
-    /* 4. Crisp Corporate Tables (No Awkward Page Breaks) */
+    /* 3. Tables auto-fit with sharp solid black borders */
     table, .print-table {
       width: 100% !important;
-      border-collapse: collapse !important;
-      font-size: 10px !important;
+      max-width: 100% !important;
       table-layout: auto !important;
-      border: 1px solid #111111 !important;
+      border-collapse: collapse !important;
+      margin: 6px 0 !important;
+      box-sizing: border-box !important;
+      page-break-inside: auto !important;
+      border: 1px solid #000000 !important;
       background: #ffffff !important;
+    }
+
+    table.table-fixed, table[class*="table-fixed"] {
+      table-layout: fixed !important;
     }
 
     thead {
@@ -294,14 +310,18 @@
     }
 
     th, td, .print-table th, .print-table td {
-      border: 1px solid #111111 !important;
-      padding: 4px 6px !important;
+      border: 1px solid #000000 !important;
+      padding: 3px 5px !important;
+      font-size: 9.5px !important;
+      line-height: 1.2 !important;
       color: #000000 !important;
+      word-break: break-word !important;
     }
 
     th, .print-table th {
-      background-color: #f1f5f9 !important;
-      font-weight: 700 !important;
+      background-color: #f2f2f2 !important;
+      font-weight: bold !important;
+      text-align: center !important;
       text-transform: uppercase !important;
     }
 

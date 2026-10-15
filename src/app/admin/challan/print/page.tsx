@@ -189,101 +189,126 @@ function ChallanPrintContent() {
           </div>
         </div>
 
-        {/* Loaded Bilties Table */}
-        <div className="border border-black rounded-lg overflow-hidden">
-          <table className="w-full text-left text-[11px] border-collapse">
+        {/* Loaded Bilties Table - Fixed 100% width auto-fit without horizontal cutoff */}
+        <div className="w-full overflow-hidden">
+          <table
+            className="w-full text-left text-[9px] border-collapse border border-black table-fixed"
+            style={{ width: "100%", tableLayout: "fixed" }}
+          >
+            <colgroup>
+              <col style={{ width: "4%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "11%" }} />
+            </colgroup>
             <thead>
-              <tr className="bg-slate-100 text-black font-bold text-[10px] uppercase border-b border-black">
-                <th className="p-2 border-r border-black w-8">#</th>
-                <th className="p-2 border-r border-black">Bilty #</th>
-                <th className="p-2 border-r border-black">Shipper / Sender</th>
-                <th className="p-2 border-r border-black">Consignee / Receiver</th>
-                <th className="p-2 border-r border-black">Goods / Description</th>
-                <th className="p-2 border-r border-black text-center">Qty</th>
-                <th className="p-2 border-r border-black text-right">Weight & CBM</th>
-                <th className="p-2 border-r border-black text-right">Freight</th>
-                <th className="p-2 text-center">Status</th>
+              <tr className="bg-slate-100 text-black font-bold text-[9px] uppercase border-b border-black text-center">
+                <th className="p-1 border border-black">#</th>
+                <th className="p-1 border border-black">Bilty #</th>
+                <th className="p-1 border border-black">Booking Date</th>
+                <th className="p-1 border border-black">Sender</th>
+                <th className="p-1 border border-black">Receiver</th>
+                <th className="p-1 border border-black">Packages</th>
+                <th className="p-1 border border-black">Cargo Details</th>
+                <th className="p-1 border border-black">Weight</th>
+                <th className="p-1 border border-black">Freight Mode</th>
+                <th className="p-1 border border-black text-right">Balance</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-black">
+            <tbody>
               {bilties.map((b: any, idx: number) => (
                 <tr key={b.id || idx}>
-                  <td className="p-2 border-r border-black font-mono text-slate-600">{idx + 1}</td>
-                  <td className="p-2 border-r border-black font-bold font-mono text-red-700">
+                  <td className="p-1 border border-black text-center font-mono font-bold">{idx + 1}</td>
+                  <td className="p-1 border border-black font-bold font-mono text-red-700 truncate">
                     {b.biltyNumber}
                   </td>
-                  <td className="p-2 border-r border-black">
-                    <span className="font-semibold block">{b.senderName}</span>
-                    <span className="text-[9px] text-slate-600 font-mono">{b.senderPhone}</span>
+                  <td className="p-1 border border-black text-center font-mono whitespace-nowrap truncate">
+                    {formatDate(b.date || b.createdAt)}
                   </td>
-                  <td className="p-2 border-r border-black">
-                    <span className="font-semibold block">{b.receiverName}</span>
-                    <span className="text-[9px] text-slate-600 font-mono">{b.receiverPhone}</span>
+                  <td className="p-1 border border-black truncate">
+                    <span className="font-semibold block truncate">{b.senderName}</span>
+                    <span className="text-[8px] text-slate-500 font-mono block truncate">{b.senderPhone}</span>
                   </td>
-                  <td className="p-2 border-r border-black text-slate-800 font-medium">
+                  <td className="p-1 border border-black truncate">
+                    <span className="font-semibold block truncate">{b.receiverName}</span>
+                    <span className="text-[8px] text-slate-500 font-mono block truncate">{b.receiverPhone}</span>
+                  </td>
+                  <td className="p-1 border border-black text-center font-bold font-mono">
+                    {b.quantity || 1}
+                  </td>
+                  <td className="p-1 border border-black text-slate-800 truncate">
                     {b.packageDetails || b.description || "General Cargo"}
                   </td>
-                  <td className="p-2 border-r border-black text-center font-bold font-mono">{b.quantity || 1}</td>
-                  <td className="p-2 border-r border-black text-right font-mono whitespace-nowrap">
-                    {b.weight
-                      ? `${b.weight} kg | ${b.cbm || (Math.round((Number(b.weight) / 330) * 10) / 10).toFixed(1)} CBM`
-                      : "—"}
+                  <td className="p-1 border border-black text-center font-mono whitespace-nowrap truncate">
+                    {b.weight ? `${b.weight} kg` : "—"}
                   </td>
-                  <td className="p-2 border-r border-black text-right font-bold font-mono">
-                    {formatCurrency(b.freight || b.totalAmount || 0)}
+                  <td className="p-1 border border-black text-center font-bold uppercase text-[8.5px] truncate">
+                    {b.freightAsPer || b.amountType || b.paymentStatus || "To Pay"}
                   </td>
-                  <td className="p-2 text-center font-bold text-[10px]">
-                    <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-900">
-                      {b.paymentStatus || (b.remainingBalance <= 0 ? "PAID" : "TO-PAY")}
-                    </span>
+                  <td className="p-1 border border-black text-right font-black font-mono text-black truncate">
+                    {formatCurrency(b.remainingBalance !== undefined ? b.remainingBalance : (b.freight || b.totalAmount || 0))}
                   </td>
                 </tr>
               ))}
+              {bilties.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="p-3 text-center text-slate-400 italic border border-black">
+                    No consignments loaded on this challan trip.
+                  </td>
+                </tr>
+              )}
             </tbody>
             <tfoot>
-              <tr className="bg-slate-100 font-black border-t-2 border-black">
-                <td colSpan={5} className="p-2 text-right uppercase text-[10px] text-black">
+              <tr className="bg-slate-100 font-black border-t-2 border-black text-[9px]">
+                <td colSpan={5} className="p-1 text-right uppercase text-black">
                   Manifest Totals ({bilties.length} Bilties):
                 </td>
-                <td className="p-2 text-center font-mono">{totalPackages}</td>
-                <td className="p-2 text-right font-mono">{totalWeight} kg</td>
-                <td className="p-2 text-right font-mono text-red-700">
+                <td className="p-1 text-center font-mono">{totalPackages}</td>
+                <td></td>
+                <td className="p-1 text-center font-mono">{totalWeight} kg</td>
+                <td></td>
+                <td className="p-1 text-right font-mono text-red-700 truncate">
                   {formatCurrency(totalFreight)}
                 </td>
-                <td></td>
               </tr>
             </tfoot>
           </table>
         </div>
 
-        {/* Trip Financial Ledger */}
-        <div className="grid grid-cols-4 gap-2 border border-black p-3 rounded-lg text-xs bg-slate-50">
+        {/* Trip Financial Ledger & Driver Advance Slip */}
+        <div className="grid grid-cols-4 gap-2 border border-black p-2.5 rounded-lg text-xs bg-slate-50">
           <div>
-            <span className="text-[10px] text-slate-500 font-bold uppercase block">Gross Bilty Freight</span>
+            <span className="text-[9px] text-slate-500 font-bold uppercase block">Gross Bilty Freight</span>
             <span className="font-black text-black font-mono">{formatCurrency(challan.totalBiltyFreight || totalFreight)}</span>
           </div>
           <div>
-            <span className="text-[10px] text-slate-500 font-bold uppercase block">Truck Hire / Freight</span>
+            <span className="text-[9px] text-slate-500 font-bold uppercase block">Truck Hire / Freight</span>
             <span className="font-black text-black font-mono">{formatCurrency(challan.truckFreight || 0)}</span>
           </div>
           <div>
-            <span className="text-[10px] text-slate-500 font-bold uppercase block">Trip Advance to Driver</span>
+            <span className="text-[9px] text-slate-500 font-bold uppercase block">Trip Advance to Driver</span>
             <span className="font-black text-emerald-800 font-mono">{formatCurrency(challan.advancePaidToDriver || 0)}</span>
           </div>
           <div>
-            <span className="text-[10px] text-slate-500 font-bold uppercase block">Driver Balance Due</span>
+            <span className="text-[9px] text-slate-500 font-bold uppercase block">Driver Balance Due</span>
             <span className="font-black text-red-700 font-mono">
               {formatCurrency(challan.driverBalancePayable || 0)}
             </span>
           </div>
         </div>
 
-        {/* Official Transport Signatures & Legal Carrier Notice */}
+        {/* Official Transport Signatures & 3-Part Carrier Slips */}
         <PrintFooter
           notes="NOTICE TO CARRIER: The driver and transport operator acknowledge receipt of the above listed commercial packages in good order and condition. Goods must be delivered directly to the designated receiving hub without unauthorized diversion or delay. In case of accident, breakdown, or delay, notify the central dispatch office immediately."
           preparedByLabel="Prepared By"
-          checkedByLabel="Checked By"
-          authorizedLabel="Authorized Signature"
+          checkedByLabel="Driver Signature"
+          authorizedLabel="Station Manager"
         />
       </div>
     </div>
