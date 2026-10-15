@@ -432,7 +432,44 @@ export function removeStoredBroker(id: string): any[] {
 }
 
 // ==========================================
-// 7. UNIVERSAL CROSS-DEVICE SERVER SYNC
+// 7. DELIVERIES (`spd_deliveries` & `spd_local_deliveries`)
+// ==========================================
+export const DELIVERIES_KEY = "spd_deliveries";
+export const LOCAL_DELIVERIES_KEY = "spd_local_deliveries";
+
+export function getStoredDeliveries(): any[] {
+  return readMergedStorage(DELIVERIES_KEY, LOCAL_DELIVERIES_KEY, "consignment").filter(
+    (d) => d && (d.id || d.biltyNumber || d.challanNumber)
+  );
+}
+
+export function saveStoredDelivery(deliveryItem: any): any[] {
+  if (!deliveryItem) return getStoredDeliveries();
+  const cleanId = String(deliveryItem.id || deliveryItem.biltyNumber || `del-${Date.now()}`);
+  const list = getStoredDeliveries();
+  const idx = list.findIndex(
+    (d) =>
+      String(d.id) === cleanId ||
+      (d.biltyNumber && deliveryItem.biltyNumber && String(d.biltyNumber).toUpperCase() === String(deliveryItem.biltyNumber).toUpperCase())
+  );
+  const normalized = { ...deliveryItem, id: cleanId };
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...normalized };
+  } else {
+    list.unshift(normalized);
+  }
+  writeDualStorage(DELIVERIES_KEY, LOCAL_DELIVERIES_KEY, list);
+  return list;
+}
+
+export function removeStoredDelivery(id: string): any[] {
+  const list = getStoredDeliveries().filter((d) => String(d.id) !== String(id) && String(d.biltyNumber) !== String(id));
+  writeDualStorage(DELIVERIES_KEY, LOCAL_DELIVERIES_KEY, list);
+  return list;
+}
+
+// ==========================================
+// 8. UNIVERSAL CROSS-DEVICE SERVER SYNC
 // ==========================================
 let isSyncing = false;
 

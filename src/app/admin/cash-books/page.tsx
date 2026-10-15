@@ -210,6 +210,18 @@ function CashBooksContent() {
   const [txFormData, setTxFormData] = useState(initialTxState);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
+  // Dedicated Party Statement & Export state
+  interface PartyStatementData {
+    partyName: string;
+    transactions: any[];
+    totalIn: number;
+    totalOut: number;
+    balance: number;
+    dateRange: string;
+  }
+  const [partyStatementModal, setPartyStatementModal] = useState<PartyStatementData | null>(null);
+  const [printTarget, setPrintTarget] = useState<"BOOK" | "PARTY">("BOOK");
+
   // Smart highlight hook
   const { highlightClass } = useSmartHighlight(transactions);
 
@@ -658,6 +670,116 @@ function CashBooksContent() {
     }
   };
 
+  // Helper to extract clean party name
+  const getTxPartyName = (t: TransactionItem): string => {
+    return (t.party || t.accountPerson || t.customer?.name || t.driverName || "").trim();
+  };
+
+  // Build statement for a party
+  const getPartyStatement = (partyName: string): PartyStatementData | null => {
+    const pName = partyName.trim();
+    if (!pName) return null;
+    const normalized = pName.toLowerCase();
+
+    const partyTxs = (transactions || [])
+      .filter((t) => getTxPartyName(t).toLowerCase() === normalized)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    if (partyTxs.length === 0) return null;
+
+    let running = 0;
+    const enrichedTxs = partyTxs.map((t) => {
+      const cr = Number(t.credit) || 0;
+      const dr = Number(t.debit) || 0;
+      running += (cr - dr);
+      return {
+        ...t,
+        partyRunningBalance: running,
+      };
+    });
+
+    const totalIn = enrichedTxs.reduce((sum, t) => sum + (Number(t.credit) || 0), 0);
+    const totalOut = enrichedTxs.reduce((sum, t) => sum + (Number(t.debit) || 0), 0);
+    const balance = totalIn - totalOut;
+
+    const dates = enrichedTxs.map((t) => t.date).filter(Boolean).sort();
+    const dateRange = dates.length > 0
+      ? `${new Date(dates[0]).toLocaleDateString("en-GB")} — ${new Date(dates[dates.length - 1]).toLocaleDateString("en-GB")}`
+      : "All Recorded Entries";
+
+    return {
+      partyName: pName,
+      transactions: enrichedTxs,
+      totalIn,
+      totalOut,
+      balance,
+      dateRange,
+    };
+  };
+
+  // Open statement modal
+  const handleOpenPartyStatement = (partyName: string) => {
+    const statement = getPartyStatement(partyName);
+    if (!statement) {
+      setFeedback({ type: "error", message: `No ledger records found for party: ${partyName}` });
+      return;
+    }
+    setPartyStatementModal(statement);
+  };
+
+  // Print party statement (A4)
+  const handlePrintPartyStatement = (partyName: string) => {
+    const statement = getPartyStatement(partyName);
+    if (!statement) {
+      setFeedback({ type: "error", message: `No ledger records found for party: ${partyName}` });
+      return;
+    }
+    setPartyStatementModal(statement);
+    setPrintTarget("PARTY");
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
+  // Export single party ledger to Excel (.xlsx)
+  const handleExportPartyExcel = (partyName: string) => {
+    const statement = getPartyStatement(partyName);
+    if (!statement || !statement.transactions.length) {
+      setFeedback({ type: "error", message: `No ledger records found for party: ${partyName}` });
+      return;
+    }
+
+    let running = 0;
+    const exportRows = statement.transactions.map((t: any) => {
+      const cr = Number(t.credit) || 0;
+      const dr = Number(t.debit) || 0;
+      running += (cr - dr);
+      return {
+        "Date": t.date ? new Date(t.date).toLocaleDateString("en-GB") : "",
+        "Voucher #": t.voucherNumber || t.id?.slice(0, 8) || "",
+        "Party / Account": statement.partyName,
+        "Description": t.description || "",
+        "Category": t.category || "",
+        "Payment Mode": t.paymentMethod || "CASH",
+        "Cash IN / Credit (آمد)": cr,
+        "Cash OUT / Debit (خرچہ)": dr,
+        "Running Balance (بقایا)": running,
+        "Vehicle #": t.vehicleNumber || "",
+        "Driver": t.driverName || "",
+        "Bilty #": t.biltyNumber || "",
+        "Challan #": t.challanNumber || "",
+        "Route": t.route || "",
+        "Remarks": t.notes || "",
+      };
+    });
+
+    exportToExcel(
+      exportRows,
+      `Party_Ledger_${statement.partyName.replace(/[^a-zA-Z0-9_-]/g, "_")}`
+    );
+    setFeedback({ type: "success", message: `Exported ledger for "${statement.partyName}" to Excel (.xlsx)` });
+  };
+
   // Universal Export to Excel / CSV
   const handleExportExcel = () => {
     if (!filteredTransactions.length || !selectedBook) return;
@@ -688,7 +810,10 @@ function CashBooksContent() {
 
   // Print Day Book
   const handlePrint = () => {
-    window.print();
+    setPrintTarget("BOOK");
+    setTimeout(() => {
+      window.print();
+    }, 50);
   };
 
   return (
@@ -1133,13 +1258,14 @@ function CashBooksContent() {
                   <TableHead className="text-xs font-bold text-right font-mono w-32">
                     Running Bal
                   </TableHead>
-                  <TableHead className="text-xs font-bold text-center w-14">Action</TableHead>
+                  <TableHead className="text-xs font-bold text-center w-28">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredTransactions.map((tx) => {
                   const isIn = tx.credit > 0;
                   const isOut = tx.debit > 0;
+                  const partyName = (tx.party || tx.accountPerson || "").trim();
                   return (
                     <TableRow
                       key={tx.id}
@@ -1248,9 +1374,19 @@ function CashBooksContent() {
 
                       {/* Party */}
                       <TableCell>
-                        <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
-                          {tx.party || tx.accountPerson || "-"}
-                        </span>
+                        {partyName ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPartyStatement(partyName)}
+                            className="font-bold text-slate-800 dark:text-slate-200 text-xs text-left hover:text-spd-blue hover:underline cursor-pointer flex items-center gap-1 group transition-colors"
+                            title="Click to view party ledger & statement"
+                          >
+                            <span>{partyName}</span>
+                            <ChevronRight className="w-3 h-3 text-slate-400 group-hover:text-spd-blue group-hover:translate-x-0.5 transition-transform" />
+                          </button>
+                        ) : (
+                          <span className="font-bold text-slate-400 text-xs">-</span>
+                        )}
                       </TableCell>
 
                       {/* Mode */}
@@ -1282,15 +1418,43 @@ function CashBooksContent() {
                         Rs {(tx.balance || 0).toLocaleString()}
                       </TableCell>
 
-                      {/* Action */}
-                      <TableCell className="text-center">
-                        <button
-                          onClick={() => setDeleteTx(tx)}
-                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                          title="Delete entry"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      {/* Actions */}
+                      <TableCell className="text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
+                          {/* Party Print / PDF Statement */}
+                          {partyName ? (
+                            <button
+                              type="button"
+                              onClick={() => handlePrintPartyStatement(partyName)}
+                              className="p-1.5 rounded-md text-slate-500 hover:text-spd-blue hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors"
+                              title={`Print / PDF Statement for ${partyName}`}
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                          ) : null}
+
+                          {/* Party Export Excel */}
+                          {partyName ? (
+                            <button
+                              type="button"
+                              onClick={() => handleExportPartyExcel(partyName)}
+                              className="p-1.5 rounded-md text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                              title={`Export Ledger for ${partyName} (.xlsx)`}
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5" />
+                            </button>
+                          ) : null}
+
+                          {/* Delete Transaction */}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTx(tx)}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                            title="Delete entry"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -1304,8 +1468,13 @@ function CashBooksContent() {
 
       {/* ======================================================== */}
       {/* DEDICATED A4 PRINTABLE CASH BOOK DAY LEDGER */}
-      {/* ======================================================== */}
-      <div id="cash-book-printable" className="hidden print:block font-sans text-black p-4 space-y-3 bg-white">
+      <div
+        id="cash-book-printable"
+        className={cn(
+          printTarget === "BOOK" ? "print:block" : "print:hidden",
+          "hidden font-sans text-black p-4 space-y-3 bg-white"
+        )}
+      >
         <PrintHeader
           title={`Cash Book & Day Ledger: ${selectedBook?.name || "General Cash Book"}`}
           subtitle="Real-Time Station Cash Receipts, Operational Expenses & Ledger Balance"
@@ -1459,6 +1628,156 @@ function CashBooksContent() {
           checkedByLabel="Checked By"
           authorizedLabel="Authorized Signature"
         />
+      </div>
+
+      {/* ======================================================== */}
+      {/* DEDICATED A4 PRINTABLE PARTY STATEMENT */}
+      {/* ======================================================== */}
+      <div 
+        id="party-statement-printable" 
+        className={cn(
+          printTarget === "PARTY" && partyStatementModal ? "print:block" : "print:hidden",
+          "hidden font-sans text-black p-4 space-y-3 bg-white"
+        )}
+      >
+        {partyStatementModal && (
+          <>
+            <PrintHeader
+              companyName="SUPER PAK DATA WALE GOODS TRANSPORT CO."
+              title={`Party Ledger Statement: ${partyStatementModal.partyName}`}
+              subtitle="Consolidated Party Ledger Statement • Debits, Credits & Running Balance"
+              documentNumber={`STMT-${partyStatementModal.partyName.slice(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, "")}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`}
+              station={selectedBook?.station || selectedBook?.city || "All Operating Stations"}
+            />
+
+            {/* Financial Summary Box */}
+            <div className="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50">
+              <div className="grid grid-cols-4 gap-2 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase">Party / Account Name</span>
+                  <span className="font-bold text-slate-900 text-sm">{partyStatementModal.partyName}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase">Operating Cash Book</span>
+                  <span className="font-bold text-slate-900">{selectedBook?.name || "Cash Book"}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase">Statement Period</span>
+                  <span className="font-semibold text-slate-800">{partyStatementModal.dateRange}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase">Net Running Balance</span>
+                  <span className={cn(
+                    "font-black text-sm",
+                    partyStatementModal.balance >= 0 ? "text-slate-900" : "text-rose-700"
+                  )}>
+                    {formatCurrency(partyStatementModal.balance)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Financial KPI Cards */}
+            <div className="grid grid-cols-3 gap-2 border border-slate-300 rounded-lg p-2 text-center bg-white">
+              <div>
+                <span className="text-[9px] uppercase font-bold text-emerald-600 block">Total Received / Credit (+ آمد)</span>
+                <span className="text-sm font-black text-emerald-700">
+                  +{formatCurrency(partyStatementModal.totalIn)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase font-bold text-rose-600 block">Total Paid / Debit (- خرچہ)</span>
+                <span className="text-sm font-black text-rose-700">
+                  -{formatCurrency(partyStatementModal.totalOut)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase font-bold text-slate-700 block">Closing Balance (بقایا جات)</span>
+                <span className={cn("text-sm font-black", partyStatementModal.balance >= 0 ? "text-slate-900" : "text-rose-700")}>
+                  {formatCurrency(partyStatementModal.balance)}
+                </span>
+              </div>
+            </div>
+
+            {/* Itemized Party Transactions */}
+            <div>
+              <p className="text-[11px] font-black uppercase text-slate-800 mb-1">
+                Itemized Chronological Transaction History ({partyStatementModal.transactions.length} Records)
+              </p>
+              <table className="w-full border-collapse border border-slate-300 text-[10px]">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-800">
+                    <th className="border border-slate-300 p-1.5 text-left w-20">Date</th>
+                    <th className="border border-slate-300 p-1.5 text-left w-24">Voucher #</th>
+                    <th className="border border-slate-300 p-1.5 text-left">Description & Category</th>
+                    <th className="border border-slate-300 p-1.5 text-left w-28">Transport / Ref</th>
+                    <th className="border border-slate-300 p-1.5 text-center w-20">Payment Mode</th>
+                    <th className="border border-slate-300 p-1.5 text-right text-emerald-700 font-bold w-24">Cash IN (آمد)</th>
+                    <th className="border border-slate-300 p-1.5 text-right text-rose-700 font-bold w-24">Cash OUT (خرچہ)</th>
+                    <th className="border border-slate-300 p-1.5 text-right font-black text-slate-900 w-24">Running Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {partyStatementModal.transactions.map((tx: any, idx: number) => (
+                    <tr key={tx.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                      <td className="border border-slate-300 p-1 whitespace-nowrap font-mono text-[9px]">
+                        {tx.date ? new Date(tx.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                      </td>
+                      <td className="border border-slate-300 p-1 font-mono font-bold text-slate-800">
+                        {tx.voucherNumber || tx.id?.slice(0, 8)}
+                      </td>
+                      <td className="border border-slate-300 p-1">
+                        <div className="font-semibold text-slate-900">{tx.description || tx.category}</div>
+                        <div className="text-[9px] text-slate-500">{tx.category}</div>
+                      </td>
+                      <td className="border border-slate-300 p-1 font-mono text-[9px]">
+                        {tx.biltyNumber && <div>Bilty: <span className="font-bold">{tx.biltyNumber}</span></div>}
+                        {tx.challanNumber && <div>Challan: <span className="font-bold">{tx.challanNumber}</span></div>}
+                        {tx.vehicleNumber && <div>Vehicle: {tx.vehicleNumber}</div>}
+                        {!tx.biltyNumber && !tx.challanNumber && !tx.vehicleNumber && "—"}
+                      </td>
+                      <td className="border border-slate-300 p-1 text-center font-mono uppercase text-[9px]">
+                        {tx.paymentMethod || "CASH"}
+                      </td>
+                      <td className="border border-slate-300 p-1 text-right font-mono font-bold text-emerald-700">
+                        {tx.credit > 0 ? formatCurrency(tx.credit) : "—"}
+                      </td>
+                      <td className="border border-slate-300 p-1 text-right font-mono font-bold text-rose-700">
+                        {tx.debit > 0 ? formatCurrency(tx.debit) : "—"}
+                      </td>
+                      <td className="border border-slate-300 p-1 text-right font-mono font-black text-slate-900">
+                        {formatCurrency(tx.partyRunningBalance || 0)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-100 font-black border-t-2 border-slate-400">
+                    <td colSpan={5} className="p-1.5 text-right uppercase text-[10px] text-slate-700">
+                      Party Totals ({partyStatementModal.transactions.length} Transactions):
+                    </td>
+                    <td className="p-1.5 text-right font-mono text-emerald-700">
+                      +{formatCurrency(partyStatementModal.totalIn)}
+                    </td>
+                    <td className="p-1.5 text-right font-mono text-rose-700">
+                      -{formatCurrency(partyStatementModal.totalOut)}
+                    </td>
+                    <td className="p-1.5 text-right font-mono text-slate-900">
+                      {formatCurrency(partyStatementModal.balance)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <PrintFooter
+              notes={`Official Individual Party Account Statement for ${partyStatementModal.partyName} generated by Super Pak Data Wale Goods Transport Co. Verified against Cash Book records.`}
+              preparedByLabel="Accountant"
+              checkedByLabel="Station Manager"
+              authorizedLabel="Authorized Signatory"
+            />
+          </>
+        )}
       </div>
 
       {/* ======================================================== */}
@@ -2077,6 +2396,136 @@ function CashBooksContent() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ======================================================== */}
+      {/* MODAL: PARTY STATEMENT & QUICK ACTIONS */}
+      {/* ======================================================== */}
+      <Dialog open={!!partyStatementModal} onOpenChange={(open) => !open && setPartyStatementModal(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          {partyStatementModal && (
+            <div className="space-y-4">
+              <DialogHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <DialogTitle className="flex items-center gap-2 text-base font-black uppercase text-slate-900 dark:text-white">
+                    <Building2 className="w-5 h-5 text-spd-blue shrink-0" />
+                    <span>Party Ledger Statement: {partyStatementModal.partyName}</span>
+                  </DialogTitle>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleExportPartyExcel(partyStatementModal.partyName)}
+                      className="gap-1.5 text-xs font-bold text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>Export Excel (.xlsx)</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => handlePrintPartyStatement(partyStatementModal.partyName)}
+                      className="gap-1.5 text-xs font-bold bg-spd-blue hover:bg-spd-blue/90 text-white"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print / PDF (A4)</span>
+                    </Button>
+                  </div>
+                </div>
+                <DialogDescription>
+                  Consolidated chronological transaction history and running net balance for{" "}
+                  <strong className="text-slate-800 dark:text-slate-200">{partyStatementModal.partyName}</strong>
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* KPI Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 rounded-lg border bg-slate-50 dark:bg-slate-900/40">
+                  <span className="text-[10px] font-bold uppercase text-slate-500 block">Total Entries</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">
+                    {partyStatementModal.transactions.length}
+                  </span>
+                </div>
+                <div className="p-3 rounded-lg border bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900">
+                  <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 block">Total Received (آمد)</span>
+                  <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                    +{formatCurrency(partyStatementModal.totalIn)}
+                  </span>
+                </div>
+                <div className="p-3 rounded-lg border bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900">
+                  <span className="text-[10px] font-bold uppercase text-rose-700 dark:text-rose-400 block">Total Paid (خرچہ)</span>
+                  <span className="text-lg font-black text-rose-600 dark:text-rose-400">
+                    -{formatCurrency(partyStatementModal.totalOut)}
+                  </span>
+                </div>
+                <div className="p-3 rounded-lg border bg-blue-50/60 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+                  <span className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-400 block">Net Balance (بقایا)</span>
+                  <span className={cn(
+                    "text-lg font-black",
+                    partyStatementModal.balance >= 0 ? "text-blue-700 dark:text-blue-300" : "text-rose-600 dark:text-rose-400"
+                  )}>
+                    {formatCurrency(partyStatementModal.balance)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Itemized Table */}
+              <div className="border rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-100 dark:bg-slate-800 text-[11px]">
+                      <TableHead className="w-20 font-bold">Date</TableHead>
+                      <TableHead className="w-24 font-bold">Voucher #</TableHead>
+                      <TableHead className="font-bold">Description</TableHead>
+                      <TableHead className="w-24 font-bold text-right text-emerald-700">Cash IN</TableHead>
+                      <TableHead className="w-24 font-bold text-right text-rose-700">Cash OUT</TableHead>
+                      <TableHead className="w-24 font-bold text-right font-black">Balance</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {partyStatementModal.transactions.map((tx: any, idx: number) => (
+                      <TableRow key={tx.id || idx} className="text-xs">
+                        <TableCell className="font-mono text-[11px] whitespace-nowrap">
+                          {tx.date ? new Date(tx.date).toLocaleDateString("en-GB") : "-"}
+                        </TableCell>
+                        <TableCell className="font-mono font-bold">
+                          {tx.voucherNumber || tx.id?.slice(0, 8)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-semibold text-slate-800 dark:text-slate-200">{tx.description || tx.category}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {tx.category} • {tx.paymentMethod || "CASH"}
+                            {tx.biltyNumber && ` • Bilty: ${tx.biltyNumber}`}
+                            {tx.challanNumber && ` • Challan: ${tx.challanNumber}`}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-emerald-600">
+                          {tx.credit > 0 ? `+Rs ${tx.credit.toLocaleString()}` : "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-rose-600">
+                          {tx.debit > 0 ? `-Rs ${tx.debit.toLocaleString()}` : "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-black text-slate-900 dark:text-white">
+                          Rs {(tx.partyRunningBalance ?? 0).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <DialogFooter className="flex items-center justify-between sm:justify-between pt-2 border-t">
+                <span className="text-xs text-muted-foreground">
+                  Ledger Period: {partyStatementModal.dateRange}
+                </span>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPartyStatementModal(null)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

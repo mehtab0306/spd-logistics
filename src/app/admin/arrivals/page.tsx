@@ -28,6 +28,9 @@ import {
   saveStoredChallan,
   getDeletedChallanIds,
   mergeLocalWithApi,
+  getStoredBilties,
+  saveStoredBilty,
+  saveStoredDelivery,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
 
@@ -63,47 +66,126 @@ export default function ArrivalsPage() {
         getDeletedChallanIds(),
         "challanNumber"
       );
-      const arrived = merged.filter(
-        (c: any) => c.status === "ARRIVED" || c.status === "COMPLETED"
-      );
+      const arrived = merged.filter((c: any) => {
+        const st = String(c.status || "").toUpperCase();
+        return st === "ARRIVED" || st === "READY_FOR_DELIVERY" || st === "OUT_FOR_DELIVERY" || st === "COMPLETED";
+      });
       setChallans(arrived);
     } catch (err) {
       console.error("Error fetching arrivals:", err);
-      const arrived = getStoredChallans().filter(
-        (c: any) => c.status === "ARRIVED" || c.status === "COMPLETED"
-      );
+      const arrived = getStoredChallans().filter((c: any) => {
+        const st = String(c.status || "").toUpperCase();
+        return st === "ARRIVED" || st === "READY_FOR_DELIVERY" || st === "OUT_FOR_DELIVERY" || st === "COMPLETED";
+      });
       setChallans(arrived);
     } finally {
       setLoading(false);
     }
   };
 
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ARRIVED" | "READY_FOR_DELIVERY">("ALL");
+
   const handleMarkReadyForDelivery = async (challan: any) => {
     setActionLoading(challan.id);
     try {
+      const timestamp = new Date().toISOString();
       const updated = {
         ...challan,
-        status: "COMPLETED",
-        notes: `Inspected and un-loaded at ${challan.destination} warehouse. Consignments released for delivery.`,
+        status: "READY_FOR_DELIVERY",
+        shipmentStatus: "READY_FOR_DELIVERY",
+        unloadedAt: timestamp,
+        notes: `Inspected and un-loaded at ${challan.destination || "destination"} terminal. Consignments passed to delivery queue.`,
       };
       saveStoredChallan(updated);
-      setChallans((prev) => prev.map((c) => (String(c.id) === String(challan.id) ? updated : c)));
 
+      // Find all linked consignments in challan or local store
+      const allBilties = getStoredBilties();
+      const linkedBilties: any[] = [];
+      if (Array.isArray(challan.consignments) && challan.consignments.length > 0) {
+        linkedBilties.push(...challan.consignments);
+      }
+      for (const b of allBilties) {
+        if (
+          (b.challanId && String(b.challanId) === String(challan.id)) ||
+          (b.challanNumber && String(b.challanNumber).toUpperCase() === String(challan.challanNumber).toUpperCase())
+        ) {
+          if (!linkedBilties.some((lb) => String(lb.id) === String(b.id) || String(lb.biltyNumber).toUpperCase() === String(b.biltyNumber).toUpperCase())) {
+            linkedBilties.push(b);
+          }
+        }
+      }
+
+      // Update and push all linked bilties to delivery queue
+      for (const b of linkedBilties) {
+        const updatedBilty = {
+          ...b,
+          shipmentStatus: "READY_FOR_DELIVERY",
+          deliveryStatus: "READY_FOR_DELIVERY",
+          currentLocation: `${challan.destination || "Destination"} Terminal`,
+          unloadedDate: timestamp,
+          notes: (b.notes ? b.notes + " • " : "") + `Arrived on Challan #${challan.challanNumber}. Queued for local delivery.`,
+        };
+        saveStoredBilty(updatedBilty);
+        saveStoredDelivery({
+          ...updatedBilty,
+          challanId: challan.id,
+          challanNumber: challan.challanNumber,
+          truckNumber: challan.truckNumber,
+          driverName: challan.driverName,
+          status: "READY_FOR_DELIVERY",
+        });
+
+        // Background API update
+        fetch(`/api/admin/bilty/${encodeURIComponent(b.id || b.biltyNumber)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shipmentStatus: "READY_FOR_DELIVERY",
+            notes: updatedBilty.notes,
+          }),
+        }).catch(() => {});
+      }
+
+      // If no individual bilties, create a consolidated delivery queue manifest item
+      if (linkedBilties.length === 0) {
+        saveStoredDelivery({
+          id: `del-${challan.id}`,
+          challanId: challan.id,
+          challanNumber: challan.challanNumber,
+          biltyNumber: `MANIFEST-${challan.challanNumber}`,
+          origin: challan.origin,
+          destination: challan.destination,
+          receiverName: challan.driverName ? `Assigned to ${challan.driverName}` : "Consignee Handover",
+          receiverPhone: challan.driverPhone || "0300-0000000",
+          packageDetails: `Consolidated cargo from Challan #${challan.challanNumber}`,
+          quantity: challan.totalBilties || 1,
+          weight: challan.totalWeight || 0,
+          freight: challan.totalBiltyFreight || challan.totalFreight || 0,
+          remainingBalance: 0,
+          shipmentStatus: "READY_FOR_DELIVERY",
+          status: "READY_FOR_DELIVERY",
+          createdAt: timestamp,
+        });
+      }
+
+      // Sync challan with API
       try {
         await fetch("/api/admin/challan", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             id: challan.id,
-            status: "COMPLETED",
+            status: "READY_FOR_DELIVERY",
             notes: updated.notes,
           }),
         });
       } catch {}
 
+      setChallans((prev) => prev.map((c) => (String(c.id) === String(challan.id) ? updated : c)));
+
       setFeedback({
         type: "success",
-        text: `Challan ${challan.challanNumber} cargo un-loaded & moved to Delivery queue!`,
+        text: `Challan ${challan.challanNumber} (${linkedBilties.length || 1} consignments) successfully passed to Delivery queue!`,
       });
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Failed to update" });
@@ -113,6 +195,10 @@ export default function ArrivalsPage() {
   };
 
   const filtered = challans.filter((c) => {
+    const st = String(c.status || "").toUpperCase();
+    if (statusFilter === "ARRIVED" && st !== "ARRIVED") return false;
+    if (statusFilter === "READY_FOR_DELIVERY" && st !== "READY_FOR_DELIVERY" && st !== "COMPLETED") return false;
+
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     return (
@@ -219,7 +305,17 @@ export default function ArrivalsPage() {
             className="pl-9 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs w-full"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            className="h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200"
+          >
+            <option value="ALL">All Arrivals ({challans.length})</option>
+            <option value="ARRIVED">Awaiting Unload ({challans.filter((c) => String(c.status).toUpperCase() === "ARRIVED").length})</option>
+            <option value="READY_FOR_DELIVERY">Sent to Delivery ({challans.filter((c) => String(c.status).toUpperCase() === "READY_FOR_DELIVERY" || String(c.status).toUpperCase() === "COMPLETED").length})</option>
+          </select>
+
           <Button
             variant="ghost"
             size="icon"
@@ -229,7 +325,7 @@ export default function ArrivalsPage() {
             <RefreshCw className="w-4 h-4" />
           </Button>
           <span className="text-xs font-bold text-slate-500">
-            {filtered.length} Arrived Trips
+            {filtered.length} Trips
           </span>
         </div>
       </div>

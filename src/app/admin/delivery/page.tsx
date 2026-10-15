@@ -8,10 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   CheckCircle2,
   Package,
-  User,
-  Phone,
   Calendar,
-  Wallet,
   AlertTriangle,
   Loader2,
   Search,
@@ -19,6 +16,11 @@ import {
   Printer,
   FileText,
   MapPin,
+  FileSpreadsheet,
+  FileCheck,
+  ShieldCheck,
+  Truck,
+  ExternalLink,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -29,14 +31,24 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  getStoredBilties,
+  saveStoredBilty,
+  getStoredDeliveries,
+  saveStoredDelivery,
+  getStoredChallans,
+} from "@/lib/local-persistence";
+import { exportToExcel } from "@/lib/export-excel";
+import { PrintableGatePass } from "@/components/delivery/printable-gate-pass";
+import { PodModal } from "@/components/delivery/pod-modal";
 
 export default function DeliveryPage() {
-  const [consignments, setConsignments] = useState<any[]>([]);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("PENDING");
+  const [statusFilter, setStatusFilter] = useState<"READY" | "DELIVERED" | "ALL">("READY");
 
-  // Delivery Modal State
+  // Confirm Handover Modal State
   const [deliveryModalBilty, setDeliveryModalBilty] = useState<any>(null);
   const [deliveryData, setDeliveryData] = useState({
     receivedBy: "",
@@ -46,23 +58,123 @@ export default function DeliveryPage() {
     deliveryNotes: "",
   });
 
+  // POD Modal State
+  const [podModalItem, setPodModalItem] = useState<any>(null);
+
+  // Gate Pass Modal State
+  const [gatePassItem, setGatePassItem] = useState<any>(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
-    fetchConsignments();
+    fetchDeliveryQueue();
   }, []);
 
-  const fetchConsignments = async () => {
+  const fetchDeliveryQueue = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/bilty");
-      const data = await res.json();
-      if (data.consignments) {
-        setConsignments(data.consignments);
+
+      // 1. Fetch from Bilties API & Challans API
+      let apiBilties: any[] = [];
+      try {
+        const [bRes, cRes] = await Promise.all([
+          fetch("/api/admin/bilty").catch(() => null),
+          fetch("/api/admin/challan").catch(() => null),
+        ]);
+
+        if (bRes && bRes.ok) {
+          const bData = await bRes.json().catch(() => ({}));
+          apiBilties = Array.isArray(bData.data)
+            ? bData.data
+            : Array.isArray(bData.consignments)
+            ? bData.consignments
+            : [];
+        }
+
+        if (cRes && cRes.ok) {
+          const cData = await cRes.json().catch(() => ({}));
+          const cArr = Array.isArray(cData.data)
+            ? cData.data
+            : Array.isArray(cData.challans)
+            ? cData.challans
+            : [];
+
+          // Extract consignments inside challans that are arrived or in delivery
+          for (const ch of cArr) {
+            const chStatus = String(ch.status || "").toUpperCase();
+            if (chStatus === "ARRIVED" || chStatus === "READY_FOR_DELIVERY" || chStatus === "COMPLETED") {
+              if (Array.isArray(ch.consignments) && ch.consignments.length > 0) {
+                for (const cb of ch.consignments) {
+                  apiBilties.push({
+                    ...cb,
+                    challanId: ch.id,
+                    challanNumber: ch.challanNumber,
+                    truckNumber: ch.truckNumber,
+                    driverName: ch.driverName,
+                    shipmentStatus: cb.shipmentStatus || "READY_FOR_DELIVERY",
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("API delivery queue load warning:", e);
       }
+
+      // 2. Fetch local storage records
+      const localDeliveries = getStoredDeliveries();
+      const localBilties = getStoredBilties();
+      const localChallans = getStoredChallans();
+
+      // Extract from local arrived challans
+      const challanExtracted: any[] = [];
+      for (const ch of localChallans) {
+        const chStatus = String(ch.status || "").toUpperCase();
+        if (chStatus === "ARRIVED" || chStatus === "READY_FOR_DELIVERY" || chStatus === "COMPLETED") {
+          if (Array.isArray(ch.consignments) && ch.consignments.length > 0) {
+            for (const cb of ch.consignments) {
+              challanExtracted.push({
+                ...cb,
+                challanId: ch.id,
+                challanNumber: ch.challanNumber,
+                truckNumber: ch.truckNumber,
+                driverName: ch.driverName,
+                shipmentStatus: cb.shipmentStatus || "READY_FOR_DELIVERY",
+              });
+            }
+          }
+        }
+      }
+
+      // Merge and deduplicate by clean ID or biltyNumber
+      const combined = [
+        ...localDeliveries,
+        ...challanExtracted,
+        ...localBilties,
+        ...apiBilties,
+      ];
+
+      const seen = new Map<string, any>();
+      for (const item of combined) {
+        if (!item) continue;
+        const key = String(item.biltyNumber || item.id || "").toUpperCase().trim();
+        if (!key) continue;
+
+        if (!seen.has(key)) {
+          seen.set(key, item);
+        } else {
+          // Merge preserving status
+          seen.set(key, { ...seen.get(key), ...item });
+        }
+      }
+
+      const unifiedQueue = Array.from(seen.values());
+      setDeliveries(unifiedQueue);
     } catch (err) {
-      console.error("Error fetching consignments for delivery:", err);
+      console.error("Error loading delivery queue:", err);
+      setDeliveries([...getStoredDeliveries(), ...getStoredBilties()]);
     } finally {
       setLoading(false);
     }
@@ -71,8 +183,8 @@ export default function DeliveryPage() {
   const handleOpenDelivery = (bilty: any) => {
     setDeliveryModalBilty(bilty);
     setDeliveryData({
-      receivedBy: bilty.receiverName || "",
-      receiverCnic: "",
+      receivedBy: bilty.receiverName || bilty.customer?.name || "",
+      receiverCnic: bilty.receiverCnic || "",
       deliveryDate: new Date().toISOString().slice(0, 10),
       collectRemainingAmount: (bilty.remainingBalance || 0) > 0,
       deliveryNotes: "",
@@ -90,32 +202,66 @@ export default function DeliveryPage() {
       const newPaid = willCollect
         ? (deliveryModalBilty.paidAmount || 0) + remaining
         : deliveryModalBilty.paidAmount || 0;
+      const newRemaining = willCollect ? 0 : remaining;
 
-      const payload = {
-        id: deliveryModalBilty.id,
+      const timestamp = new Date().toISOString();
+      const updatedItem = {
+        ...deliveryModalBilty,
         shipmentStatus: "DELIVERED",
-        location: deliveryModalBilty.destination || "Destination Hub",
-        statusNote: `Delivered to ${deliveryData.receivedBy} on ${deliveryData.deliveryDate}. ${deliveryData.deliveryNotes}`,
+        deliveryStatus: "DELIVERED",
+        deliveredDate: deliveryData.deliveryDate || timestamp,
+        receivedBy: deliveryData.receivedBy,
+        receiverCnic: deliveryData.receiverCnic,
+        deliveryNotes: deliveryData.deliveryNotes,
         paidAmount: newPaid,
+        remainingBalance: newRemaining,
+        paymentStatus: newRemaining <= 0 ? "PAID" : deliveryModalBilty.paymentStatus,
+        trackingEvents: [
+          ...(Array.isArray(deliveryModalBilty.trackingEvents) ? deliveryModalBilty.trackingEvents : []),
+          {
+            id: `evt-${Date.now()}`,
+            status: "DELIVERED",
+            location: deliveryModalBilty.destination || "Destination Terminal",
+            notes: `Consignment delivered to ${deliveryData.receivedBy} on ${deliveryData.deliveryDate}. ${deliveryData.deliveryNotes}`,
+            timestamp,
+          },
+        ],
       };
 
-      const res = await fetch("/api/admin/bilty", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      // 1. Update local storage
+      saveStoredDelivery(updatedItem);
+      saveStoredBilty(updatedItem);
 
-      const result = await res.json();
-      if (!res.ok || result.error) {
-        throw new Error(result.error || "Failed to confirm delivery");
+      // 2. Update server API
+      try {
+        await fetch(`/api/admin/bilty/${encodeURIComponent(deliveryModalBilty.id || deliveryModalBilty.biltyNumber)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shipmentStatus: "DELIVERED",
+            paidAmount: newPaid,
+            remainingBalance: newRemaining,
+            notes: updatedItem.deliveryNotes,
+          }),
+        });
+      } catch (err) {
+        console.warn("API update fallback active:", err);
       }
+
+      setDeliveries((prev) =>
+        prev.map((d) =>
+          String(d.biltyNumber || d.id).toUpperCase() ===
+          String(deliveryModalBilty.biltyNumber || deliveryModalBilty.id).toUpperCase()
+            ? updatedItem
+            : d
+        )
+      );
 
       setFeedback({
         type: "success",
-        text: `Consignment ${deliveryModalBilty.biltyNumber} successfully marked as DELIVERED to ${deliveryData.receivedBy}!`,
+        text: `Consignment #${deliveryModalBilty.biltyNumber} successfully marked as DELIVERED to ${deliveryData.receivedBy}!`,
       });
       setDeliveryModalBilty(null);
-      fetchConsignments();
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Failed to confirm delivery" });
     } finally {
@@ -123,51 +269,126 @@ export default function DeliveryPage() {
     }
   };
 
-  const filteredConsignments = consignments.filter((b) => {
-    // Status filter
-    if (statusFilter === "PENDING") {
-      if (b.shipmentStatus === "DELIVERED" || b.shipmentStatus === "DELETED") return false;
-    } else if (statusFilter === "DELIVERED") {
-      if (b.shipmentStatus !== "DELIVERED") return false;
-    }
+  const handleSavePod = (updatedItem: any) => {
+    saveStoredDelivery(updatedItem);
+    saveStoredBilty(updatedItem);
+    setDeliveries((prev) =>
+      prev.map((d) =>
+        String(d.biltyNumber || d.id).toUpperCase() ===
+        String(updatedItem.biltyNumber || updatedItem.id).toUpperCase()
+          ? updatedItem
+          : d
+      )
+    );
+    setFeedback({
+      type: "success",
+      text: `Proof of Delivery (POD) updated for Bilty #${updatedItem.biltyNumber}!`,
+    });
+  };
+
+  // Case-Insensitive Status Matching & Queue Logic
+  const isDeliveredStatus = (status: string) => {
+    const s = String(status || "").toUpperCase();
+    return s === "DELIVERED" || s === "COMPLETED" || s === "RECEIVED";
+  };
+
+  const filteredDeliveries = deliveries.filter((item) => {
+    const isDelivered = isDeliveredStatus(item.shipmentStatus);
+
+    if (statusFilter === "READY" && isDelivered) return false;
+    if (statusFilter === "DELIVERED" && !isDelivered) return false;
 
     if (!search.trim()) return true;
-    const s = search.toLowerCase();
+    const q = search.toLowerCase();
     return (
-      b.biltyNumber?.toLowerCase().includes(s) ||
-      b.trackingId?.toLowerCase().includes(s) ||
-      b.receiverName?.toLowerCase().includes(s) ||
-      b.receiverPhone?.toLowerCase().includes(s) ||
-      b.destination?.toLowerCase().includes(s)
+      item.biltyNumber?.toLowerCase().includes(q) ||
+      item.trackingId?.toLowerCase().includes(q) ||
+      item.receiverName?.toLowerCase().includes(q) ||
+      item.receiverPhone?.toLowerCase().includes(q) ||
+      item.destination?.toLowerCase().includes(q) ||
+      item.truckNumber?.toLowerCase().includes(q) ||
+      item.driverName?.toLowerCase().includes(q)
     );
   });
 
+  const handleExportExcel = () => {
+    if (!filteredDeliveries.length) return;
+    const data = filteredDeliveries.map((b) => ({
+      "Bilty #": b.biltyNumber || "",
+      "Booking Date": b.date ? new Date(b.date).toLocaleDateString("en-GB") : "",
+      "Route": `${b.origin || ""} → ${b.destination || ""}`,
+      "Sender (Shipper)": b.senderName || "",
+      "Receiver (Consignee)": b.receiverName || "",
+      "Receiver Phone": b.receiverPhone || "",
+      "Delivery Address": b.deliveryAddress || b.receiverAddress || "",
+      "Cargo Packages": `${b.quantity || 1} Pkgs (${b.packageDetails || ""})`,
+      "Weight (KG)": b.weight || 0,
+      "Total Freight (PKR)": b.totalAmount || b.freight || 0,
+      "Advance Paid": b.paidAmount || 0,
+      "Balance Due": b.remainingBalance || 0,
+      "Delivery Status": b.shipmentStatus || "READY_FOR_DELIVERY",
+      "Delivered Date": b.deliveredDate ? new Date(b.deliveredDate).toLocaleDateString("en-GB") : "-",
+      "Received By": b.receivedBy || "-",
+      "Receiver CNIC": b.receiverCnic || "-",
+      "POD Photo": b.podPhoto || b.podImage ? "Attached" : "No",
+    }));
+
+    exportToExcel(data, `Delivery_Queue_${statusFilter}`);
+  };
+
+  const readyCount = deliveries.filter((d) => !isDeliveredStatus(d.shipmentStatus)).length;
+  const deliveredCount = deliveries.filter((d) => isDeliveredStatus(d.shipmentStatus)).length;
+
   return (
     <div className="space-y-6 pb-20">
+      {/* Printable Gate Pass Modal */}
+      {gatePassItem && (
+        <PrintableGatePass item={gatePassItem} onClose={() => setGatePassItem(null)} />
+      )}
+
+      {/* Proof of Delivery (POD) Modal */}
+      {podModalItem && (
+        <PodModal
+          item={podModalItem}
+          onClose={() => setPodModalItem(null)}
+          onSavePod={handleSavePod}
+        />
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Trip Setup
+              Terminal Operations
             </span>
             <span className="text-slate-300">/</span>
-            <span className="text-xs font-bold text-emerald-600">Customer Handover</span>
+            <span className="text-xs font-bold text-emerald-600">Last-Mile Handover</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
             <CheckCircle2 className="w-7 h-7 text-emerald-600" />
-            Consignment Delivery & POD
+            Consignment Delivery Queue &amp; POD
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Manual delivery confirmation and proof of delivery (POD). Settle remaining freight balances and record consignee verification.
+            Manage arrived cargo releases, issue security gate passes, record receiver verification, and upload proof of delivery (POD).
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link href="/admin/bilty">
-            <Button variant="outline" className="rounded-xl text-xs font-bold gap-2">
-              <Package className="w-4 h-4 text-spd-red" />
-              <span>All Consignments</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={!filteredDeliveries.length}
+            className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-xl shadow-xs gap-2 h-10 px-4"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Export Excel</span>
+          </Button>
+
+          <Link href="/admin/arrivals">
+            <Button variant="outline" className="rounded-xl text-xs font-bold gap-2 h-10 px-4">
+              <MapPin className="w-4 h-4 text-red-600" />
+              <span>Warehouse Arrivals</span>
             </Button>
           </Link>
         </div>
@@ -200,33 +421,34 @@ export default function DeliveryPage() {
         <div className="relative w-full md:w-96">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input
-            placeholder="Search Bilty #, Receiver name, phone..."
+            placeholder="Search Bilty #, Receiver name, phone, truck..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs w-full"
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
             className="h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200"
           >
-            <option value="PENDING">Awaiting Delivery</option>
-            <option value="DELIVERED">Delivered Consignments</option>
-            <option value="ALL">All Statuses</option>
+            <option value="READY">Ready for Delivery ({readyCount})</option>
+            <option value="DELIVERED">Delivered &amp; Completed ({deliveredCount})</option>
+            <option value="ALL">All Deliveries ({deliveries.length})</option>
           </select>
+
           <Button
             variant="ghost"
             size="icon"
-            onClick={fetchConsignments}
+            onClick={fetchDeliveryQueue}
             className="h-10 w-10 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white"
           >
             <RefreshCw className="w-4 h-4" />
           </Button>
           <span className="text-xs font-bold text-slate-500">
-            {filteredConsignments.length} Records
+            {filteredDeliveries.length} Records
           </span>
         </div>
       </div>
@@ -237,17 +459,22 @@ export default function DeliveryPage() {
           <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
           <p className="text-xs font-semibold text-slate-500">Loading delivery records...</p>
         </div>
-      ) : filteredConsignments.length === 0 ? (
+      ) : filteredDeliveries.length === 0 ? (
         <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
           <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 mx-auto flex items-center justify-center text-slate-400">
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">
-            No Consignments Matching Filter
+            No Consignments in {statusFilter === "READY" ? "Active Delivery Queue" : "This Queue"}
           </h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Consignments ready for customer handover will appear here.
+            When trucks arrive at the warehouse, click &ldquo;Unload &amp; Send to Delivery&rdquo; in Warehouse Arrivals to release consignments here.
           </p>
+          <Link href="/admin/arrivals">
+            <Button size="sm" variant="outline" className="rounded-xl text-xs font-bold">
+              Check Arrivals
+            </Button>
+          </Link>
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
@@ -256,57 +483,63 @@ export default function DeliveryPage() {
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase text-[10px] font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="p-3">Bilty # / Date</th>
-                  <th className="p-3">Route</th>
+                  <th className="p-3">Route / Hub</th>
                   <th className="p-3">Consignee / Receiver</th>
                   <th className="p-3">Goods / Packages</th>
-                  <th className="p-3 text-right">Freight & Balance</th>
+                  <th className="p-3 text-right">Freight &amp; Balance</th>
                   <th className="p-3 text-center">Status</th>
-                  <th className="p-3 text-right">Action</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredConsignments.map((b) => {
-                  const isDelivered = b.shipmentStatus === "DELIVERED";
+                {filteredDeliveries.map((b) => {
+                  const isDelivered = isDeliveredStatus(b.shipmentStatus);
                   const remaining = b.remainingBalance || 0;
+                  const hasPod = Boolean(b.podPhoto || b.podImage || b.hasPod || isDelivered);
 
                   return (
                     <tr
-                      key={b.id}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                      key={b.id || b.biltyNumber}
+                      className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       <td className="p-3">
-                        <span className="font-bold font-mono text-red-600 block">
+                        <span className="font-bold font-mono text-red-600 block text-xs">
                           {b.biltyNumber}
                         </span>
                         <span className="text-[10px] text-slate-400">
                           {formatDate(b.date || b.createdAt)}
                         </span>
+                        {b.challanNumber && (
+                          <span className="text-[9px] font-mono text-blue-600 block">
+                            Challan: {b.challanNumber}
+                          </span>
+                        )}
                       </td>
 
                       <td className="p-3">
                         <span className="font-semibold text-slate-800 dark:text-slate-200 block">
-                          {b.origin} → {b.destination}
+                          {b.origin} &rarr; {b.destination}
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          {b.warehouse || "Warehouse"}
+                          {b.destination} Station
                         </span>
                       </td>
 
                       <td className="p-3">
                         <span className="font-semibold text-slate-800 dark:text-slate-200 block">
-                          {b.receiverName}
+                          {b.receiverName || "Consignee Handover"}
                         </span>
                         <span className="text-[10px] font-mono text-slate-500 block">
-                          {b.receiverPhone}
+                          {b.receiverPhone || "No phone"}
                         </span>
                         <span className="text-[10px] text-slate-400 truncate max-w-xs block">
-                          {b.receiverAddress}
+                          {b.deliveryAddress || b.receiverAddress || "Local Warehouse Pick-up"}
                         </span>
                       </td>
 
                       <td className="p-3">
                         <span className="font-semibold text-slate-800 dark:text-slate-200 block">
-                          {b.packageDetails || "Commercial Goods"}
+                          {b.packageDetails || "Commercial Merchandise"}
                         </span>
                         <span className="text-[10px] text-slate-500">
                           {b.quantity || 1} Pkgs &bull; {b.weight || 0} kg
@@ -315,7 +548,7 @@ export default function DeliveryPage() {
 
                       <td className="p-3 text-right">
                         <span className="font-bold font-mono text-slate-900 dark:text-white block">
-                          {formatCurrency(b.freight || 0)}
+                          {formatCurrency(b.totalAmount || b.freight || 0)}
                         </span>
                         <span
                           className={`text-[10px] font-mono font-bold block ${
@@ -330,30 +563,59 @@ export default function DeliveryPage() {
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
                             isDelivered
-                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                              : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
                           }`}
                         >
-                          {b.shipmentStatus}
+                          {b.shipmentStatus || "READY_FOR_DELIVERY"}
                         </span>
                       </td>
 
+                      {/* 3 Instant Action Buttons: Mark Delivered, Proof of Delivery (POD), Print Gate Pass */}
                       <td className="p-3 text-right">
-                        {isDelivered ? (
-                          <span className="text-emerald-600 font-bold text-xs flex items-center justify-end gap-1">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Delivered</span>
-                          </span>
-                        ) : (
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          {/* Action 1: Mark Delivered */}
+                          {!isDelivered ? (
+                            <Button
+                              size="sm"
+                              onClick={() => handleOpenDelivery(b)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs gap-1 h-8 px-2.5"
+                              title="Mark consignment as delivered and confirm consignee handover"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Mark Delivered</span>
+                            </Button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 px-2 py-1 rounded-lg">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Delivered</span>
+                            </span>
+                          )}
+
+                          {/* Action 2: Proof of Delivery (POD) */}
                           <Button
                             size="sm"
-                            onClick={() => handleOpenDelivery(b)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs gap-1.5 h-8 px-3"
+                            variant="outline"
+                            onClick={() => setPodModalItem(b)}
+                            className="rounded-xl text-xs font-semibold gap-1 h-8 px-2.5 text-blue-700 border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-800"
+                            title="View / Upload Proof of Delivery (POD) receipt & stamp"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Confirm Delivery</span>
+                            <FileCheck className="w-3.5 h-3.5 text-blue-600" />
+                            <span className="hidden sm:inline">POD</span>
                           </Button>
-                        )}
+
+                          {/* Action 3: Print Gate Pass */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setGatePassItem(b)}
+                            className="rounded-xl text-xs font-semibold gap-1 h-8 px-2.5 text-slate-700 border-slate-300 hover:bg-slate-50 dark:text-slate-200 dark:border-slate-700"
+                            title="Print outward delivery gate pass & cargo release voucher"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="hidden sm:inline">Gate Pass</span>
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -370,10 +632,10 @@ export default function DeliveryPage() {
           <DialogHeader>
             <DialogTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              Confirm Delivery & Handover
+              Confirm Delivery &amp; Handover
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Record consignee verification details and settle any remaining balance.
+              Record consignee verification details, settle freight balance, and release shipment.
             </DialogDescription>
           </DialogHeader>
 
@@ -387,7 +649,7 @@ export default function DeliveryPage() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500 font-bold">Shipper:</span>
+                  <span className="text-slate-500 font-bold">Consignor (Shipper):</span>
                   <span className="font-semibold text-slate-700 dark:text-slate-200">
                     {deliveryModalBilty.senderName}
                   </span>
@@ -422,7 +684,7 @@ export default function DeliveryPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  Receiver CNIC / ID Card
+                  Receiver CNIC / Identification #
                 </Label>
                 <Input
                   value={deliveryData.receiverCnic}
@@ -444,6 +706,20 @@ export default function DeliveryPage() {
                   onChange={(e) =>
                     setDeliveryData({ ...deliveryData, deliveryDate: e.target.value })
                   }
+                  className="rounded-xl h-10 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                  Delivery Remarks / Condition Notes
+                </Label>
+                <Input
+                  value={deliveryData.deliveryNotes}
+                  onChange={(e) =>
+                    setDeliveryData({ ...deliveryData, deliveryNotes: e.target.value })
+                  }
+                  placeholder=""
                   className="rounded-xl h-10 text-xs"
                 />
               </div>

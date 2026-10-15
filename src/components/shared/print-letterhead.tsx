@@ -8,6 +8,7 @@ interface PrintHeaderProps {
   documentNumber?: string;
   date?: string;
   station?: string;
+  companyName?: string;
 }
 
 export function PrintHeader({
@@ -16,6 +17,7 @@ export function PrintHeader({
   documentNumber,
   date,
   station = "Head Office Station (Lahore)",
+  companyName,
 }: PrintHeaderProps) {
   const displayDate = date || new Date().toLocaleDateString("en-PK", {
     year: "numeric",
@@ -37,7 +39,7 @@ export function PrintHeader({
           />
           <div>
             <h1 className="text-xl font-black tracking-tight text-red-600 uppercase">
-              SUPER PAK DATA GOODS TRANSPORT CO. (SPD LOGISTICS)
+              {companyName || "SUPER PAK DATA GOODS TRANSPORT CO. (SPD LOGISTICS)"}
             </h1>
             <p className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">
               {subtitle}
