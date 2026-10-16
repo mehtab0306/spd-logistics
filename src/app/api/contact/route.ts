@@ -4,9 +4,42 @@ import prisma from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-function formatWhatsAppNumber(phone: string): string {
-  const digits = (phone || "").replace(/\D/g, "");
-  if (!digits) return "923252024433";
+// In-memory sliding window rate limiter (max 5 submissions per 10 minutes per IP)
+const rateLimitMap = new Map<string, { count: number; expiresAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+  if (!record || record.expiresAt < now) {
+    rateLimitMap.set(ip, { count: 1, expiresAt: now + 10 * 60 * 1000 });
+    return true;
+  }
+  if (record.count >= 5) {
+    return false;
+  }
+  record.count += 1;
+  return true;
+}
+
+// Security: escape HTML entities to prevent HTML injection in email clients
+function escapeHtml(str: string = ""): string {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Security: strip carriage returns and newlines to prevent email header injection
+function sanitizeHeader(str: string = ""): string {
+  return String(str).replace(/[\r\n\t]+/g, " ").trim();
+}
+
+// Normalize Pakistani and international phone numbers to international digits-only format
+function normalizePhoneNumber(phoneStr: string = ""): string {
+  const digits = phoneStr.replace(/\D/g, "");
+  if (!digits || digits.length < 10) return "";
   if (digits.startsWith("0")) {
     return "92" + digits.slice(1);
   }
@@ -16,11 +49,20 @@ function formatWhatsAppNumber(phone: string): string {
   return "92" + digits;
 }
 
-function buildCorporateHtmlEmail(data: {
+// Generate unique, collision-resistant inquiry reference ID
+function generateReferenceId(): string {
+  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const randomPart = Math.floor(1000 + Math.random() * 9000);
+  return `SPD-INQ-${datePart}-${randomPart}`;
+}
+
+interface EmailRenderData {
+  refId: string;
   inquiryType: "CUSTOMER" | "BROKER";
   fullName: string;
   companyName?: string;
   phone: string;
+  normalizedPhone: string;
   email: string;
   originCity?: string;
   destinationCity?: string;
@@ -33,39 +75,106 @@ function buildCorporateHtmlEmail(data: {
   expectedTerms?: string;
   message: string;
   submittedAt: string;
-}): string {
+}
+
+function buildCorporateHtmlEmail(data: EmailRenderData): string {
   const isBroker = data.inquiryType === "BROKER";
-  const cleanWaPhone = formatWhatsAppNumber(data.phone);
-  const waReplyUrl = `https://wa.me/${cleanWaPhone}?text=Hello,%20we%20received%20your%20${isBroker ? "fleet%20registration" : "booking%20inquiry"}%20on%20SPD%20Logistics.`;
-  const laneOrBase = isBroker
-    ? data.operatingCity || "Pakistan Linehaul Corridor"
-    : data.originCity && data.destinationCity
-    ? `${data.originCity} ➔ ${data.destinationCity}`
-    : data.originCity || data.destinationCity || "Karachi ➔ Lahore Linehaul";
+  const badgeBg = isBroker ? "#f3e8ff" : "#dcfce7";
+  const badgeColor = isBroker ? "#7e22ce" : "#15803d";
+  const badgeBorder = isBroker ? "#d8b4fe" : "#86efac";
+  const badgeLabel = isBroker ? "TRANSPORTER / BROKER REGISTRATION" : "CUSTOMER BOOKING";
+
+  const waPrefillMessage = encodeURIComponent(
+    "Assalam-o-Alaikum! We have received your inquiry regarding SPD Logistics. Thank you for contacting us. Our team will assist you shortly."
+  );
+  const waUrl = data.normalizedPhone ? `https://wa.me/${data.normalizedPhone}?text=${waPrefillMessage}` : "";
+
+  // Table rows with alternating background and conditional rendering (omit empty values)
+  const rows: { label: string; value: string; isLink?: boolean; href?: string; highlight?: boolean }[] = [];
+
+  rows.push({ label: "Reference ID", value: data.refId, highlight: true });
+
+  if (isBroker) {
+    rows.push({ label: "Broker / Owner Name", value: data.fullName });
+    if (data.companyName) {
+      rows.push({ label: "Company / Fleet Name", value: data.companyName });
+    }
+  } else {
+    rows.push({ label: "Customer Full Name", value: data.fullName });
+  }
+
+  rows.push({
+    label: "WhatsApp / Phone",
+    value: data.phone,
+    isLink: true,
+    href: `tel:${data.normalizedPhone || data.phone}`,
+    highlight: true,
+  });
+
+  if (data.email && data.email !== "superpakdatawale@gmail.com") {
+    rows.push({ label: "Email Address", value: data.email, isLink: true, href: `mailto:${data.email}` });
+  }
+
+  if (isBroker) {
+    if (data.operatingCity) rows.push({ label: "Operating Base City", value: data.operatingCity });
+    if (data.vehicleType) rows.push({ label: "Vehicle Category", value: data.vehicleType });
+    if (data.vehicleRegNo) rows.push({ label: "Registration Plate", value: data.vehicleRegNo });
+    if (data.preferredRoutes) rows.push({ label: "Preferred Routes", value: data.preferredRoutes });
+    if (data.expectedTerms) rows.push({ label: "Tariff Expectations / Terms", value: data.expectedTerms });
+  } else {
+    if (data.originCity) rows.push({ label: "Origin City", value: data.originCity });
+    if (data.destinationCity) rows.push({ label: "Destination City", value: data.destinationCity });
+    if (data.originCity && data.destinationCity) {
+      rows.push({ label: "Transport Lane", value: `${data.originCity} ➔ ${data.destinationCity}`, highlight: true });
+    }
+    if (data.cargoDescription) rows.push({ label: "Cargo Description", value: data.cargoDescription });
+    if (data.estimatedWeight) rows.push({ label: "Estimated Weight", value: data.estimatedWeight });
+  }
+
+  const tableRowsHtml = rows
+    .map((r, idx) => {
+      const bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+      const valContent = r.isLink && r.href
+        ? `<a href="${escapeHtml(r.href)}" style="color: ${r.highlight ? "#dc2626" : "#1e40af"}; text-decoration: none; font-weight: 700;">${escapeHtml(r.value)}</a>`
+        : `<span style="color: ${r.highlight ? "#0f172a" : "#334155"}; font-weight: ${r.highlight ? "800" : "600"};">${escapeHtml(r.value)}</span>`;
+
+      return `
+        <tr style="background-color: ${bg};">
+          <td style="padding: 11px 16px; width: 40%; font-size: 12px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid #e2e8f0;">
+            ${escapeHtml(r.label)}
+          </td>
+          <td style="padding: 11px 16px; font-size: 13px; border-bottom: 1px solid #e2e8f0;">
+            ${valContent}
+          </td>
+        </tr>`;
+    })
+    .join("");
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SPD Logistics - Dispatch Inquiry</title>
+  <title>${escapeHtml(data.inquiryType)} - SPD Logistics</title>
 </head>
 <body style="margin: 0; padding: 24px 10px; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-  <center>
-    <!-- Container matching top international carriers (DHL / Maersk) -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border-top: 5px solid #dc2626; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);">
+  <center style="width: 100%;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border-top: 5px solid #dc2626; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
       
       <!-- Header Banner -->
       <tr>
-        <td style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 28px 24px; text-align: center; border-bottom: 2px solid #334155;">
+        <td style="background-color: #ffffff; padding: 26px 24px 20px 24px; text-align: center;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
             <tr>
               <td align="center">
-                <div style="font-size: 28px; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase;">
-                  <span style="color: #dc2626;">SPD</span> <span style="color: #3b82f6;">LOGISTICS</span>
+                <div style="font-size: 26px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px;">
+                  <span style="color: #dc2626;">SPD</span> <span style="color: #1e40af;">LOGISTICS</span>
                 </div>
-                <div style="font-size: 11px; color: #94a3b8; font-weight: 700; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">
-                  Super Pak Data Wale Goods Transport Co. &bull; Est. 1996
+                <div style="font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 2px;">
+                  Super Pak Data Wale Goods Transport Co.
+                </div>
+                <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
+                  Professional Cargo &amp; Transportation Services &bull; Est. 1996
                 </div>
               </td>
             </tr>
@@ -73,170 +182,102 @@ function buildCorporateHtmlEmail(data: {
         </td>
       </tr>
 
-      <!-- Inquiry Type & Timestamp Badge -->
+      <!-- Brand Divider Line (Red & Blue) -->
       <tr>
-        <td style="padding: 24px 24px 12px 24px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 0; line-height: 4px; font-size: 1px; height: 4px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
             <tr>
-              <td>
-                ${
-                  isBroker
-                    ? `<span style="display: inline-block; padding: 6px 14px; background-color: #f3e8ff; color: #7e22ce; border: 1.5px solid #d8b4fe; border-radius: 9999px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
-                        🚛 Transporter & Fleet Registration
-                       </span>`
-                    : `<span style="display: inline-block; padding: 6px 14px; background-color: #dcfce7; color: #15803d; border: 1.5px solid #86efac; border-radius: 9999px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
-                        📦 General Cargo Booking Inquiry
-                       </span>`
-                }
+              <td width="50%" style="background-color: #dc2626; height: 4px; line-height: 4px; font-size: 1px;">&nbsp;</td>
+              <td width="50%" style="background-color: #1e40af; height: 4px; line-height: 4px; font-size: 1px;">&nbsp;</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Inquiry Identification Bar -->
+      <tr>
+        <td style="padding: 16px 24px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td align="left">
+                <span style="display: inline-block; padding: 5px 12px; background-color: ${badgeBg}; color: ${badgeColor}; border: 1.5px solid ${badgeBorder}; border-radius: 9999px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase;">
+                  ${badgeLabel}
+                </span>
               </td>
               <td align="right" style="font-size: 11px; color: #64748b; font-weight: 700;">
-                🕒 ${data.submittedAt} (PKT)
+                🕒 ${escapeHtml(data.submittedAt)}
               </td>
             </tr>
           </table>
         </td>
       </tr>
 
-      <!-- Main Body -->
+      <!-- Content Area -->
       <tr>
         <td style="padding: 24px;">
-          <h2 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 900; color: #0f172a; letter-spacing: -0.3px;">
-            ${isBroker ? "New Fleet Owner / Broker Registration" : "New Customer Consignment Inquiry"}
-          </h2>
-          <p style="margin: 0 0 20px 0; font-size: 13px; color: #475569; line-height: 1.6;">
-            A new submission has been received on <strong>spd-logistics.com</strong> and directed to official operations (<a href="mailto:superpakdatawale@gmail.com" style="color: #1e40af; text-decoration: none; font-weight: 700;">superpakdatawale@gmail.com</a>).
-          </p>
-
-          <!-- Structured Particulars Table -->
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 24px; font-size: 13px;">
-            <tr style="background-color: #f1f5f9;">
-              <td style="padding: 12px 16px; font-weight: 800; color: #334155; width: 38%; border-bottom: 1px solid #e2e8f0;">Particulars</td>
-              <td style="padding: 12px 16px; font-weight: 800; color: #334155; border-bottom: 1px solid #e2e8f0;">Verified Record</td>
-            </tr>
-            <tr style="background-color: #ffffff;">
-              <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">
-                ${isBroker ? "Broker / Owner Name:" : "Customer Name:"}
-              </td>
-              <td style="padding: 11px 16px; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0;">
-                ${data.fullName} ${data.companyName ? `<span style="color: #64748b; font-weight: 600;">(${data.companyName})</span>` : ""}
+          
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px;">
+            <tr>
+              <td>
+                <h3 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 900; color: #0f172a;">
+                  ${isBroker ? "Fleet Owner / Transporter Registration" : "New Consignment Booking Inquiry"}
+                </h3>
+                <p style="margin: 0; font-size: 12px; color: #64748b; line-height: 1.5;">
+                  A verified inquiry has been received via the SPD Logistics web portal for <strong style="color: #1e40af;">superpakdatawale@gmail.com</strong>.
+                </p>
               </td>
             </tr>
-            <tr style="background-color: #f8fafc;">
-              <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">Phone / WhatsApp:</td>
-              <td style="padding: 11px 16px; font-weight: 800; color: #dc2626; border-bottom: 1px solid #e2e8f0;">
-                <a href="tel:${data.phone}" style="color: #dc2626; text-decoration: none;">📞 ${data.phone}</a>
-              </td>
-            </tr>
-            <tr style="background-color: #ffffff;">
-              <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">Email Address:</td>
-              <td style="padding: 11px 16px; font-weight: 700; color: #1e40af; border-bottom: 1px solid #e2e8f0;">
-                <a href="mailto:${data.email}" style="color: #1e40af; text-decoration: none;">✉️ ${data.email || "N/A"}</a>
-              </td>
-            </tr>
-            <tr style="background-color: #f8fafc;">
-              <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">
-                ${isBroker ? "Operating Base:" : "Transport Lane:"}
-              </td>
-              <td style="padding: 11px 16px; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0;">
-                📍 ${laneOrBase}
-              </td>
-            </tr>
-
-            ${
-              isBroker
-                ? `
-            <tr style="background-color: #ffffff;">
-              <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">Vehicle Category:</td>
-              <td style="padding: 11px 16px; font-weight: 800; color: #7e22ce; border-bottom: 1px solid #e2e8f0;">
-                🚛 ${data.vehicleType || "Commercial Fleet"}
-              </td>
-            </tr>
-            <tr style="background-color: #f8fafc;">
-              <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">Registration Plate:</td>
-              <td style="padding: 11px 16px; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0; font-family: monospace;">
-                🏷️ ${data.vehicleRegNo || "Registration on inspection"}
-              </td>
-            </tr>
-            <tr style="background-color: #ffffff;">
-              <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">Regular Routes:</td>
-              <td style="padding: 11px 16px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #e2e8f0;">
-                🛣️ ${data.preferredRoutes || "Nationwide Corridors"}
-              </td>
-            </tr>
-            ${
-              data.expectedTerms
-                ? `<tr style="background-color: #f8fafc;">
-                    <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">Tariff Terms:</td>
-                    <td style="padding: 11px 16px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #e2e8f0;">
-                      ${data.expectedTerms}
-                    </td>
-                  </tr>`
-                : ""
-            }
-            `
-                : `
-            ${
-              data.cargoDescription
-                ? `<tr style="background-color: #ffffff;">
-                    <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">Cargo Commodity:</td>
-                    <td style="padding: 11px 16px; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0;">
-                      📦 ${data.cargoDescription}
-                    </td>
-                  </tr>`
-                : ""
-            }
-            ${
-              data.estimatedWeight
-                ? `<tr style="background-color: #f8fafc;">
-                    <td style="padding: 11px 16px; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0;">Estimated Weight / Units:</td>
-                    <td style="padding: 11px 16px; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0;">
-                      ⚖️ ${data.estimatedWeight}
-                    </td>
-                  </tr>`
-                : ""
-            }
-            `
-            }
           </table>
 
-          <!-- Cargo / Special Message Box -->
-          <div style="background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; border-left: 4px solid #dc2626; padding: 16px; margin-bottom: 24px;">
-            <div style="font-size: 11px; font-weight: 900; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
-              📝 Full Cargo / Operational Notes:
+          <!-- Structured Inquiry Table -->
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 22px;">
+            ${tableRowsHtml}
+          </table>
+
+          <!-- Message Box -->
+          <div style="background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; border-left: 4px solid #dc2626; padding: 14px 16px; margin-bottom: 24px;">
+            <div style="font-size: 11px; font-weight: 900; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+              📝 ${isBroker ? "Additional Fleet Notes & Tariff Requirements:" : "Customer Consignment & Handling Message:"}
             </div>
-            <div style="font-size: 13px; color: #0f172a; line-height: 1.6; white-space: pre-wrap;">${
-              data.message || "No special instructions provided. Standard dispatch requested."
+            <div style="font-size: 13px; color: #0f172a; line-height: 1.6; white-space: pre-wrap; word-break: break-word;">${
+              escapeHtml(data.message) || "No additional instructions provided. Standard logistics dispatch requested."
             }</div>
           </div>
 
-          <!-- Call-To-Action WhatsApp Bar -->
-          <div style="text-align: center; margin: 28px 0 12px 0;">
-            <a href="${waReplyUrl}" target="_blank" style="display: inline-block; padding: 14px 32px; background-color: #22c55e; color: #ffffff; font-size: 13px; font-weight: 800; text-decoration: none; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-              💬 Direct WhatsApp Reply to ${isBroker ? "Broker" : "Customer"} (${data.phone})
+          <!-- WhatsApp Action Button (Omitted if phone invalid) -->
+          ${
+            waUrl
+              ? `
+          <div style="text-align: center; margin: 24px 0 10px 0;">
+            <a href="${escapeHtml(waUrl)}" target="_blank" style="display: inline-block; padding: 13px 28px; background-color: #22c55e; color: #ffffff; font-size: 13px; font-weight: 800; text-decoration: none; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+              💬 REPLY TO ${isBroker ? "BROKER" : "CUSTOMER"} ON WHATSAPP
             </a>
-          </div>
-          <div style="text-align: center; font-size: 11px; color: #64748b; margin-top: 6px;">
-            Clicking opens pre-filled WhatsApp conversation with this client.
-          </div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 6px;">
+              Opens verified conversation with ${escapeHtml(data.phone)}
+            </div>
+          </div>`
+              : ""
+          }
+
         </td>
       </tr>
 
-      <!-- Corporate Signature -->
+      <!-- Corporate Footer -->
       <tr>
-        <td style="background-color: #0b1120; padding: 24px; text-align: center; border-top: 1px solid #1e293b; color: #94a3b8; font-size: 12px; line-height: 1.7;">
-          <p style="margin: 0 0 8px 0; font-weight: 800; color: #ffffff; font-size: 13px;">
-            SUPER PAK DATA WALE GOODS TRANSPORT CO. (EST. 1996)
+        <td style="background-color: #0b1120; padding: 22px 24px; text-align: center; border-top: 1px solid #1e293b; color: #94a3b8; font-size: 11px; line-height: 1.6;">
+          <p style="margin: 0 0 4px 0; font-weight: 800; color: #ffffff; font-size: 12px; letter-spacing: 0.5px;">
+            SPD LOGISTICS &bull; SUPER PAK DATA WALE GOODS TRANSPORT CO.
           </p>
-          <p style="margin: 0 0 4px 0; color: #cbd5e1;">
-            <strong>Karachi Terminal:</strong> Hawksbay Truck Stand, Maripur Road, Karachi (Hammad: 0325 2024433)
+          <p style="margin: 0 0 3px 0; color: #cbd5e1;">
+            <strong>Karachi Freight Operations:</strong> Hawksbay Truck Stand, Maripur Road, Karachi (Hammad: 0325 2024433)
           </p>
-          <p style="margin: 0 0 12px 0; color: #cbd5e1;">
-            <strong>Lahore Terminal:</strong> Saggian Bypass & Bhati Gate Stand, Lahore (Faisal: 0300 2024433)
+          <p style="margin: 0 0 8px 0; color: #cbd5e1;">
+            <strong>Lahore Freight Operations:</strong> Saggian Bypass &amp; Bhati Gate Stand, Lahore (Faisal: 0300 2024433)
           </p>
-          <div style="padding-top: 12px; border-top: 1px solid #1e293b; font-size: 11px; color: #64748b;">
-            System Developed &amp; Maintained by 
-            <a href="https://wa.me/923147194861?text=Hello%20Mehtab,%20regarding%20SPD%20Logistics%20email%20system" target="_blank" style="color: #ef4444; font-weight: 700; text-decoration: none;">Mehtab</a> 
-            (WhatsApp: +92 314 7194861)
+          <div style="padding-top: 10px; border-top: 1px solid #1e293b; font-size: 10px; color: #64748b;">
+            Technical Support: Mehtab &bull; WhatsApp +92 314 7194861
+            <br>
+            <span style="font-style: italic; color: #475569;">Automated inquiry notification from SPD Logistics website.</span>
           </div>
         </td>
       </tr>
@@ -247,36 +288,25 @@ function buildCorporateHtmlEmail(data: {
 </html>`;
 }
 
-function buildCorporateTextEmail(data: {
-  inquiryType: "CUSTOMER" | "BROKER";
-  fullName: string;
-  companyName?: string;
-  phone: string;
-  email: string;
-  originCity?: string;
-  destinationCity?: string;
-  cargoDescription?: string;
-  estimatedWeight?: string;
-  vehicleType?: string;
-  vehicleRegNo?: string;
-  operatingCity?: string;
-  preferredRoutes?: string;
-  expectedTerms?: string;
-  message: string;
-  submittedAt: string;
-}): string {
+function buildCorporateTextEmail(data: EmailRenderData): string {
   const isBroker = data.inquiryType === "BROKER";
+  const waPrefillMessage = encodeURIComponent(
+    "Assalam-o-Alaikum! We have received your inquiry regarding SPD Logistics. Thank you for contacting us. Our team will assist you shortly."
+  );
+  const waUrl = data.normalizedPhone ? `https://wa.me/${data.normalizedPhone}?text=${waPrefillMessage}` : "";
+
   return `===================================================
-SPD LOGISTICS - ${isBroker ? "BROKER & FLEET REGISTRATION" : "NEW BOOKING INQUIRY"}
+SPD LOGISTICS - ${isBroker ? "TRANSPORTER / BROKER REGISTRATION" : "CUSTOMER BOOKING INQUIRY"}
 Super Pak Data Wale Goods Transport Co. - Est. 1996
 ===================================================
 
+Reference ID:     ${data.refId}
 Submission Time:  ${data.submittedAt} (PKT)
-Inquiry Type:     ${isBroker ? "Transporter / Broker Attachment" : "Customer Cargo Booking"}
+Inquiry Type:     ${isBroker ? "Transporter & Broker Registration" : "Customer Cargo Booking"}
 
 Name:             ${data.fullName} ${data.companyName ? `(${data.companyName})` : ""}
 Phone / WhatsApp: ${data.phone}
-Official Email:   ${data.email || "N/A"}
+Email:            ${data.email || "N/A"}
 ${
   isBroker
     ? `Operating Base:   ${data.operatingCity || "Pakistan"}
@@ -289,46 +319,105 @@ Cargo Commodity:  ${data.cargoDescription || "General Freight"}
 Estimated Weight: ${data.estimatedWeight || "Full Truckload"}`
 }
 
-Message / Notes:
-${data.message || "No additional notes"}
+Message / Special Requirements:
+${data.message || "No additional instructions provided."}
 
-WhatsApp Direct Reply:
-https://wa.me/${formatWhatsAppNumber(data.phone)}
-
+${waUrl ? `Direct WhatsApp Reply:\n${waUrl}\n` : ""}
 ---------------------------------------------------
 Super Pak Data Wale Goods Transport Co. (Est. 1996)
-Karachi: Hawksbay Truck Stand, Maripur Road
-Lahore:  Saggian Bypass Terminal
+Karachi: Hawksbay Truck Stand, Maripur Road (Hammad: 0325 2024433)
+Lahore:  Saggian Bypass Stand (Faisal: 0300 2024433)
 Official Dispatch: superpakdatawale@gmail.com
-System Developed & Maintained by Mehtab (WhatsApp: +92 314 7194861)
+Technical Support: Mehtab (WhatsApp: +92 314 7194861)
+Automated inquiry notification from SPD Logistics website.
 ===================================================`;
 }
 
 export async function POST(req: NextRequest) {
   try {
+    // 1. Rate Limiting Check
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.ip || "127.0.0.1";
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        {
+          success: false,
+          delivered: false,
+          message: "Bohat ziyada inquiries submit ho chuki hain. Baraye meherbani 10 minute baad dobara koshish karein.",
+        },
+        { status: 429 }
+      );
+    }
+
     let body: any = {};
     try {
       body = await req.json();
     } catch {
-      body = {};
+      return NextResponse.json(
+        { success: false, delivered: false, message: "Invalid JSON payload." },
+        { status: 400 }
+      );
     }
 
+    // 2. Honeypot Spam Protection
+    if (body._hp_website || body._hp_company) {
+      console.warn("[Contact Honeypot] Bot spam attempt detected.");
+      return NextResponse.json(
+        { success: false, delivered: false, message: "Spam submission rejected." },
+        { status: 400 }
+      );
+    }
+
+    // 3. Extract and Sanitize Inputs with Maximum Length Constraints
     const inquiryType: "CUSTOMER" | "BROKER" =
       (body.inquiryType || "CUSTOMER").toUpperCase() === "BROKER" ? "BROKER" : "CUSTOMER";
-    const fullName = (body.fullName || body.name || body.brokerName || "Valued Shipper").trim();
-    const companyName = (body.companyName || "").trim();
-    const phone = (body.phone || body.whatsapp || "Not specified").trim();
-    const email = (body.email || "superpakdatawale@gmail.com").trim();
-    const originCity = (body.originCity || body.origin || "").trim();
-    const destinationCity = (body.destinationCity || body.destination || "").trim();
-    const cargoDescription = (body.cargoDescription || body.cargo || "").trim();
-    const estimatedWeight = (body.estimatedWeight || body.weight || "").trim();
-    const vehicleType = (body.vehicleType || "").trim();
-    const vehicleRegNo = (body.vehicleRegNo || body.vehicleNumber || "").trim();
-    const operatingCity = (body.operatingCity || "").trim();
-    const preferredRoutes = (body.preferredRoutes || "").trim();
-    const expectedTerms = (body.expectedTerms || body.terms || "").trim();
-    const message = (body.message || body.notes || "").trim();
+    const isBroker = inquiryType === "BROKER";
+
+    const fullName = sanitizeHeader(String(body.fullName || body.name || body.brokerName || "").slice(0, 100));
+    const companyName = sanitizeHeader(String(body.companyName || "").slice(0, 100));
+    const phone = sanitizeHeader(String(body.phone || body.whatsapp || "").slice(0, 30));
+    const email = sanitizeHeader(String(body.email || "").slice(0, 100));
+    const originCity = sanitizeHeader(String(body.originCity || body.origin || "").slice(0, 100));
+    const destinationCity = sanitizeHeader(String(body.destinationCity || body.destination || "").slice(0, 100));
+    const cargoDescription = sanitizeHeader(String(body.cargoDescription || body.cargo || "").slice(0, 200));
+    const estimatedWeight = sanitizeHeader(String(body.estimatedWeight || body.weight || "").slice(0, 50));
+    const vehicleType = sanitizeHeader(String(body.vehicleType || "").slice(0, 100));
+    const vehicleRegNo = sanitizeHeader(String(body.vehicleRegNo || body.vehicleNumber || "").slice(0, 40));
+    const operatingCity = sanitizeHeader(String(body.operatingCity || "").slice(0, 100));
+    const preferredRoutes = sanitizeHeader(String(body.preferredRoutes || "").slice(0, 200));
+    const expectedTerms = sanitizeHeader(String(body.expectedTerms || body.terms || "").slice(0, 200));
+    const message = String(body.message || body.notes || "").slice(0, 3000).trim();
+
+    // 4. Server-Side Mandatory Field Validation
+    if (!fullName) {
+      return NextResponse.json(
+        { success: false, delivered: false, message: "Baraye meherbani apna naam darj karein." },
+        { status: 422 }
+      );
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phone);
+    if (!normalizedPhone || normalizedPhone.length < 10) {
+      return NextResponse.json(
+        { success: false, delivered: false, message: "Durust Pakistani WhatsApp / Mobile number darj karein (e.g. 0325 2024433)." },
+        { status: 422 }
+      );
+    }
+
+    if (!isBroker && (!originCity || !destinationCity)) {
+      return NextResponse.json(
+        { success: false, delivered: false, message: "Origin aur Destination shehar darj karna zaroori hai." },
+        { status: 422 }
+      );
+    }
+
+    if (isBroker && !operatingCity) {
+      return NextResponse.json(
+        { success: false, delivered: false, message: "Operating Base City darj karna zaroori hai." },
+        { status: 422 }
+      );
+    }
+
+    const refId = generateReferenceId();
 
     const submittedAt = new Date().toLocaleString("en-PK", {
       timeZone: "Asia/Karachi",
@@ -336,17 +425,19 @@ export async function POST(req: NextRequest) {
       timeStyle: "medium",
     });
 
-    const isBroker = inquiryType === "BROKER";
+    // 5. Professional Subject Lines (Section 4 Specification)
     const subject = isBroker
-      ? `[BROKER & FLEET REGISTRATION] - SPD Logistics - ${companyName || fullName}`
-      : `[NEW BOOKING INQUIRY] - SPD Logistics - ${fullName || "Valued Shipper"}`;
+      ? sanitizeHeader(`[FLEET REGISTRATION] SPD Logistics | ${fullName} | ${vehicleType || "Commercial Fleet"}`)
+      : sanitizeHeader(`[NEW CUSTOMER INQUIRY] SPD Logistics | ${fullName} | ${originCity || "Origin"} → ${destinationCity || "Destination"}`);
 
-    const payload = {
+    const renderData: EmailRenderData = {
+      refId,
       inquiryType,
       fullName,
       companyName,
       phone,
-      email,
+      normalizedPhone,
+      email: email || "superpakdatawale@gmail.com",
       originCity,
       destinationCity,
       cargoDescription,
@@ -360,23 +451,23 @@ export async function POST(req: NextRequest) {
       submittedAt,
     };
 
-    const html = buildCorporateHtmlEmail(payload);
-    const text = buildCorporateTextEmail(payload);
+    const html = buildCorporateHtmlEmail(renderData);
+    const text = buildCorporateTextEmail(renderData);
 
-    // Save notification & audit log in database
+    // 6. Record Audit and Notification in DB (Safe / non-blocking)
     try {
       await prisma.auditLog.create({
         data: {
           action: isBroker ? "BROKER_REGISTRATION" : "BOOKING_INQUIRY",
           module: "CONTACT",
-          details: `${isBroker ? "Broker" : "Customer"} submission from ${fullName} (${phone}) - Target: superpakdatawale@gmail.com`,
+          details: `Inquiry ${refId} from ${fullName} (${phone}) - Target: superpakdatawale@gmail.com`,
         },
       });
 
       const { createSystemNotification } = await import("@/lib/notifications");
       await createSystemNotification({
         type: "CONTACT",
-        title: isBroker ? `🚛 New Broker Registration: ${fullName}` : `📦 New Booking Inquiry: ${fullName}`,
+        title: isBroker ? `🚛 Broker: ${fullName} (${refId})` : `📦 Cargo Inquiry: ${fullName} (${refId})`,
         message: `${subject}: "${message || cargoDescription || 'Cargo inquiry'}" (Phone: ${phone})`,
         link: "/admin/notifications",
       });
@@ -384,54 +475,61 @@ export async function POST(req: NextRequest) {
       console.warn("[Contact DB Warning]", dbErr);
     }
 
-    // Automatically send high-density corporate email to superpakdatawale@gmail.com
-    let dispatchMethod = "local_store";
-    try {
-      const dispatchResult = await sendContactEmail({
-        to: "superpakdatawale@gmail.com",
-        fromName: fullName,
-        fromEmail: email,
-        phone,
-        message,
-        submittedAt,
-        replyTo: email,
-        subject,
-        html,
-        text,
-      });
-      if (dispatchResult && dispatchResult.method) {
-        dispatchMethod = dispatchResult.method;
-      }
-    } catch (sendErr) {
-      console.warn("[Contact Mailer Warning]", sendErr);
+    // 7. Transmit Email via Nodemailer to superpakdatawale@gmail.com
+    const dispatchResult = await sendContactEmail({
+      to: "superpakdatawale@gmail.com",
+      fromName: fullName,
+      fromEmail: email || "superpakdatawale@gmail.com",
+      phone,
+      message,
+      submittedAt,
+      replyTo: email || undefined,
+      subject,
+      html,
+      text,
+    });
+
+    // 8. Honest Response Check: Do not claim success if email provider failed or is unconfigured
+    if (!dispatchResult.success) {
+      console.error(
+        `[Contact API] Dispatch failed for ${refId} (${dispatchResult.method}): ${dispatchResult.message}`
+      );
+
+      const isUnconfigured = dispatchResult.method === "SMTP_UNCONFIGURED";
+
+      return NextResponse.json(
+        {
+          success: false,
+          delivered: false,
+          refId,
+          method: dispatchResult.method,
+          message: "Maazrat, aap ki inquiry abhi send nahi ho saki. Aap dobara koshish karein ya WhatsApp ke zariye rabta karein.",
+          setupNotice: isUnconfigured
+            ? "Server Gmail credentials (SMTP_USER / SMTP_PASS) are not yet configured in environment."
+            : undefined,
+        },
+        { status: isUnconfigured ? 503 : 502 }
+      );
     }
 
+    // 9. Verified Successful Delivery
+    return NextResponse.json({
+      success: true,
+      delivered: true,
+      refId,
+      message: "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi.",
+      recipient: "superpakdatawale@gmail.com",
+      submittedAt,
+    });
+  } catch (error: any) {
+    console.error("[Contact API Exception]", error);
     return NextResponse.json(
       {
-        success: true,
-        message: "Shukriya! Aap ki inquiry superpakdatawale@gmail.com par pohnch chuki hai. Hamari operations team foran rabta karegi.",
-        targetEmail: "superpakdatawale@gmail.com",
-        submissionTime: submittedAt,
-        dispatchMethod,
+        success: false,
+        delivered: false,
+        message: "Maazrat, aap ki inquiry abhi send nahi ho saki. Aap dobara koshish karein ya WhatsApp ke zariye rabta karein.",
       },
-      {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
-        },
-      }
-    );
-  } catch (error) {
-    console.error("[Contact Route Exception]", error);
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Shukriya! Aap ki inquiry superpakdatawale@gmail.com par pohnch chuki hai. Hamari operations team foran rabta karegi.",
-      },
-      {
-        headers: { "Access-Control-Allow-Origin": "*" },
-      }
+      { status: 500 }
     );
   }
 }
