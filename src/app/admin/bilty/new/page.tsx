@@ -792,20 +792,30 @@ export default function NewBiltyPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link href="/admin/bilty">
             <Button variant="ghost" className="rounded-xl text-xs font-semibold">
               Cancel
             </Button>
           </Link>
           <Button
-            type="submit"
-            form="new-bilty-form"
+            type="button"
+            onClick={() => handleSaveAction("save_and_print")}
+            disabled={submitting}
+            variant="outline"
+            className="border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl shadow-xs gap-2 h-10 px-4"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4 text-slate-600 dark:text-slate-300" />}
+            <span>Save &amp; Print 4-Sheet Dossier</span>
+          </Button>
+          <Button
+            type="button"
+            onClick={() => handleSaveAction("save_only")}
             disabled={submitting}
             className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-5"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>Book Consignment (4 Sheets)</span>
+            <span>💾 Save Bilty to Records</span>
           </Button>
         </div>
       </div>
@@ -1900,7 +1910,7 @@ export default function NewBiltyPage() {
               ) : (
                 <Save className="w-4 h-4" />
               )}
-              <span>Save Bilty &amp; Record in System</span>
+              <span>💾 Save Bilty to Records</span>
             </Button>
           </div>
         </div>

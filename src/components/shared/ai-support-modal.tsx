@@ -38,15 +38,13 @@ export function AiSupportModal() {
     {
       id: "welcome",
       sender: "bot",
-      text: "Assalam-o-Alaikum! Main Super Pak Data Wale Goods Transport Co. ka AI Operations Copilot hoon. Aaj ka Profit/Loss, kisi party ka khata, ya active trips ke baray mein poochein.",
+      text: "Assalam-o-Alaikum! Main Super Pak Data Wale Goods Transport Co. (SPD Logistics) ka Customer Support Assistant hoon. Consignment tracking, nationwide transport services, ya terminal details ke baray mein rehnumai lein.",
       time: "Just now",
       actions: [
-        { label: "📊 Aaj ka Profit / Loss kitna hai?" },
-        { label: "📒 Kisi party ka khata batao" },
-        { label: "🚚 Aaj ki active gadiyan aur challan" },
-        { label: "➕ Quick expense / kharcha add karo" },
-        { label: "🔍 Track My Bilty", href: "/tracking" },
+        { label: "🔍 Track My Bilty / Consignment", href: "/tracking" },
         { label: "🚚 Book Transport / FTL", href: "/services/full-truck-load" },
+        { label: "📍 Karachi & Lahore Terminal Hubs", href: "/#map-section" },
+        { label: "📞 Operations Helpline (0325 2024433)", href: "tel:03252024433" },
       ],
     },
   ]);
@@ -59,7 +57,7 @@ export function AiSupportModal() {
     let isMounted = true;
     async function checkAiStatus() {
       try {
-        const res = await fetch("/api/ai/chat");
+        const res = await fetch("/api/ai/public");
         const data = await res.json();
         if (!isMounted) return;
         if (data.status === "ready") {
@@ -130,31 +128,18 @@ export function AiSupportModal() {
     setIsTyping(true);
 
     try {
-      // Pass live context to AI assistant
-      let context: any = {};
-      try {
-        const rawCash = localStorage.getItem("spd_cash_books") || localStorage.getItem("cash_books");
-        const rawBilties = localStorage.getItem("spd_bilties") || localStorage.getItem("bilties");
-        const rawCusts = localStorage.getItem("spd_customers") || localStorage.getItem("customers");
-        context = {
-          cashBooks: rawCash ? JSON.parse(rawCash).slice(0, 10) : [],
-          bilties: rawBilties ? JSON.parse(rawBilties).slice(0, 10) : [],
-          customers: rawCusts ? JSON.parse(rawCusts).slice(0, 15) : [],
-        };
-      } catch {}
-
       const chatHistory = nextMessages.slice(-8).map((m) => ({
         role: m.sender === "user" ? ("user" as const) : ("assistant" as const),
         content: m.text,
       }));
 
-      const response = await fetch("/api/ai-assistant", {
+      // Strictly query public privacy enclave (zero internal financial/ledger access)
+      const response = await fetch("/api/ai/public", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: messageText,
           messages: chatHistory,
-          context,
         }),
       });
 

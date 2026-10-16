@@ -12,40 +12,71 @@ const GEMINI_MODELS = [
   "gemini-1.5-flash",
 ];
 
-const BASE_SYSTEM_PROMPT = `Aap "SUPER PAK DATA WALE GOODS TRANSPORT CO." (SPD Logistics, Established 1996) ke Official AI Operations & Finance Copilot hain.
-Owner / Operations Head: Haji Rahim, Hammad Rahim (0325 2024433).
+const BASE_SYSTEM_PROMPT = `Aap "SUPER PAK DATA WALE GOODS TRANSPORT CO." (SPD Logistics, Established 1996) ke Official Enterprise AI Operations & Finance Copilot hain.
+Owner / Operations Head: Haji Rahim, Hammad Faisal Bhatti (0325 2024433).
 Hub Terminals: Karachi (Hawksbay / Mauripur) aur Lahore (Saggian Bypass / Badami Bagh).
 
 Aapka Maqsad:
-1. Operations team, accounts manager, aur dispatchers ko daily Profit/Loss, Cash In/Out, Customer Khatas (Adamjee Dura Built, Crescent, etc.), aur Trip Challans ke baray mein bilkul accurate numbers aur guidance faraham karna.
-2. Zubaan: Natural, ba-adab, professional Roman Urdu / Hindi (ya zaroorat parne par English). Hamesha mukhtasar, seedha aur hisaab-kitab mein 100% precise jawab dein.
+1. Operations team, accounts manager, aur dispatchers ko daily Profit/Loss, Cash In/Out, Customer Khatas (Adamjee Dura Built, Crescent, etc.), aur Trip Challans ke baray mein bilkul accurate numbers aur operational guidance faraham karna.
+2. Zubaan: Natural, ba-adab, professional Roman Urdu / Hindi / English. Mukhtasar, seedha aur hisaab-kitab mein 100% precise jawab dein.
 3. Profit & Loss Formula:
    - Total Inflow / Freight Revenue (Bilties + Received Payments) minus (Truck Hire / Challan Advance + Diesel + Labour + Kharchay).
-   - "Aaj ka kitna profit loss hai?": Total freight aur expenses ko minus kar ke wazeh net profit ya loss batayein.
-4. Customer Khata:
+4. Customer Khata & Balances:
    - Jab kisi party ka khata pucha jaye (e.g., Adamjee, Crescent, Rahim, etc.), unka total billed freight, outstanding balance (baya), aur status batayein.
-5. Quick Entry Assistant:
-   - Agar user kahe ke "Kharcha add karo" ya "Bilty banao", to jawab ke aakhir mein aik clean structured JSON block dein taake system form pre-fill kar sake. Format:
-   \`\`\`json
-   {
-     "type": "quick_expense",
-     "category": "Diesel / Labour / Toll / Food / Godown",
-     "amount": 5000,
-     "description": "...",
-     "partyName": "..."
-   }
-   \`\`\`
-   ya
-   \`\`\`json
-   {
-     "type": "quick_bilty",
-     "sender": "...",
-     "receiver": "...",
-     "origin": "...",
-     "destination": "...",
-     "freight": 25000
-   }
-   \`\`\``;
+
+5. ENTERPRISE ACTION GENERATION (CRITICAL):
+Jab user voice ya text ke zariye Bilty banane, Challan jari karne, ya Cashbook mein transaction/kharcha darj karne ka hukum de, to jawab ke aakhir mein STRICTLY yeh structured JSON block generate karein:
+
+A) BILTY CREATION (CREATE_BILTY):
+\`\`\`json
+{
+  "action": "CREATE_BILTY",
+  "data": {
+    "biltyNumber": "SPD-2026-XXXX",
+    "sender": "Consignor / Shipper Name",
+    "receiver": "Consignee / Receiver Name",
+    "origin": "Karachi",
+    "destination": "Lahore",
+    "freight": 35000,
+    "packages": 50,
+    "commodity": "Cartons / Chemical / General Goods",
+    "weight": "1200 kg",
+    "vehicleNo": "TLR-892"
+  }
+}
+\`\`\`
+
+B) CHALLAN ISSUANCE (CREATE_CHALLAN):
+\`\`\`json
+{
+  "action": "CREATE_CHALLAN",
+  "data": {
+    "challanNumber": "CHL-2026-XXXX",
+    "truckNumber": "TLR-786",
+    "driverName": "Driver Name",
+    "driverPhone": "0300-1234567",
+    "origin": "Karachi Hawksbay",
+    "destination": "Lahore Saggian",
+    "totalTruckHire": 90000,
+    "advancePaid": 40000,
+    "balancePayable": 50000
+  }
+}
+\`\`\`
+
+C) CASHBOOK TRANSACTION (ADD_CASHBOOK_TRANSACTION):
+\`\`\`json
+{
+  "action": "ADD_CASHBOOK_TRANSACTION",
+  "data": {
+    "type": "OUT",
+    "amount": 5000,
+    "category": "Diesel / Maintenance / Toll Tax / Labour / Godown",
+    "party": "Linehaul Fleet / Driver",
+    "description": "Transit operational expense"
+  }
+}
+\`\`\``;
 
 async function callGeminiAssistant(
   prompt: string,
@@ -187,6 +218,22 @@ export async function POST(req: NextRequest) {
 
     const fullSystemPrompt = `${BASE_SYSTEM_PROMPT}\n${operationalContextSnippet}`;
 
+    const parseStructuredAction = (text: string): { type: string; data: any } | null => {
+      try {
+        const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+          const parsed = JSON.parse(jsonMatch[1]);
+          if (parsed.action) {
+            return { type: parsed.action, data: parsed.data || parsed };
+          }
+          if (parsed.type) {
+            return { type: parsed.type, data: parsed };
+          }
+        }
+      } catch {}
+      return null;
+    };
+
     const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
     if (apiKey) {
@@ -197,9 +244,12 @@ export async function POST(req: NextRequest) {
           apiKey
         );
 
+        const parsedAction = parseStructuredAction(geminiResult.reply);
+
         return NextResponse.json({
           success: true,
           reply: geminiResult.reply,
+          action: parsedAction,
           model: geminiResult.model,
           timestamp: new Date().toISOString(),
         });
@@ -208,11 +258,53 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Heuristic Local Fallback Engine (Answers Profit/Loss and Party Khatas accurately even without internet)
+    // Heuristic Local Fallback Engine (Answers Profit/Loss, Party Khatas, Bilty, Challan & Expenses)
     const lower = userText.toLowerCase();
     let localReply = "";
+    let localAction: { type: string; data: any } | null = null;
 
-    if (lower.includes("profit") || lower.includes("loss") || lower.includes("aaj ka")) {
+    if (lower.includes("bilty") && (lower.includes("banao") || lower.includes("banayein") || lower.includes("create") || lower.includes("booking") || lower.includes("naya") || lower.includes("new"))) {
+      const randomBiltyNo = `SPD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const amountMatch = userText.match(/\b(\d{3,6})\b/);
+      const freightAmt = amountMatch ? parseInt(amountMatch[1], 10) : 35000;
+
+      localAction = {
+        type: "CREATE_BILTY",
+        data: {
+          biltyNumber: randomBiltyNo,
+          sender: "Adamjee Dura Built",
+          receiver: "Crescent Chemical Industries",
+          origin: "Karachi Hawksbay Hub",
+          destination: "Lahore Saggian Hub",
+          freight: freightAmt,
+          packages: 60,
+          commodity: "Industrial Goods / Cartons",
+          weight: "1800 kg",
+          vehicleNo: "TLR-786",
+        },
+      };
+
+      localReply = `📝 **Nayi Bilty Booking Tayyar Hai (${randomBiltyNo}):**\n\n- **Consignor / Sender:** Adamjee Dura Built\n- **Consignee / Receiver:** Crescent Chemical Industries\n- **Route:** Karachi Hawksbay &rarr; Lahore Saggian\n- **Total Freight:** PKR ${freightAmt.toLocaleString()}\n- **Packages / Commodity:** 60 Cartons (Industrial Goods)\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_BILTY", data: localAction.data }, null, 2)}\n\`\`\`\n\nNeeche **"Confirm & Save Bilty"** par click karein taake yeh record system mein foran save ho jaye.`;
+    } else if (lower.includes("challan") && (lower.includes("banao") || lower.includes("banayein") || lower.includes("create") || lower.includes("rawana") || lower.includes("gadi") || lower.includes("truck") || lower.includes("trip"))) {
+      const randomChallanNo = `CHL-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      
+      localAction = {
+        type: "CREATE_CHALLAN",
+        data: {
+          challanNumber: randomChallanNo,
+          truckNumber: "TLR-992",
+          driverName: "Muhammad Tariq Khan",
+          driverPhone: "0300-8451290",
+          origin: "Karachi Mauripur / Hawksbay",
+          destination: "Lahore Saggian Terminal",
+          totalTruckHire: 95000,
+          advancePaid: 45000,
+          balancePayable: 50000,
+        },
+      };
+
+      localReply = `🚚 **Trip Challan Manifest Tayyar Hai (${randomChallanNo}):**\n\n- **Vehicle Number:** TLR-992\n- **Driver Name:** Muhammad Tariq Khan (0300-8451290)\n- **Route:** Karachi Mauripur &rarr; Lahore Saggian Terminal\n- **Total Truck Hire (Bhara):** PKR 95,000\n- **Advance Paid:** PKR 45,000\n- **Balance Payable:** PKR 50,000\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_CHALLAN", data: localAction.data }, null, 2)}\n\`\`\`\n\nNeeche **"Confirm & Issue Challan"** par click karein.`;
+    } else if (lower.includes("profit") || lower.includes("loss") || lower.includes("aaj ka") || lower.includes("nafa") || lower.includes("nuqsan")) {
       const inVal = Number(context.todayCashIn) || 0;
       const outVal = Number(context.todayCashOut) || 0;
       const net = inVal - outVal;
@@ -233,15 +325,34 @@ export async function POST(req: NextRequest) {
       } else {
         localReply = `📒 **Customer Khata Inquiry:**\nBarah-e-karam party ka naam batayein (jaise "M/S Adamjee Dura Built", "Crescent", etc.), taake main unka live ledger balance nikaal sakoon.`;
       }
-    } else if (lower.includes("kharcha") || lower.includes("expense") || lower.includes("diesel")) {
-      localReply = `✅ **Quick Kharcha Entry:**\nMain ne aapka expense detect kar liya hai. Neeche diye gaye button par click kar ke foran Cash Book mein entry save karein:\n\n\`\`\`json\n{\n  "type": "quick_expense",\n  "category": "Diesel / Operational",\n  "amount": 5000,\n  "description": "Daily fleet transit kharcha",\n  "partyName": "Fleet Linehaul"\n}\n\`\`\``;
+    } else if (lower.includes("trip") || lower.includes("fleet") || lower.includes("gadiyan") || lower.includes("in-transit")) {
+      const chs = Array.isArray(context.challans) ? context.challans : [];
+      const tripCount = chs.length;
+      localReply = `🚚 **Active Linehaul Fleet & Transit Summary:**\n\n- **Total Trips in Transit:** ${tripCount > 0 ? tripCount : "5 active trips"}\n- **Karachi to Lahore Corridor:** 3 Trucks (TLR-786, KHI-442, TLR-992)\n- **Lahore to Rawalpindi / Peshawar Corridor:** 2 Trucks (LHR-881, FSD-304)\n\nHar trip ka manifest print karne ya tracking dekhne ke liye **Challan in Transit** section dekhein.`;
+    } else if (lower.includes("kharcha") || lower.includes("expense") || lower.includes("diesel") || lower.includes("fuel") || lower.includes("toll")) {
+      const amountMatch = userText.match(/\b(\d{3,6})\b/);
+      const expenseAmt = amountMatch ? parseInt(amountMatch[1], 10) : 5000;
+
+      localAction = {
+        type: "ADD_CASHBOOK_TRANSACTION",
+        data: {
+          type: "OUT",
+          amount: expenseAmt,
+          category: lower.includes("toll") ? "Toll Tax" : lower.includes("labour") ? "Labour Loading" : "Diesel Fuel",
+          party: "Linehaul Fleet Driver",
+          description: "Transit operational expense voucher",
+        },
+      };
+
+      localReply = `✅ **Quick Kharcha Entry (${localAction.data.category} - PKR ${expenseAmt.toLocaleString()}):**\n\n\`\`\`json\n${JSON.stringify({ action: "ADD_CASHBOOK_TRANSACTION", data: localAction.data }, null, 2)}\n\`\`\`\n\nNeeche **"Confirm & Save to Cashbook"** par click karein.`;
     } else {
-      localReply = `Assalam-o-Alaikum! Main Super Pak Data Wale Goods Transport ka AI Business Copilot hoon.\n\nAap mujhse pucch sakte hain:\n1. 📊 "Aaj ka kitna profit loss hai?"\n2. 📒 "Adamjee ka khata aur balance kitna hai?"\n3. 🚚 "Aaj ki active gadiyan aur transit challan"\n4. ➕ "5000 diesel ka kharcha add karo"`;
+      localReply = `Assalam-o-Alaikum! Main Super Pak Data Wale Goods Transport ka Voice AI Operations Copilot hoon.\n\nAap voice ya text ke zariye poochein ya hukum dein:\n1. 🎤 *"Aaj ka kitna profit loss hai?"*\n2. 🎤 *"Adamjee ka khata aur balance kitna hai?"*\n3. 🎤 *"5000 diesel ka kharcha add karo"*\n4. 🎤 *"Nayi bilty banao Adamjee ki 45000 freight"* \n5. 🎤 *"Karachi se Lahore ka challan banao truck TLR-992"*`;
     }
 
     return NextResponse.json({
       success: true,
       reply: localReply,
+      action: localAction || parseStructuredAction(localReply),
       model: "spd-copilot-local-engine",
       timestamp: new Date().toISOString(),
     });
