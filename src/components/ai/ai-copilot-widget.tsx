@@ -409,7 +409,7 @@ export function AiCopilotWidget() {
                 <Mic className="w-3 h-3 text-red-300" />
               </span>
               <span className="text-[10px] text-red-200 block font-semibold leading-tight">
-                Gemini 3.8 &bull; Urdu / English Voice
+                Gemini 1.5 Flash &bull; Urdu / English Voice
               </span>
             </div>
             <Sparkles className="w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform ml-0.5" />

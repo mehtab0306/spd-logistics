@@ -19,16 +19,16 @@ interface BackgroundParticlesProps {
   count?: number;
 }
 
-// 3 Subtle SPD Brand Colors with soft opacity for refined micro-dots
+// 3 Subtle SPD Brand Colors with soft opacity for refined micro-dots (No bulky spheres)
 const SPD_BRAND_COLORS = [
-  "rgba(220, 38, 38, 0.35)",  // SPD Crimson
-  "rgba(29, 78, 216, 0.35)",  // SPD Royal Blue
-  "rgba(30, 41, 59, 0.25)",   // SPD Charcoal / Black
+  "rgba(220, 38, 38, 0.3)",  // SPD Crimson
+  "rgba(29, 78, 216, 0.3)",  // SPD Royal Blue
+  "rgba(30, 41, 59, 0.2)",   // SPD Charcoal
 ];
 
 export function BackgroundParticles({
   className = "",
-  count = 70,
+  count = 60,
 }: BackgroundParticlesProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -64,12 +64,12 @@ export function BackgroundParticles({
       const actualWidth = width || window.innerWidth || 1200;
       const actualHeight = height || window.innerHeight || 800;
 
-      // Elegant count: approx 70 on desktop, 35 on mobile
-      const effectiveCount = actualWidth < 768 ? 35 : Math.min(count, 80);
+      // Exact Density: 50-70 tiny dots on desktop, 30 on mobile
+      const effectiveCount = actualWidth < 768 ? 30 : Math.min(Math.max(count, 50), 70);
 
       for (let i = 0; i < effectiveCount; i++) {
-        // Strictly tiny micro-dots between 1.2px and 2.7px max
-        const radius = Math.random() * 1.5 + 1.2;
+        // Radius: strictly between 0.8px and 1.5px (tiny pinhead micro-dots)
+        const radius = Math.random() * 0.7 + 0.8;
         const color = SPD_BRAND_COLORS[i % SPD_BRAND_COLORS.length];
 
         dots.push({
@@ -78,8 +78,8 @@ export function BackgroundParticles({
           radius,
           baseRadius: radius,
           // Ultra-smooth, slow ambient floating drift without abrupt jumps
-          vx: (Math.random() - 0.5) * 0.22,
-          vy: (Math.random() - 0.5) * 0.22,
+          vx: (Math.random() - 0.5) * 0.2,
+          vy: (Math.random() - 0.5) * 0.2,
           color,
           pulsePhase: Math.random() * Math.PI * 2,
           pulseSpeed: 0.008 + Math.random() * 0.012,
@@ -108,9 +108,9 @@ export function BackgroundParticles({
         d.x += d.vx * dt;
         d.y += d.vy * dt;
 
-        // Micro-breathing oscillation within tiny bounds (±0.2px)
+        // Micro-breathing oscillation strictly within 0.8px and 1.5px
         d.pulsePhase += d.pulseSpeed * dt;
-        d.radius = d.baseRadius + Math.sin(d.pulsePhase) * 0.2;
+        d.radius = Math.min(1.5, Math.max(0.8, d.baseRadius + Math.sin(d.pulsePhase) * 0.15));
 
         // Wrap around canvas boundaries smoothly
         const pad = 10;
@@ -119,9 +119,9 @@ export function BackgroundParticles({
         if (d.y < -pad) d.y = height + pad;
         if (d.y > height + pad) d.y = -pad;
 
-        // Draw refined subtle micro-dot
+        // Draw refined subtle micro-dot (strictly sharp pinhead dot, zero blur)
         ctx.beginPath();
-        ctx.arc(d.x, d.y, Math.max(1.0, d.radius), 0, Math.PI * 2);
+        ctx.arc(d.x, d.y, d.radius, 0, Math.PI * 2);
         ctx.fillStyle = d.color;
         ctx.fill();
       }
