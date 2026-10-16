@@ -306,16 +306,12 @@ export function AiCopilotWidget() {
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          messages: [...chatHistory, { role: "user", content: text }],
-          context,
-        }),
+        body: JSON.stringify({ query: text, message: text }),
       });
 
       const data = await res.json();
 
-      if (data.success && data.reply) {
+      if (data && data.reply) {
         const parsedAction = data.action || extractAction(data.reply);
         const botId = `bot-${Date.now()}`;
 
