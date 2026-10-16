@@ -96,17 +96,21 @@ export default function HomePage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      setFormSubmitted(true);
-      toast.success(data.message || "Shukriya! Aap ka pegham send ho gaya hai.");
-      setContactName('');
-      setContactPhone('');
-      setContactEmail('');
-      setContactOrigin('');
-      setContactDestination('');
-      setContactMsg('');
+
+      if (res.ok && data.success) {
+        setFormSubmitted(true);
+        toast.success("Thank you! Your message has been sent successfully. Our team will contact you shortly.");
+        setContactName('');
+        setContactPhone('');
+        setContactEmail('');
+        setContactOrigin('');
+        setContactDestination('');
+        setContactMsg('');
+      } else {
+        toast.error("Message delivery failed. Please contact us directly via WhatsApp.");
+      }
     } catch {
-      setFormSubmitted(true);
-      toast.success("Shukriya! Aap ka pegham send ho gaya hai.");
+      toast.error("Message delivery failed. Please contact us directly via WhatsApp.");
     } finally {
       setIsSubmitting(false);
     }

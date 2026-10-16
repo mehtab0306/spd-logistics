@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Send, MessageCircle } from "lucide-react";
+import { Send, MessageCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,15 +21,15 @@ export default function ContactSection() {
     setIsSubmitting(true);
 
     const payload = {
-      fullName: name?.trim() || "Visitor / Anonymous",
-      name: name?.trim() || "Visitor / Anonymous",
+      fullName: name?.trim() || "Website Visitor",
+      name: name?.trim() || "Website Visitor",
       phone: phone?.trim() || "Not Provided",
       email: email?.trim() || "Not Provided",
       origin: origin?.trim() || "Not Specified",
       destination: destination?.trim() || "Not Specified",
       originCity: origin?.trim() || "Not Specified",
       destinationCity: destination?.trim() || "Not Specified",
-      message: message?.trim() || "No message written",
+      message: message?.trim() || "Direct inquiry submitted from website.",
       type: "CUSTOMER_INQUIRY",
     };
 
@@ -41,21 +41,20 @@ export default function ContactSection() {
       });
 
       const data = await res.json().catch(() => ({}));
-      toast.success(data.message || "Shukriya! Aap ka pegham send ho gaya hai.");
-      setName("");
-      setPhone("");
-      setEmail("");
-      setOrigin("");
-      setDestination("");
-      setMessage("");
+
+      if (res.ok && data.success) {
+        toast.success("Thank you! Your message has been sent successfully. Our team will contact you shortly.");
+        setName("");
+        setPhone("");
+        setEmail("");
+        setOrigin("");
+        setDestination("");
+        setMessage("");
+      } else {
+        toast.error("Message delivery failed. Please contact us directly via WhatsApp.");
+      }
     } catch {
-      toast.success("Shukriya! Aap ka pegham send ho gaya hai.");
-      setName("");
-      setPhone("");
-      setEmail("");
-      setOrigin("");
-      setDestination("");
-      setMessage("");
+      toast.error("Message delivery failed. Please contact us directly via WhatsApp.");
     } finally {
       setIsSubmitting(false);
     }
@@ -72,7 +71,7 @@ export default function ContactSection() {
           />
           <h2 className="text-3xl sm:text-4xl font-black text-slate-950 dark:text-white">Contact Us</h2>
           <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-            Send your cargo inquiry directly to <strong className="text-spd-blue">superpakdata@gmail.com</strong> for instant freight quotation and dispatch scheduling.
+            Send your cargo inquiry directly to <strong className="text-spd-blue">superpakdatawale@gmail.com</strong> for instant freight quotation and dispatch scheduling.
           </p>
         </div>
 
@@ -163,8 +162,17 @@ export default function ContactSection() {
                 disabled={isSubmitting}
                 className="w-full sm:w-auto bg-spd-red hover:bg-spd-red/90 text-white font-extrabold px-8 h-12 shadow-md flex items-center justify-center gap-2"
               >
-                <Send className="w-4 h-4" />
-                <span>{isSubmitting ? "Sending..." : "Submit Inquiry"}</span>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Sending inquiry...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>Submit Inquiry</span>
+                  </>
+                )}
               </Button>
 
               <a

@@ -96,35 +96,45 @@ export default function ContactPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      const successMsg = data.message || "Shukriya! Aap ka pegham send ho gaya hai.";
-      setStatusAlert({
-        type: "success",
-        message: successMsg,
-        refId: data.refId,
-      });
 
-      toast.success(successMsg, {
-        description: data.refId ? `Reference ID: ${data.refId}` : undefined,
-      });
+      if (res.ok && data.success) {
+        const successMsg = "Thank you! Your message has been sent successfully. Our team will contact you shortly.";
+        setStatusAlert({
+          type: "success",
+          message: successMsg,
+          refId: data.refId,
+        });
 
-      setCustomerForm({
-        fullName: "",
-        whatsapp: "",
-        email: "",
-        originCity: "",
-        destinationCity: "",
-        cargoDescription: "",
-        estimatedWeight: "",
-        message: "",
-        _hp_website: "",
-      });
+        toast.success(successMsg, {
+          description: data.refId ? `Reference ID: ${data.refId}` : undefined,
+        });
+
+        setCustomerForm({
+          fullName: "",
+          whatsapp: "",
+          email: "",
+          originCity: "",
+          destinationCity: "",
+          cargoDescription: "",
+          estimatedWeight: "",
+          message: "",
+          _hp_website: "",
+        });
+      } else {
+        const errorMsg = "Message delivery failed. Please contact us directly via WhatsApp.";
+        setStatusAlert({
+          type: "error",
+          message: errorMsg,
+        });
+        toast.error(errorMsg);
+      }
     } catch {
-      const successMsg = "Shukriya! Aap ka pegham send ho gaya hai.";
+      const errorMsg = "Message delivery failed. Please contact us directly via WhatsApp.";
       setStatusAlert({
-        type: "success",
-        message: successMsg,
+        type: "error",
+        message: errorMsg,
       });
-      toast.success(successMsg);
+      toast.error(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -163,36 +173,46 @@ export default function ContactPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      const successMsg = data.message || "Shukriya! Aap ka pegham send ho gaya hai.";
-      setStatusAlert({
-        type: "success",
-        message: successMsg,
-        refId: data.refId,
-      });
 
-      toast.success(successMsg, {
-        description: data.refId ? `Reference ID: ${data.refId}` : undefined,
-      });
+      if (res.ok && data.success) {
+        const successMsg = "Thank you! Your message has been sent successfully. Our team will contact you shortly.";
+        setStatusAlert({
+          type: "success",
+          message: successMsg,
+          refId: data.refId,
+        });
 
-      setBrokerForm({
-        brokerName: "",
-        companyName: "",
-        whatsapp: "",
-        email: "",
-        operatingCity: "",
-        vehicleType: "22-Wheeler Trailer",
-        vehicleRegNo: "",
-        preferredRoutes: "Karachi ➔ Lahore Corridor",
-        expectedTerms: "",
-        _hp_website: "",
-      });
+        toast.success(successMsg, {
+          description: data.refId ? `Reference ID: ${data.refId}` : undefined,
+        });
+
+        setBrokerForm({
+          brokerName: "",
+          companyName: "",
+          whatsapp: "",
+          email: "",
+          operatingCity: "",
+          vehicleType: "22-Wheeler Trailer",
+          vehicleRegNo: "",
+          preferredRoutes: "Karachi ➔ Lahore Corridor",
+          expectedTerms: "",
+          _hp_website: "",
+        });
+      } else {
+        const errorMsg = "Message delivery failed. Please contact us directly via WhatsApp.";
+        setStatusAlert({
+          type: "error",
+          message: errorMsg,
+        });
+        toast.error(errorMsg);
+      }
     } catch {
-      const successMsg = "Shukriya! Aap ka pegham send ho gaya hai.";
+      const errorMsg = "Message delivery failed. Please contact us directly via WhatsApp.";
       setStatusAlert({
-        type: "success",
-        message: successMsg,
+        type: "error",
+        message: errorMsg,
       });
-      toast.success(successMsg);
+      toast.error(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
