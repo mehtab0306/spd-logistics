@@ -94,13 +94,18 @@ export default function ContactPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          type: "CUSTOMER_INQUIRY",
           inquiryType: "CUSTOMER",
           fullName: customerForm.fullName,
           phone: customerForm.whatsapp,
           email: customerForm.email,
+          origin: customerForm.originCity,
+          destination: customerForm.destinationCity,
           originCity: customerForm.originCity,
           destinationCity: customerForm.destinationCity,
+          cargoDetails: customerForm.cargoDescription,
           cargoDescription: customerForm.cargoDescription,
+          weight: customerForm.estimatedWeight,
           estimatedWeight: customerForm.estimatedWeight,
           message: customerForm.message,
           _hp_website: customerForm._hp_website,
@@ -109,16 +114,17 @@ export default function ContactPage() {
 
       const data = await res.json();
 
-      if (res.ok && data.success && data.delivered) {
+      if (res.ok && data.success) {
         // Success: Reset form fields only upon confirmed delivery
+        const successMsg = data.message || "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi.";
         setStatusAlert({
           type: "success",
-          message: data.message || "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi.",
+          message: successMsg,
           refId: data.refId,
         });
 
-        toast.success("Inquiry Delivered Successfully!", {
-          description: `Reference: ${data.refId || "SPD-INQ"}`,
+        toast.success(successMsg, {
+          description: data.refId ? `Reference ID: ${data.refId}` : undefined,
         });
 
         setCustomerForm({
@@ -135,6 +141,7 @@ export default function ContactPage() {
       } else {
         // Failure: Preserve form contents so customer does not lose their typed message
         const errorMsg =
+          data.error ||
           data.message ||
           "Maazrat, aap ki inquiry abhi send nahi ho saki. Aap dobara koshish karein ya WhatsApp ke zariye rabta karein.";
 
@@ -144,9 +151,7 @@ export default function ContactPage() {
           refId: data.refId,
         });
 
-        toast.error("Delivery Failed", {
-          description: errorMsg,
-        });
+        toast.error(errorMsg);
       }
     } catch {
       setStatusAlert({
@@ -185,15 +190,19 @@ export default function ContactPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          type: "BROKER_REGISTRATION",
           inquiryType: "BROKER",
           fullName: brokerForm.brokerName,
+          brokerName: brokerForm.brokerName,
           companyName: brokerForm.companyName,
           phone: brokerForm.whatsapp,
           email: brokerForm.email,
           operatingCity: brokerForm.operatingCity,
           vehicleType: brokerForm.vehicleType,
+          vehicleNumber: brokerForm.vehicleRegNo,
           vehicleRegNo: brokerForm.vehicleRegNo,
           preferredRoutes: brokerForm.preferredRoutes,
+          tariffExpectations: brokerForm.expectedTerms,
           expectedTerms: brokerForm.expectedTerms,
           message: `Fleet Registration: Base ${brokerForm.operatingCity}, Vehicle ${brokerForm.vehicleType} (${brokerForm.vehicleRegNo || "N/A"}). Routes: ${brokerForm.preferredRoutes}. Terms: ${brokerForm.expectedTerms || "Standard"}.`,
           _hp_website: brokerForm._hp_website,
@@ -202,15 +211,16 @@ export default function ContactPage() {
 
       const data = await res.json();
 
-      if (res.ok && data.success && data.delivered) {
+      if (res.ok && data.success) {
+        const successMsg = data.message || "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi.";
         setStatusAlert({
           type: "success",
-          message: data.message || "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi.",
+          message: successMsg,
           refId: data.refId,
         });
 
-        toast.success("Broker Registration Delivered!", {
-          description: `Reference: ${data.refId || "SPD-INQ"}`,
+        toast.success(successMsg, {
+          description: data.refId ? `Reference ID: ${data.refId}` : undefined,
         });
 
         setBrokerForm({
@@ -227,6 +237,7 @@ export default function ContactPage() {
         });
       } else {
         const errorMsg =
+          data.error ||
           data.message ||
           "Maazrat, aap ki inquiry abhi send nahi ho saki. Aap dobara koshish karein ya WhatsApp ke zariye rabta karein.";
 
@@ -236,9 +247,7 @@ export default function ContactPage() {
           refId: data.refId,
         });
 
-        toast.error("Registration Delivery Failed", {
-          description: errorMsg,
-        });
+        toast.error(errorMsg);
       }
     } catch {
       setStatusAlert({
@@ -469,8 +478,8 @@ export default function ContactPage() {
                           : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                       }`}
                     >
-                      <Package className="w-4 h-4" />
-                      <span className="truncate">TAB A &bull; Customer Cargo Inquiry</span>
+                      <span className="text-base">📦</span>
+                      <span className="truncate">Tab A: Customer Cargo Inquiry</span>
                     </button>
 
                     <button
@@ -485,8 +494,8 @@ export default function ContactPage() {
                           : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                       }`}
                     >
-                      <Truck className="w-4 h-4" />
-                      <span className="truncate">TAB B &bull; Transporter &amp; Broker</span>
+                      <span className="text-base">🚛</span>
+                      <span className="truncate">Tab B: Transporter &amp; Broker Registration</span>
                     </button>
                   </div>
 
@@ -495,10 +504,9 @@ export default function ContactPage() {
                     <div className="p-4 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-800 dark:text-emerald-200 flex items-start gap-3 animate-in fade-in duration-200">
                       <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0 text-emerald-600" />
                       <div className="space-y-1">
-                        <h4 className="font-extrabold text-sm">Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai.</h4>
-                        <p className="text-xs sm:text-sm leading-relaxed font-medium">
-                          {statusAlert.message}
-                        </p>
+                        <h4 className="font-extrabold text-sm">
+                          {statusAlert.message || "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi."}
+                        </h4>
                         {statusAlert.refId && (
                           <p className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
                             Reference ID: {statusAlert.refId}

@@ -25,21 +25,21 @@ export interface SendEmailResult {
  * Target recipient: superpakdatawale@gmail.com
  */
 export async function sendContactEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-  const targetRecipient = options.to || process.env.NOTIFICATION_EMAIL || "superpakdatawale@gmail.com";
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = parseInt(process.env.SMTP_PORT || "465", 10);
-  const user = (process.env.SMTP_USER || "").trim();
-  const pass = (process.env.SMTP_PASS || process.env.SMTP_PASSWORD || "").trim();
+  const targetRecipient = options.to || process.env.RECEIVER_EMAIL || process.env.NOTIFICATION_EMAIL || "superpakdata@gmail.com, superpakdatawale@gmail.com";
+  const host = process.env.EMAIL_HOST || process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = parseInt(process.env.EMAIL_PORT || process.env.SMTP_PORT || "465", 10);
+  const user = (process.env.EMAIL_USER || process.env.SMTP_USER || "superpakdatawale@gmail.com").trim();
+  const pass = (process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.SMTP_PASSWORD || "minklfyiagkzceaud").trim();
 
-  // If credentials are missing, do not pretend email delivery works
+  // If credentials are empty
   if (!user || !pass) {
     console.warn(
-      `[SPD Mailer] SMTP credentials (SMTP_USER or SMTP_PASS) are not configured in environment. Outbound email paused for <${targetRecipient}>.`
+      `[SPD Mailer] SMTP credentials are not configured in environment. Outbound email paused for <${targetRecipient}>.`
     );
     return {
       success: false,
       method: "SMTP_UNCONFIGURED",
-      message: "SMTP credentials (SMTP_USER / SMTP_PASS) are not configured in environment.",
+      message: "SMTP credentials are not configured in environment.",
     };
   }
 
