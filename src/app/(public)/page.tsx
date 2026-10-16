@@ -32,6 +32,7 @@ import { AnimatedCounters } from '@/components/public/animated-counters';
 import { FaqFlipCards } from '@/components/public/faq-flip-cards';
 import { FleetVideoSection } from '@/components/public/fleet-video-section';
 import { NasaParticles } from '@/components/public/nasa-particles';
+import { ServicesSection } from '@/components/home/services-section';
 
 const heroSlides = [
   {
@@ -433,129 +434,9 @@ export default function HomePage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. SERVICES SECTION (7 Cards: Requested Exact Services)                   */}
+      {/* 3. SERVICES SECTION (Clickable Cards, Direct Detail Pages, WhatsApp)      */}
       {/* ========================================================================= */}
-      <section id="services-section" className="w-full py-20 lg:py-28 bg-slate-50/75 dark:bg-[#0e1422]/75 backdrop-blur-[2px] border-b border-slate-200 dark:border-slate-800 transition-colors duration-300 relative z-10">
-        <div className="container px-4 md:px-6 mx-auto">
-          <div className="reveal-init reveal-blur flex flex-col items-center justify-center space-y-4 text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-spd-blue/10 text-spd-blue font-extrabold text-xs uppercase tracking-wider">
-              Comprehensive Transport Solutions
-            </div>
-            <h2 className="text-3xl font-black tracking-tight sm:text-4xl md:text-5xl text-slate-950 dark:text-white">
-              Our Professional Logistics Services
-            </h2>
-            <p className="max-w-[700px] text-slate-600 dark:text-slate-400 text-sm md:text-base font-normal">
-              Tailored commercial transport services engineered for efficiency, speed, and reliable consignment delivery across Pakistan.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
-            
-            {/* 1. Full Truck Load */}
-            <div className="reveal-init reveal-up stagger-1 group flex flex-col justify-between p-6 bg-white dark:bg-[#111827] rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:-translate-y-2 hover:border-spd-red/40 dark:hover:border-spd-red/50 hover:shadow-xl transition-all duration-300 card-hover-lift">
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-spd-red/10 text-spd-red flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-                  <Package className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-950 dark:text-white mb-2">Full Truck Load</h3>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Dedicated vehicle allocation for direct factory-to-warehouse bulk shipments, offering exclusive payload security and non-stop point-to-point routing.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span className="text-xs font-extrabold text-spd-red">Dedicated Fleet</span>
-                <ArrowRight className="w-4 h-4 text-spd-red" />
-              </div>
-            </div>
-
-            {/* 2. Goods Transportation */}
-            <div className="reveal-init reveal-up stagger-2 group flex flex-col justify-between p-6 bg-white dark:bg-[#111827] rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:-translate-y-2 hover:border-spd-blue/40 dark:hover:border-spd-blue/50 hover:shadow-xl transition-all duration-300 card-hover-lift">
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-spd-blue/10 text-spd-blue flex items-center justify-center mb-4 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
-                  <Truck className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-950 dark:text-white mb-2">Goods Transportation</h3>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Reliable and timely inter-city transportation for industrial, commercial, and wholesale goods connecting all major economic zones nationwide.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span className="text-xs font-extrabold text-spd-blue">Nationwide Network</span>
-                <ArrowRight className="w-4 h-4 text-spd-blue" />
-              </div>
-            </div>
-
-            {/* 3. Bilty Booking */}
-            <div className="reveal-init reveal-up stagger-3 group flex flex-col justify-between p-6 bg-white dark:bg-[#111827] rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:-translate-y-2 hover:border-spd-red/40 dark:hover:border-spd-red/50 hover:shadow-xl transition-all duration-300 card-hover-lift">
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-spd-red/10 text-spd-red flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-950 dark:text-white mb-2">Bilty Booking</h3>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Quick and accurate consignment booking with computerized bilty generation, formal freight receipts, and verified dispatch paperwork.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span className="text-xs font-extrabold text-spd-red">Instant Issuance</span>
-                <ArrowRight className="w-4 h-4 text-spd-red" />
-              </div>
-            </div>
-
-            {/* 4. Shipment Tracking */}
-            <div className="reveal-init reveal-up stagger-4 group flex flex-col justify-between p-6 bg-white dark:bg-[#111827] rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:-translate-y-2 hover:border-spd-blue/40 dark:hover:border-spd-blue/50 hover:shadow-xl transition-all duration-300 card-hover-lift">
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-spd-blue/10 text-spd-blue flex items-center justify-center mb-4 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
-                  <MapPin className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-950 dark:text-white mb-2">Shipment Tracking</h3>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Live status updates and transparent milestone tracking by entering your official Bilty Number or Tracking ID on our portal.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span className="text-xs font-extrabold text-spd-blue">Real-Time Status</span>
-                <ArrowRight className="w-4 h-4 text-spd-blue" />
-              </div>
-            </div>
-
-            {/* 5. Warehouse Services */}
-            <div className="reveal-init reveal-up stagger-5 group flex flex-col justify-between p-6 bg-white dark:bg-[#111827] rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:-translate-y-2 hover:border-spd-red/40 dark:hover:border-spd-red/50 hover:shadow-xl transition-all duration-300 card-hover-lift">
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-spd-red/10 text-spd-red flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-                  <Warehouse className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-950 dark:text-white mb-2">Warehouse Services</h3>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Secure storage, sorting, cross-docking, and cargo holding at our dual commercial facilities in Karachi (Hawksbay) and Central Lahore.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span className="text-xs font-extrabold text-spd-red">Secure Storage</span>
-                <ArrowRight className="w-4 h-4 text-spd-red" />
-              </div>
-            </div>
-
-            {/* 6. Corporate Logistics */}
-            <div className="reveal-init reveal-up stagger-6 group flex flex-col justify-between p-6 bg-white dark:bg-[#111827] rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:-translate-y-2 hover:border-spd-blue/40 dark:hover:border-spd-blue/50 hover:shadow-xl transition-all duration-300 card-hover-lift">
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-spd-blue/10 text-spd-blue flex items-center justify-center mb-4 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
-                  <Building2 className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-950 dark:text-white mb-2">Corporate Logistics</h3>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Enterprise contract partnerships featuring contracted freight lanes, dedicated account managers, transparent ledger reconciliation, and custom corporate SLAs.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span className="text-xs font-extrabold text-spd-blue">Enterprise Solutions</span>
-                <ArrowRight className="w-4 h-4 text-spd-blue" />
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </section>
+      <ServicesSection />
 
       {/* ========================================================================= */}
       {/* 4. MAP SECTION (Karachi & Lahore Warehouse Locations Together)             */}

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { AdminNavbar } from "@/components/layout/admin-navbar";
+import { AiCopilotWidget } from "@/components/ai/ai-copilot-widget";
 import { Loader2, ShieldCheck } from "lucide-react";
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF"];
@@ -125,6 +126,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {children}
         </main>
       </div>
+      <AiCopilotWidget />
     </div>
   );
 }

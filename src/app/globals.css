@@ -724,5 +724,23 @@
   opacity: 1;
 }
 
+/* 8. Mobile Text Tap Auto-Zoom Prevention & Instant Touch Response */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
 
-
+button,
+a,
+input,
+select,
+textarea,
+.card,
+[role="button"],
+.card-hover-lift,
+.clickable {
+  touch-action: manipulation;
+}

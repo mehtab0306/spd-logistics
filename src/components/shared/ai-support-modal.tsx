@@ -38,13 +38,15 @@ export function AiSupportModal() {
     {
       id: "welcome",
       sender: "bot",
-      text: "Assalam-o-Alaikum! I am your SPD Logistics AI Assistant. How can I assist you with your freight, consignment tracking, or booking today?",
+      text: "Assalam-o-Alaikum! Main Super Pak Data Wale Goods Transport Co. ka AI Operations Copilot hoon. Aaj ka Profit/Loss, kisi party ka khata, ya active trips ke baray mein poochein.",
       time: "Just now",
       actions: [
-        { label: "🔍 Track My Bilty" },
-        { label: "🚚 Book Transport / FTL" },
-        { label: "🏢 Warehouse Locations" },
-        { label: "📞 Contact Management" },
+        { label: "📊 Aaj ka Profit / Loss kitna hai?" },
+        { label: "📒 Kisi party ka khata batao" },
+        { label: "🚚 Aaj ki active gadiyan aur challan" },
+        { label: "➕ Quick expense / kharcha add karo" },
+        { label: "🔍 Track My Bilty", href: "/tracking" },
+        { label: "🚚 Book Transport / FTL", href: "/services/full-truck-load" },
       ],
     },
   ]);
@@ -128,16 +130,32 @@ export function AiSupportModal() {
     setIsTyping(true);
 
     try {
-      // Build conversation history for Groq context
+      // Pass live context to AI assistant
+      let context: any = {};
+      try {
+        const rawCash = localStorage.getItem("spd_cash_books") || localStorage.getItem("cash_books");
+        const rawBilties = localStorage.getItem("spd_bilties") || localStorage.getItem("bilties");
+        const rawCusts = localStorage.getItem("spd_customers") || localStorage.getItem("customers");
+        context = {
+          cashBooks: rawCash ? JSON.parse(rawCash).slice(0, 10) : [],
+          bilties: rawBilties ? JSON.parse(rawBilties).slice(0, 10) : [],
+          customers: rawCusts ? JSON.parse(rawCusts).slice(0, 15) : [],
+        };
+      } catch {}
+
       const chatHistory = nextMessages.slice(-8).map((m) => ({
         role: m.sender === "user" ? ("user" as const) : ("assistant" as const),
         content: m.text,
       }));
 
-      const response = await fetch("/api/ai/chat", {
+      const response = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: chatHistory }),
+        body: JSON.stringify({
+          message: messageText,
+          messages: chatHistory,
+          context,
+        }),
       });
 
       const contentType = response.headers.get("content-type") || "";
