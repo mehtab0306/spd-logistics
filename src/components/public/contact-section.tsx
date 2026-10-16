@@ -43,7 +43,7 @@ export default function ContactSection() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) {
-        toast.success("Thank you! Your message has been sent successfully. Our team will contact you shortly.");
+        toast.success("Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly.");
         setName("");
         setPhone("");
         setEmail("");
@@ -51,10 +51,10 @@ export default function ContactSection() {
         setDestination("");
         setMessage("");
       } else {
-        toast.error("Message delivery failed. Please contact us directly via WhatsApp.");
+        toast.error("Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.");
       }
     } catch {
-      toast.error("Message delivery failed. Please contact us directly via WhatsApp.");
+      toast.error("Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.");
     } finally {
       setIsSubmitting(false);
     }
@@ -165,7 +165,7 @@ export default function ContactSection() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Sending inquiry...</span>
+                    <span>Sending your inquiry...</span>
                   </>
                 ) : (
                   <>

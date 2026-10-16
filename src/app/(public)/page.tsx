@@ -99,7 +99,7 @@ export default function HomePage() {
 
       if (res.ok && data.success) {
         setFormSubmitted(true);
-        toast.success("Thank you! Your message has been sent successfully. Our team will contact you shortly.");
+        toast.success("Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly.");
         setContactName('');
         setContactPhone('');
         setContactEmail('');
@@ -107,10 +107,10 @@ export default function HomePage() {
         setContactDestination('');
         setContactMsg('');
       } else {
-        toast.error("Message delivery failed. Please contact us directly via WhatsApp.");
+        toast.error("Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.");
       }
     } catch {
-      toast.error("Message delivery failed. Please contact us directly via WhatsApp.");
+      toast.error("Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.");
     } finally {
       setIsSubmitting(false);
     }
@@ -653,7 +653,7 @@ export default function HomePage() {
                   className="w-full sm:w-auto bg-spd-red hover:bg-spd-redHover text-white font-extrabold px-8 h-12 shadow-md flex items-center justify-center gap-2 btn-glow-red"
                 >
                   <Send className="w-4 h-4" />
-                  <span>{isSubmitting ? "Dispatching Message..." : "Submit Inquiry"}</span>
+                  <span>{isSubmitting ? "Sending your inquiry..." : "Submit Inquiry"}</span>
                 </Button>
                 
                 <a
@@ -670,7 +670,7 @@ export default function HomePage() {
               {formSubmitted && (
                 <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Thank you! Your inquiry has been sent successfully to superpakdatawale@gmail.com. Our dispatch team will contact you shortly.</span>
+                  <span>Thank you! Your inquiry has been submitted successfully to superpakdatawale@gmail.com. Our dispatch team will contact you shortly.</span>
                 </div>
               )}
             </form>

@@ -98,7 +98,7 @@ export default function ContactPage() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) {
-        const successMsg = "Thank you! Your message has been sent successfully. Our team will contact you shortly.";
+        const successMsg = "Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly.";
         setStatusAlert({
           type: "success",
           message: successMsg,
@@ -121,7 +121,7 @@ export default function ContactPage() {
           _hp_website: "",
         });
       } else {
-        const errorMsg = "Message delivery failed. Please contact us directly via WhatsApp.";
+        const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
         setStatusAlert({
           type: "error",
           message: errorMsg,
@@ -129,7 +129,7 @@ export default function ContactPage() {
         toast.error(errorMsg);
       }
     } catch {
-      const errorMsg = "Message delivery failed. Please contact us directly via WhatsApp.";
+      const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
       setStatusAlert({
         type: "error",
         message: errorMsg,
@@ -175,7 +175,7 @@ export default function ContactPage() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) {
-        const successMsg = "Thank you! Your message has been sent successfully. Our team will contact you shortly.";
+        const successMsg = "Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly.";
         setStatusAlert({
           type: "success",
           message: successMsg,
@@ -199,7 +199,7 @@ export default function ContactPage() {
           _hp_website: "",
         });
       } else {
-        const errorMsg = "Message delivery failed. Please contact us directly via WhatsApp.";
+        const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
         setStatusAlert({
           type: "error",
           message: errorMsg,
@@ -207,7 +207,7 @@ export default function ContactPage() {
         toast.error(errorMsg);
       }
     } catch {
-      const errorMsg = "Message delivery failed. Please contact us directly via WhatsApp.";
+      const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
       setStatusAlert({
         type: "error",
         message: errorMsg,
@@ -461,7 +461,7 @@ export default function ContactPage() {
                       <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0 text-emerald-600" />
                       <div className="space-y-1">
                         <h4 className="font-extrabold text-sm">
-                          {statusAlert.message || "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi."}
+                          {statusAlert.message || "Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly."}
                         </h4>
                         {statusAlert.refId && (
                           <p className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
@@ -622,7 +622,7 @@ export default function ContactPage() {
                           {isSubmitting ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>Sending inquiry...</span>
+                              <span>Sending your inquiry...</span>
                             </>
                           ) : (
                             <>
@@ -792,7 +792,7 @@ export default function ContactPage() {
                           {isSubmitting ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>Sending inquiry...</span>
+                              <span>Sending your inquiry...</span>
                             </>
                           ) : (
                             <>

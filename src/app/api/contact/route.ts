@@ -96,14 +96,14 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Thank you! Your inquiry has been sent successfully. Our team will contact you shortly.' 
+      message: 'Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly.' 
     });
 
   } catch (error: any) {
     console.error('SMTP ERROR:', error);
     return NextResponse.json({ 
       success: false, 
-      error: error?.message || 'Failed to dispatch email. Please reach out via WhatsApp.' 
+      error: 'Failed to dispatch email. Please reach out via WhatsApp.' 
     }, { status: 500 });
   }
 }
