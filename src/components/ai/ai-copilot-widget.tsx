@@ -798,7 +798,7 @@ export function AiCopilotWidget() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Yahan likhein ya bolen..."
+              placeholder="Yahan likhein ya mic se bolein..."
               disabled={loading}
               className="h-10 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 font-medium"
             />

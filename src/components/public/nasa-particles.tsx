@@ -9,7 +9,7 @@ interface NasaParticlesProps {
   theme?: "default" | "hero";
 }
 
-interface Sphere {
+interface MicroDot {
   x: number;
   y: number;
   radius: number;
@@ -17,30 +17,20 @@ interface Sphere {
   vx: number;
   vy: number;
   color: string;
-  glowColor: string;
   pulsePhase: number;
   pulseSpeed: number;
 }
 
-// 3 Exact SPD Brand Colors for Floating Spheres
-const SPD_SPHERE_COLORS = [
-  {
-    fill: "rgba(220, 38, 38, 0.28)",      // SPD Crimson Red
-    glow: "rgba(220, 38, 38, 0.12)",
-  },
-  {
-    fill: "rgba(29, 78, 216, 0.28)",      // SPD Royal Blue
-    glow: "rgba(29, 78, 216, 0.12)",
-  },
-  {
-    fill: "rgba(15, 23, 42, 0.20)",       // SPD Deep Charcoal / Black
-    glow: "rgba(15, 23, 42, 0.08)",
-  },
+// 3 Exact SPD Brand Colors with soft opacity for refined micro-dots
+const SPD_BRAND_COLORS = [
+  "rgba(220, 38, 38, 0.35)",  // SPD Crimson
+  "rgba(29, 78, 216, 0.35)",  // SPD Royal Blue
+  "rgba(30, 41, 59, 0.25)",   // SPD Charcoal / Black
 ];
 
 export function NasaParticles({
   className = "",
-  particleCount = 42,
+  particleCount = 70,
 }: NasaParticlesProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -55,7 +45,7 @@ export function NasaParticles({
     let width = 0;
     let height = 0;
 
-    const spheres: Sphere[] = [];
+    const dots: MicroDot[] = [];
 
     const handleResize = () => {
       if (!canvas) return;
@@ -71,44 +61,40 @@ export function NasaParticles({
       ctx.scale(dpr, dpr);
     };
 
-    const initSpheres = () => {
-      spheres.length = 0;
+    const initDots = () => {
+      dots.length = 0;
       const actualWidth = width || window.innerWidth || 1200;
       const actualHeight = height || window.innerHeight || 800;
 
-      const effectiveCount =
-        actualWidth < 768
-          ? Math.min(22, particleCount)
-          : actualWidth < 1200
-          ? Math.min(32, particleCount)
-          : particleCount;
+      // Approx 70 dots on desktop, 35 on mobile for clean aesthetic
+      const effectiveCount = actualWidth < 768 ? 35 : Math.min(particleCount, 80);
 
       for (let i = 0; i < effectiveCount; i++) {
-        // Radius between 5px and 10px as specified
-        const radius = 5 + Math.random() * 5;
-        const colorSet = SPD_SPHERE_COLORS[i % SPD_SPHERE_COLORS.length];
+        // Strictly tiny micro-dots between 1.2px and 2.7px max
+        const radius = Math.random() * 1.5 + 1.2;
+        const color = SPD_BRAND_COLORS[i % SPD_BRAND_COLORS.length];
 
-        spheres.push({
+        dots.push({
           x: Math.random() * actualWidth,
           y: Math.random() * actualHeight,
           radius,
           baseRadius: radius,
-          // Gentle, floating drift across background
-          vx: (Math.random() - 0.5) * 0.35,
-          vy: (Math.random() - 0.5) * 0.35,
-          color: colorSet.fill,
-          glowColor: colorSet.glow,
+          // Ultra-smooth, slow ambient floating drift
+          vx: (Math.random() - 0.5) * 0.22,
+          vy: (Math.random() - 0.5) * 0.22,
+          color,
           pulsePhase: Math.random() * Math.PI * 2,
-          pulseSpeed: 0.015 + Math.random() * 0.02,
+          pulseSpeed: 0.008 + Math.random() * 0.012,
         });
       }
     };
 
     handleResize();
-    initSpheres();
+    initDots();
 
     window.addEventListener("resize", handleResize);
 
+    // Animation Loop
     let lastTime = performance.now();
 
     const render = (time: number) => {
@@ -117,31 +103,26 @@ export function NasaParticles({
 
       ctx.clearRect(0, 0, width, height);
 
-      for (let i = 0; i < spheres.length; i++) {
-        const s = spheres[i];
+      for (let i = 0; i < dots.length; i++) {
+        const d = dots[i];
 
-        s.x += s.vx * dt;
-        s.y += s.vy * dt;
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
 
-        s.pulsePhase += s.pulseSpeed * dt;
-        s.radius = s.baseRadius + Math.sin(s.pulsePhase) * 1.2;
+        // Subtle micro-oscillation (±0.2px)
+        d.pulsePhase += d.pulseSpeed * dt;
+        d.radius = d.baseRadius + Math.sin(d.pulsePhase) * 0.2;
 
-        const pad = s.radius + 20;
-        if (s.x < -pad) s.x = width + pad;
-        if (s.x > width + pad) s.x = -pad;
-        if (s.y < -pad) s.y = height + pad;
-        if (s.y > height + pad) s.y = -pad;
+        const pad = 10;
+        if (d.x < -pad) d.x = width + pad;
+        if (d.x > width + pad) d.x = -pad;
+        if (d.y < -pad) d.y = height + pad;
+        if (d.y > height + pad) d.y = -pad;
 
-        // Outer ambient glow
+        // Draw refined subtle micro-dot
         ctx.beginPath();
-        ctx.arc(s.x, s.y, s.radius * 1.6, 0, Math.PI * 2);
-        ctx.fillStyle = s.glowColor;
-        ctx.fill();
-
-        // Smooth circular floating sphere
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-        ctx.fillStyle = s.color;
+        ctx.arc(d.x, d.y, Math.max(1.0, d.radius), 0, Math.PI * 2);
+        ctx.fillStyle = d.color;
         ctx.fill();
       }
 
@@ -159,8 +140,10 @@ export function NasaParticles({
   return (
     <canvas
       ref={canvasRef}
-      className={`absolute inset-0 w-full h-full pointer-events-none select-none z-0 ${className}`}
+      className={`fixed inset-0 w-full h-full pointer-events-none z-0 ${className}`}
       aria-hidden="true"
     />
   );
 }
+
+export default NasaParticles;

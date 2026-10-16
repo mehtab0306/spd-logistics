@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 
-interface Sphere {
+interface MicroDot {
   x: number;
   y: number;
   radius: number;
@@ -10,7 +10,6 @@ interface Sphere {
   vx: number;
   vy: number;
   color: string;
-  glowColor: string;
   pulsePhase: number;
   pulseSpeed: number;
 }
@@ -20,25 +19,16 @@ interface BackgroundParticlesProps {
   count?: number;
 }
 
-// 3 Exact SPD Brand Colors for Floating Spheres
-const SPD_SPHERE_COLORS = [
-  {
-    fill: "rgba(220, 38, 38, 0.28)",      // SPD Crimson Red
-    glow: "rgba(220, 38, 38, 0.12)",
-  },
-  {
-    fill: "rgba(29, 78, 216, 0.28)",      // SPD Royal Blue
-    glow: "rgba(29, 78, 216, 0.12)",
-  },
-  {
-    fill: "rgba(15, 23, 42, 0.20)",       // SPD Deep Charcoal / Black
-    glow: "rgba(15, 23, 42, 0.08)",
-  },
+// 3 Subtle SPD Brand Colors with soft opacity for refined micro-dots
+const SPD_BRAND_COLORS = [
+  "rgba(220, 38, 38, 0.35)",  // SPD Crimson
+  "rgba(29, 78, 216, 0.35)",  // SPD Royal Blue
+  "rgba(30, 41, 59, 0.25)",   // SPD Charcoal / Black
 ];
 
 export function BackgroundParticles({
   className = "",
-  count = 42,
+  count = 70,
 }: BackgroundParticlesProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -53,7 +43,7 @@ export function BackgroundParticles({
     let width = 0;
     let height = 0;
 
-    const spheres: Sphere[] = [];
+    const dots: MicroDot[] = [];
 
     const handleResize = () => {
       if (!canvas) return;
@@ -69,42 +59,36 @@ export function BackgroundParticles({
       ctx.scale(dpr, dpr);
     };
 
-    const initSpheres = () => {
-      spheres.length = 0;
+    const initDots = () => {
+      dots.length = 0;
       const actualWidth = width || window.innerWidth || 1200;
       const actualHeight = height || window.innerHeight || 800;
 
-      // Adjust sphere count based on screen size for lag-free performance
-      const effectiveCount =
-        actualWidth < 768
-          ? Math.min(22, count)
-          : actualWidth < 1200
-          ? Math.min(32, count)
-          : count;
+      // Elegant count: approx 70 on desktop, 35 on mobile
+      const effectiveCount = actualWidth < 768 ? 35 : Math.min(count, 80);
 
       for (let i = 0; i < effectiveCount; i++) {
-        // Radius between 5px and 10px as specified
-        const radius = 5 + Math.random() * 5;
-        const colorSet = SPD_SPHERE_COLORS[i % SPD_SPHERE_COLORS.length];
+        // Strictly tiny micro-dots between 1.2px and 2.7px max
+        const radius = Math.random() * 1.5 + 1.2;
+        const color = SPD_BRAND_COLORS[i % SPD_BRAND_COLORS.length];
 
-        spheres.push({
+        dots.push({
           x: Math.random() * actualWidth,
           y: Math.random() * actualHeight,
           radius,
           baseRadius: radius,
-          // Gentle floating drift across background
-          vx: (Math.random() - 0.5) * 0.35,
-          vy: (Math.random() - 0.5) * 0.35,
-          color: colorSet.fill,
-          glowColor: colorSet.glow,
+          // Ultra-smooth, slow ambient floating drift without abrupt jumps
+          vx: (Math.random() - 0.5) * 0.22,
+          vy: (Math.random() - 0.5) * 0.22,
+          color,
           pulsePhase: Math.random() * Math.PI * 2,
-          pulseSpeed: 0.015 + Math.random() * 0.02,
+          pulseSpeed: 0.008 + Math.random() * 0.012,
         });
       }
     };
 
     handleResize();
-    initSpheres();
+    initDots();
 
     window.addEventListener("resize", handleResize);
 
@@ -117,34 +101,28 @@ export function BackgroundParticles({
 
       ctx.clearRect(0, 0, width, height);
 
-      for (let i = 0; i < spheres.length; i++) {
-        const s = spheres[i];
+      for (let i = 0; i < dots.length; i++) {
+        const d = dots[i];
 
-        // Move sphere
-        s.x += s.vx * dt;
-        s.y += s.vy * dt;
+        // Slow ambient drift
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
 
-        // Subtle breathing pulse within 5-10px range
-        s.pulsePhase += s.pulseSpeed * dt;
-        s.radius = s.baseRadius + Math.sin(s.pulsePhase) * 1.2;
+        // Micro-breathing oscillation within tiny bounds (±0.2px)
+        d.pulsePhase += d.pulseSpeed * dt;
+        d.radius = d.baseRadius + Math.sin(d.pulsePhase) * 0.2;
 
-        // Soft boundary wrapping with padding
-        const pad = s.radius + 20;
-        if (s.x < -pad) s.x = width + pad;
-        if (s.x > width + pad) s.x = -pad;
-        if (s.y < -pad) s.y = height + pad;
-        if (s.y > height + pad) s.y = -pad;
+        // Wrap around canvas boundaries smoothly
+        const pad = 10;
+        if (d.x < -pad) d.x = width + pad;
+        if (d.x > width + pad) d.x = -pad;
+        if (d.y < -pad) d.y = height + pad;
+        if (d.y > height + pad) d.y = -pad;
 
-        // Draw soft ambient outer glow
+        // Draw refined subtle micro-dot
         ctx.beginPath();
-        ctx.arc(s.x, s.y, s.radius * 1.6, 0, Math.PI * 2);
-        ctx.fillStyle = s.glowColor;
-        ctx.fill();
-
-        // Draw smooth circular sphere
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-        ctx.fillStyle = s.color;
+        ctx.arc(d.x, d.y, Math.max(1.0, d.radius), 0, Math.PI * 2);
+        ctx.fillStyle = d.color;
         ctx.fill();
       }
 

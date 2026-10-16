@@ -132,8 +132,8 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/40 to-white/70 dark:from-[#0B0F19]/65 dark:via-[#111827]/45 dark:to-[#0B0F19]/70 pointer-events-none z-[2] transition-colors duration-300" />
         </div>
 
-        {/* NASA-inspired Particle Background Effect (stays strictly behind content at z-[3]) */}
-        <NasaParticles theme="hero" className="z-[3] opacity-65 dark:opacity-75 pointer-events-none" particleCount={95} connectDistance={0} />
+        {/* Subtle Micro-Dots Background Effect (stays strictly behind content at z-[3]) */}
+        <NasaParticles theme="hero" className="z-[3] opacity-65 dark:opacity-75 pointer-events-none" particleCount={60} connectDistance={0} />
 
         {/* Ambient Blur Circles */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-spd-red/10 rounded-full blur-3xl pointer-events-none"></div>

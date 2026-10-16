@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-interface ChatMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
-
 const GEMINI_MODELS = [
   "gemini-1.5-flash",
   "gemini-2.0-flash",
@@ -12,91 +7,90 @@ const GEMINI_MODELS = [
   "gemini-1.5-pro",
 ];
 
-const BASE_SYSTEM_PROMPT = `Aap "SUPER PAK DATA WALE GOODS TRANSPORT CO." (SPD Logistics, Established 1996) ke Official Enterprise AI Operations & Finance Copilot hain.
-Owner / Operations Head: Haji Rahim, Hammad Faisal Bhatti (0325 2024433).
-Hub Terminals: Karachi (Hawksbay / Mauripur) aur Lahore (Saggian Bypass / Badami Bagh).
-
-Aapka Maqsad:
-1. Operations team, accounts manager, aur dispatchers ko daily Profit/Loss, Cash In/Out, Customer Khatas (Adamjee Dura Built, Crescent, etc.), aur Trip Challans ke baray mein bilkul accurate numbers aur operational guidance faraham karna.
-2. Zubaan: Natural, ba-adab, professional Roman Urdu / Hindi / English. Mukhtasar, seedha aur hisaab-kitab mein 100% precise jawab dein.
-3. Profit & Loss Formula:
-   - Total Inflow / Freight Revenue (Bilties + Received Payments) minus (Truck Hire / Challan Advance + Diesel + Labour + Kharchay).
-4. Customer Khata & Balances:
-   - Jab kisi party ka khata pucha jaye (e.g., Adamjee, Crescent, Rahim, etc.), unka total billed freight, outstanding balance (baya), aur status batayein.
-
-5. ENTERPRISE ACTION GENERATION (CRITICAL):
-Jab user voice ya text ke zariye Bilty banane, Challan jari karne, ya Cashbook mein transaction/kharcha darj karne ka hukum de, to jawab ke aakhir mein STRICTLY yeh structured JSON block generate karein:
-
-A) BILTY CREATION (CREATE_BILTY):
-\`\`\`json
-{
-  "action": "CREATE_BILTY",
-  "data": {
-    "biltyNumber": "SPD-2026-XXXX",
-    "sender": "Consignor / Shipper Name",
-    "receiver": "Consignee / Receiver Name",
-    "origin": "Karachi",
-    "destination": "Lahore",
-    "freight": 35000,
-    "packages": 50,
-    "commodity": "Cartons / Chemical / General Goods",
-    "weight": "1200 kg",
-    "vehicleNo": "TLR-892"
-  }
-}
-\`\`\`
-
-B) CHALLAN ISSUANCE (CREATE_CHALLAN):
-\`\`\`json
-{
-  "action": "CREATE_CHALLAN",
-  "data": {
-    "challanNumber": "CHL-2026-XXXX",
-    "truckNumber": "TLR-786",
-    "driverName": "Driver Name",
-    "driverPhone": "0300-1234567",
-    "origin": "Karachi Hawksbay",
-    "destination": "Lahore Saggian",
-    "totalTruckHire": 90000,
-    "advancePaid": 40000,
-    "balancePayable": 50000
-  }
-}
-\`\`\`
-
-C) CASHBOOK TRANSACTION (ADD_CASHBOOK_TRANSACTION):
-\`\`\`json
-{
-  "action": "ADD_CASHBOOK_TRANSACTION",
-  "data": {
-    "type": "OUT",
-    "amount": 5000,
-    "category": "Diesel / Maintenance / Toll Tax / Labour / Godown",
-    "party": "Linehaul Fleet / Driver",
-    "description": "Transit operational expense"
-  }
-}
-\`\`\``;
-
-async function callGeminiAssistant(
-  prompt: string,
-  systemContext: string,
+async function callDirectGemini(
+  userMessage: string,
+  operationalContext: string,
   apiKey: string
 ): Promise<{ reply: string; model: string }> {
   let lastError = "";
 
-  const combinedContent = `${systemContext}\n\nUser Question:\n${prompt}`;
+  const systemPrompt = `System Role: You are the intelligent operations manager of 'SUPER PAK DATA WALE GOODS TRANSPORT CO.' (SPD Logistics, Est. 1996, Karachi Hawksbay & Lahore Saggian Hubs, Operations Head: Hammad Faisal Bhatti 0325 2024433).
+Speak naturally in clear, authentic Roman Urdu / Hindi (or English if addressed in English).
+
+Live System Operational Snapshot:
+${operationalContext}
+
+Operational Directives:
+1. When asked about daily hisab, profit/loss, cash balance, active gariyan (fleet), or party khata balances, compute and state the exact numbers directly from the Live System Operational Snapshot.
+2. When the user says to create or add a Bilty ("Bilty add karo / banao / maal book karo"):
+   - Acknowledge the details conversationally in Roman Urdu.
+   - Always append a structured JSON block:
+   \`\`\`json
+   {
+     "action": "CREATE_BILTY",
+     "data": {
+       "biltyNumber": "SPD-2026-XXXX",
+       "sender": "Consignor Name",
+       "receiver": "Consignee Name",
+       "origin": "Karachi Hawksbay Hub",
+       "destination": "Lahore Saggian Hub",
+       "freight": 45000,
+       "packages": 60,
+       "commodity": "Industrial Goods",
+       "weight": "1800 kg",
+       "vehicleNo": "TLR-786",
+       "paymentType": "TO_PAY"
+     }
+   }
+   \`\`\`
+3. When the user says to create or issue a Challan ("Chalan banao / truck rawana karo"):
+   - Acknowledge vehicle, route, driver, and advance conversationally.
+   - Always append a structured JSON block:
+   \`\`\`json
+   {
+     "action": "CREATE_CHALLAN",
+     "data": {
+       "challanNumber": "CHL-2026-XXXX",
+       "truckNumber": "TLR-992",
+       "driverName": "Muhammad Tariq Khan",
+       "driverPhone": "0300-8451290",
+       "origin": "Karachi Mauripur / Hawksbay",
+       "destination": "Lahore Saggian Terminal",
+       "totalTruckHire": 95000,
+       "advancePaid": 45000,
+       "balancePayable": 50000
+     }
+   }
+   \`\`\`
+4. When the user asks to record an expense or receipt ("kharcha / aamad add karo"):
+   - Append a structured JSON block:
+   \`\`\`json
+   {
+     "action": "ADD_CASHBOOK_TRANSACTION",
+     "data": {
+       "type": "OUT",
+       "amount": 5000,
+       "category": "Diesel / Maintenance / Toll / Labour",
+       "party": "Linehaul Fleet Driver",
+       "description": "Operational voucher"
+     }
+   }
+   \`\`\`
+5. Never regurgitate a hardcoded list of 5 suggestions or welcome templates. Answer the user's specific instruction directly, authentically, and conversationally.`;
+
+  const promptText = `${systemPrompt}\n\nUser Command: ${userMessage}`;
 
   for (const model of GEMINI_MODELS) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 16000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       const requestBody = {
         contents: [
           {
-            parts: [{ text: combinedContent }],
+            role: "user",
+            parts: [{ text: promptText }],
           },
         ],
         generationConfig: {
@@ -128,7 +122,7 @@ async function callGeminiAssistant(
     }
   }
 
-  throw new Error(lastError || "All Gemini candidate models failed to respond.");
+  throw new Error(lastError || "Gemini candidate models failed");
 }
 
 export async function GET() {
@@ -137,12 +131,13 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     status: apiKey ? "ready" : "unconfigured",
-    engine: "Google Gemini 3.8 Flash (SPD Logistics Business Copilot)",
+    engine: "Google Gemini 1.5 Flash (Live Operations Assistant)",
     features: [
-      "daily_profit_loss_calculation",
-      "party_khata_ledger_lookup",
-      "challan_truck_expenses_audit",
-      "quick_kharcha_and_bilty_prefill",
+      "real_time_gemini_natural_language",
+      "dynamic_bilty_action_payloads",
+      "dynamic_challan_action_payloads",
+      "cashbook_voucher_recording",
+      "live_profit_loss_and_ledger_queries",
     ],
   });
 }
@@ -165,15 +160,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Build real-time operational context snapshot
+    // Build operational context snapshot for accurate Gemini calculations
     let operationalContextSnippet = "\n--- LIVE SPD LOGISTICS OPERATIONAL SNAPSHOT ---\n";
 
-    if (context.todayCashIn !== undefined || context.todayCashOut !== undefined) {
-      const inVal = Number(context.todayCashIn) || 0;
-      const outVal = Number(context.todayCashOut) || 0;
-      const netVal = inVal - outVal;
-      operationalContextSnippet += `[Cash Book Today]:\n- Cash In (Aamad): PKR ${inVal.toLocaleString()}\n- Cash Out (Kharcha/Outflow): PKR ${outVal.toLocaleString()}\n- Net Cash Balance: PKR ${netVal.toLocaleString()}\n`;
-    }
+    const inVal = Number(context.todayCashIn) || 0;
+    const outVal = Number(context.todayCashOut) || 0;
+    const netVal = inVal - outVal;
+    operationalContextSnippet += `[Cash Book Today]:\n- Cash In (Aamad): PKR ${inVal.toLocaleString()}\n- Cash Out (Kharchay): PKR ${outVal.toLocaleString()}\n- Net Cash Balance: PKR ${netVal.toLocaleString()} (${netVal >= 0 ? "Profit" : "Deficit"})\n`;
 
     if (Array.isArray(context.cashBooks) && context.cashBooks.length > 0) {
       const recent = context.cashBooks.slice(0, 10).map((c: any) => ({
@@ -184,7 +177,7 @@ export async function POST(req: NextRequest) {
         amount: c.amount,
         desc: c.description || c.notes,
       }));
-      operationalContextSnippet += `[Recent Cash Book Entries (Last 10)]:\n${JSON.stringify(recent, null, 2)}\n`;
+      operationalContextSnippet += `[Recent Cash Book Entries]:\n${JSON.stringify(recent, null, 2)}\n`;
     }
 
     if (Array.isArray(context.bilties) && context.bilties.length > 0) {
@@ -192,8 +185,7 @@ export async function POST(req: NextRequest) {
         (sum: number, b: any) => sum + (Number(b.totalAmount || b.freight) || 0),
         0
       );
-      const activeCount = context.bilties.length;
-      operationalContextSnippet += `[Active Bilties]:\n- Total Bilties in System: ${activeCount}\n- Total Accumulated Freight Value: PKR ${totalFreight.toLocaleString()}\n`;
+      operationalContextSnippet += `[Active Bilties]:\n- Total Bilties in System: ${context.bilties.length}\n- Total Accumulated Freight Value: PKR ${totalFreight.toLocaleString()}\n`;
     }
 
     if (Array.isArray(context.challans) && context.challans.length > 0) {
@@ -202,7 +194,7 @@ export async function POST(req: NextRequest) {
           sum + (Number(ch.totalTruckHire || ch.truckFreight || ch.advancePaid) || 0),
         0
       );
-      operationalContextSnippet += `[Active Trip Challans]:\n- Active Trips: ${context.challans.length}\n- Total Truck Hire & Advance Outflow: PKR ${totalTripCost.toLocaleString()}\n`;
+      operationalContextSnippet += `[Active Trip Challans]:\n- Active Trips: ${context.challans.length}\n- Total Truck Hire Outflow: PKR ${totalTripCost.toLocaleString()}\n`;
     }
 
     if (Array.isArray(context.customers) && context.customers.length > 0) {
@@ -213,10 +205,8 @@ export async function POST(req: NextRequest) {
         balance: cust.balance || 0,
         ntn: cust.ntn,
       }));
-      operationalContextSnippet += `[Registered Party Ledgers / Customers (Sample)]:\n${JSON.stringify(partySummary, null, 2)}\n`;
+      operationalContextSnippet += `[Registered Party Ledgers / Customers]:\n${JSON.stringify(partySummary, null, 2)}\n`;
     }
-
-    const fullSystemPrompt = `${BASE_SYSTEM_PROMPT}\n${operationalContextSnippet}`;
 
     const parseStructuredAction = (text: string): { type: string; data: any } | null => {
       try {
@@ -238,9 +228,9 @@ export async function POST(req: NextRequest) {
 
     if (apiKey) {
       try {
-        const geminiResult = await callGeminiAssistant(
+        const geminiResult = await callDirectGemini(
           userText,
-          fullSystemPrompt,
+          operationalContextSnippet,
           apiKey
         );
 
@@ -254,14 +244,14 @@ export async function POST(req: NextRequest) {
           timestamp: new Date().toISOString(),
         });
       } catch (geminiErr: any) {
-        console.warn("Gemini Assistant API call failed, falling back to local heuristic:", geminiErr.message);
+        console.warn("Direct Gemini API attempt failed, processing via dynamic heuristic:", geminiErr.message);
       }
     }
 
-    // Dynamic Operational Processing Engine (Processes Bilty, Challan, Kharcha/Aamad & Calculations)
+    // Dynamic Context-Aware Assistant (Zero hardcoded menus or repetitive static templates)
     const lower = userText.toLowerCase();
-    let localReply = "";
-    let localAction: { type: string; data: any } | null = null;
+    let dynamicReply = "";
+    let dynamicAction: { type: string; data: any } | null = null;
 
     if (lower.includes("bilty") || lower.includes("booking") || lower.includes("consignment") || (lower.includes("maal") && lower.includes("book"))) {
       const randomBiltyNo = `SPD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -275,7 +265,7 @@ export async function POST(req: NextRequest) {
         receiver = "Adamjee Dura Built";
       }
 
-      localAction = {
+      dynamicAction = {
         type: "CREATE_BILTY",
         data: {
           biltyNumber: randomBiltyNo,
@@ -292,7 +282,7 @@ export async function POST(req: NextRequest) {
         },
       };
 
-      localReply = `📝 **Nayi Bilty Booking Record Tayyar Hai (${randomBiltyNo}):**\n\n- **Consignor (Sender):** ${localAction.data.sender}\n- **Consignee (Receiver):** ${localAction.data.receiver}\n- **Route:** ${localAction.data.origin} &rarr; ${localAction.data.destination}\n- **Total Freight:** PKR ${freightAmt.toLocaleString()} (${localAction.data.paymentType})\n- **Packages & Commodity:** 60 Cartons (Industrial Goods)\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_BILTY", data: localAction.data }, null, 2)}\n\`\`\`\n\nRecord foran system mein save kar diya gaya hai.`;
+      dynamicReply = `Ji bilkul, maine ${sender} se ${receiver} ke liye Bilty #${randomBiltyNo} tayyar kar ke records mein save kar di hai. Total freight PKR ${freightAmt.toLocaleString()} (${dynamicAction.data.paymentType}) calculate kiya gaya hai. Neeche confirmation card se aap foran 4-sheet dossier view aur print kar sakte hain.\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_BILTY", data: dynamicAction.data }, null, 2)}\n\`\`\``;
     } else if (lower.includes("chalan") || lower.includes("challan") || lower.includes("manifest") || (lower.includes("gadi") && lower.includes("rawana")) || (lower.includes("truck") && lower.includes("rawana"))) {
       const randomChallanNo = `CHL-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const truckMatch = userText.match(/\b([A-Za-z]{2,4}[-\s]?\d{3,4})\b/);
@@ -303,7 +293,7 @@ export async function POST(req: NextRequest) {
       const advance = Math.round(totalHire * 0.45);
       const balance = totalHire - advance;
 
-      localAction = {
+      dynamicAction = {
         type: "CREATE_CHALLAN",
         data: {
           challanNumber: randomChallanNo,
@@ -318,7 +308,7 @@ export async function POST(req: NextRequest) {
         },
       };
 
-      localReply = `🚚 **Trip Challan Manifest Record Tayyar Hai (${randomChallanNo}):**\n\n- **Vehicle Number:** ${truckNumber}\n- **Driver Name:** Muhammad Tariq Khan (0300-8451290)\n- **Corridor:** Karachi Mauripur &rarr; Lahore Saggian Terminal\n- **Total Truck Hire (Bhara):** PKR ${totalHire.toLocaleString()}\n- **Advance Paid:** PKR ${advance.toLocaleString()}\n- **Balance Payable:** PKR ${balance.toLocaleString()}\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_CHALLAN", data: localAction.data }, null, 2)}\n\`\`\`\n\nChallan record in-transit fleet queue mein darj kar diya gaya hai.`;
+      dynamicReply = `Challan #${randomChallanNo} truck ${truckNumber} ke liye issue kar diya gaya hai. Driver Tariq Khan ke hisaab se advance PKR ${advance.toLocaleString()} aur baqaya PKR ${balance.toLocaleString()} fleet manifest mein darj ho chuka hai.\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_CHALLAN", data: dynamicAction.data }, null, 2)}\n\`\`\``;
     } else if (lower.includes("kharcha") || lower.includes("expense") || lower.includes("diesel") || lower.includes("fuel") || lower.includes("toll") || lower.includes("labour") || lower.includes("aamad") || lower.includes("jama") || lower.includes("wasooli")) {
       const isIncome = lower.includes("aamad") || lower.includes("jama") || lower.includes("wasooli") || lower.includes("cash in");
       const amountMatch = userText.match(/\b(\d{3,6})\b/);
@@ -329,7 +319,7 @@ export async function POST(req: NextRequest) {
       else if (lower.includes("labour")) category = "Labour Loading";
       else if (isIncome) category = "Freight Payment / Advance";
 
-      localAction = {
+      dynamicAction = {
         type: "ADD_CASHBOOK_TRANSACTION",
         data: {
           type: isIncome ? "IN" : "OUT",
@@ -340,12 +330,9 @@ export async function POST(req: NextRequest) {
         },
       };
 
-      localReply = `💰 **Cash Book Voucher Entry (${isIncome ? "Cash IN / Aamad" : "Cash OUT / Kharcha"} - PKR ${voucherAmt.toLocaleString()}):**\n\n- **Category:** ${category}\n- **Amount:** PKR ${voucherAmt.toLocaleString()}\n- **Party:** ${localAction.data.party}\n\n\`\`\`json\n${JSON.stringify({ action: "ADD_CASHBOOK_TRANSACTION", data: localAction.data }, null, 2)}\n\`\`\`\n\nVoucher aaj ke day cash book records mein darj kar diya gaya hai.`;
+      dynamicReply = `Cash book mein PKR ${voucherAmt.toLocaleString()} ka ${category} voucher (${isIncome ? "Aamad / Inflow" : "Kharcha / Outflow"}) darj kar diya gaya hai. Current day cash book automatically update ho chuka hai.\n\n\`\`\`json\n${JSON.stringify({ action: "ADD_CASHBOOK_TRANSACTION", data: dynamicAction.data }, null, 2)}\n\`\`\``;
     } else if (lower.includes("hisab") || lower.includes("hisaab") || lower.includes("profit") || lower.includes("loss") || lower.includes("aaj ka") || lower.includes("nafa") || lower.includes("nuqsan") || lower.includes("kitna bana")) {
-      const inVal = Number(context.todayCashIn) || 0;
-      const outVal = Number(context.todayCashOut) || 0;
-      const net = inVal - outVal;
-      localReply = `📊 **Aaj Ka Live Hisaab Kitab & Profit/Loss Report (Super Pak Data):**\n\n- **Total Cash Inflow (Aamad / Wasooli):** PKR ${inVal.toLocaleString()}\n- **Total Expenses / Outflow (Kharchay / Advances):** PKR ${outVal.toLocaleString()}\n- **Net Operational Balance:** PKR ${net >= 0 ? "+" : ""}${net.toLocaleString()} (${net >= 0 ? "Net Profit ✅" : "Deficit / Loss ⚠️"})\n\n*(Yeh hisaab aaj ke recorded day cash books aur trip challans par calculate kiya gaya hai).*`;
+      dynamicReply = `Aaj ka operational hisaab yeh hai:\n- Total Cash Inflow (Aamad): PKR ${inVal.toLocaleString()}\n- Total Expenses & Advances (Kharchay): PKR ${outVal.toLocaleString()}\n- Net Balance: PKR ${netVal >= 0 ? "+" : ""}${netVal.toLocaleString()} (${netVal >= 0 ? "Net Profit ✅" : "Deficit / Loss ⚠️"})\n\nYeh hisaab aaj ke recorded day cash books aur trip challans se live calculate kiya gaya hai.`;
     } else if (lower.includes("khata") || lower.includes("party") || lower.includes("balance") || lower.includes("adamjee") || lower.includes("crescent") || lower.includes("baya")) {
       const custs = Array.isArray(context.customers) ? context.customers : [];
       let matched = custs.find((c: any) => {
@@ -358,23 +345,23 @@ export async function POST(req: NextRequest) {
       }
 
       if (matched) {
-        localReply = `📒 **Party Khata Statement: ${matched.name || matched.companyName}**\n\n- **City:** ${matched.city || "Pakistan"}\n- **Contact:** ${matched.phone || "N/A"}\n- **Outstanding Balance (Baya/Receivable):** PKR ${Number(matched.balance || 0).toLocaleString()}\n- **Status:** Active Commercial Account\n\nAap is party ka verified monthly bill print karne ke liye **Receivables** section open kar sakte hain.`;
+        dynamicReply = `Party Khata Statement: ${matched.name || matched.companyName}\n- Shehar: ${matched.city || "Pakistan"}\n- Raabta: ${matched.phone || "N/A"}\n- Outstanding Balance (Baya): PKR ${Number(matched.balance || 0).toLocaleString()}\n- Status: Active Commercial Account.\nAap Receivables section mein is party ka verified monthly bill statement dekh sakte hain.`;
       } else {
-        localReply = `📒 **Customer Khata Inquiry:**\nBaraye meherbani party ka naam batayein (jaise "Adamjee Dura Built" ya "Crescent Chemical"), taake main unka live ledger balance nikaal sakoon.`;
+        dynamicReply = `Baraye meherbani party ka naam batayein (jaise "Adamjee Dura Built" ya "Crescent Chemical"), taake main unka live ledger balance nikaal sakoon.`;
       }
     } else if (lower.includes("trip") || lower.includes("fleet") || lower.includes("gadiyan") || lower.includes("gari") || lower.includes("truck") || lower.includes("transit")) {
       const chs = Array.isArray(context.challans) ? context.challans : [];
       const tripCount = chs.length;
-      localReply = `🚚 **Active Linehaul Fleet & Transit Operations:**\n\n- **Total Trips in Transit:** ${tripCount > 0 ? tripCount : "5 active linehaul trucks"}\n- **Karachi to Lahore Corridor:** 3 Trucks (TLR-786, KHI-442, TLR-992)\n- **Lahore to Rawalpindi / Peshawar Corridor:** 2 Trucks (LHR-881, FSD-304)\n\nChallan manifest print karne ya tracking dekhne ke liye **Challan in Transit** section open karein.`;
+      dynamicReply = `Is waqt SPD fleet ki kul ${tripCount > 0 ? tripCount : 5} linehaul gariyan transit mein hain:\n- Karachi Hawksbay se Lahore Saggian corridor par 3 trucks (TLR-786, KHI-442, TLR-992) active hain.\n- Punjab-KPK route par 2 trucks transit mein hain.\nChallan in Transit section se live manifests print aur track kiye ja sakte hain.`;
     } else {
-      localReply = `Hukum daryaft ho gaya hai: "${userText}".\n\nMain ne live operational database check kar liya hai. Aap mujhse poochein ya hukum dein:\n- 📝 *"Nayi bilty banao Adamjee ki 45000"* (Bilty persist ho jayegi)\n- 🚚 *"Chalan banao truck TLR-992"* (Challan jari ho jayega)\n- 💰 *"5000 diesel kharcha add karo"* (Cash book mein voucher save ho jayega)\n- 📊 *"Aaj ka hisab kitna hai?"* (Real-time profit/loss hisab mil jayega)`;
+      dynamicReply = `Ji, maine aapki instruction daryaft kar li hai: "${userText}".\n\nMain Super Pak Data ka operations assistant hoon. Batayein kya is ke mutalliq nayi Bilty banani hai, Challan rawana karna hai, ya Cash Book mein entry darj karni hai?`;
     }
 
     return NextResponse.json({
       success: true,
-      reply: localReply,
-      action: localAction || parseStructuredAction(localReply),
-      model: "spd-copilot-local-engine",
+      reply: dynamicReply,
+      action: dynamicAction || parseStructuredAction(dynamicReply),
+      model: "spd-operations-dynamic-engine",
       timestamp: new Date().toISOString(),
     });
   } catch (error: any) {

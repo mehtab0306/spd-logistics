@@ -12,8 +12,8 @@ export default function PublicLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col relative bg-slate-50 dark:bg-[#070B14] transition-colors duration-300">
-      {/* Full-Website NASA-inspired Telemetry Particle Field (behind all sections) */}
-      <NasaParticles theme="hero" className="fixed inset-0 w-full h-full pointer-events-none z-0 opacity-70 dark:opacity-85" particleCount={140} connectDistance={0} />
+      {/* Full-Website Subtle Telemetry Micro-Dots Field (behind all sections) */}
+      <NasaParticles theme="hero" className="fixed inset-0 w-full h-full pointer-events-none z-0 opacity-70 dark:opacity-85" particleCount={70} connectDistance={0} />
 
       <PublicNavbar />
       <main className="flex-1 relative z-[1]">{children}</main>
