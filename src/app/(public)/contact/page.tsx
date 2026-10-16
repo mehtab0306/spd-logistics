@@ -69,6 +69,7 @@ export default function ContactPage() {
   const handleCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // ONLY validate fullName and phone (Required)
     if (!customerForm.fullName.trim()) {
       toast.error("Baraye meherbani apna poora naam darj karein.");
       return;
@@ -77,39 +78,31 @@ export default function ContactPage() {
       toast.error("Durust Pakistani WhatsApp / Mobile number darj karein (e.g. 0325 2024433).");
       return;
     }
-    if (!customerForm.email.trim()) {
-      toast.error("Baraye meherbani apna email address darj karein.");
-      return;
-    }
-    if (!customerForm.originCity.trim() || !customerForm.destinationCity.trim()) {
-      toast.error("Origin aur Destination shehar darj karna zaroori hai.");
-      return;
-    }
 
     setIsSubmitting(true);
     setStatusAlert(null);
+
+    const payload = {
+      fullName: customerForm.fullName.trim(),
+      phone: customerForm.whatsapp.trim(),
+      email: customerForm.email.trim() || '',
+      origin: customerForm.originCity.trim() || 'Not Specified',
+      destination: customerForm.destinationCity.trim() || 'Not Specified',
+      originCity: customerForm.originCity.trim() || 'Not Specified',
+      destinationCity: customerForm.destinationCity.trim() || 'Not Specified',
+      cargoDetails: customerForm.cargoDescription.trim() || 'N/A',
+      weight: customerForm.estimatedWeight.trim() || '',
+      message: customerForm.message.trim() || 'General Cargo Booking Inquiry',
+      type: 'CUSTOMER_INQUIRY',
+      inquiryType: 'CUSTOMER',
+      _hp_website: customerForm._hp_website,
+    };
 
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "CUSTOMER_INQUIRY",
-          inquiryType: "CUSTOMER",
-          fullName: customerForm.fullName,
-          phone: customerForm.whatsapp,
-          email: customerForm.email,
-          origin: customerForm.originCity,
-          destination: customerForm.destinationCity,
-          originCity: customerForm.originCity,
-          destinationCity: customerForm.destinationCity,
-          cargoDetails: customerForm.cargoDescription,
-          cargoDescription: customerForm.cargoDescription,
-          weight: customerForm.estimatedWeight,
-          estimatedWeight: customerForm.estimatedWeight,
-          message: customerForm.message,
-          _hp_website: customerForm._hp_website,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -583,44 +576,39 @@ export default function ContactPage() {
                         </div>
                       </div>
 
-                      <div className="grid sm:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Email Address (Optional)
+                        </label>
+                        <Input
+                          type="email"
+                          placeholder="client@company.com"
+                          value={customerForm.email}
+                          onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
+                          className="h-11 font-medium focus-visible:ring-spd-red"
+                        />
+                      </div>
+
+                      {/* Route Inputs Cleanly in 2-Column Grid (Optional Fields) */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Email <span className="text-red-500">*</span>
-                          </label>
-                          <Input
-                            required
-                            type="email"
-                            placeholder="client@company.com"
-                            value={customerForm.email}
-                            onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-spd-red"
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Origin City (Optional)</label>
+                          <Input 
+                            type="text" 
+                            placeholder="e.g. Lahore / Karachi" 
+                            className="h-11 font-medium focus-visible:ring-spd-red" 
+                            value={customerForm.originCity} 
+                            onChange={(e) => setCustomerForm({ ...customerForm, originCity: e.target.value })} 
                           />
                         </div>
-
                         <div className="space-y-1.5">
-                          <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Origin City <span className="text-red-500">*</span>
-                          </label>
-                          <Input
-                            required
-                            placeholder="Karachi Hawksbay"
-                            value={customerForm.originCity}
-                            onChange={(e) => setCustomerForm({ ...customerForm, originCity: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-spd-red"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Destination City <span className="text-red-500">*</span>
-                          </label>
-                          <Input
-                            required
-                            placeholder="Lahore Saggian"
-                            value={customerForm.destinationCity}
-                            onChange={(e) => setCustomerForm({ ...customerForm, destinationCity: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-spd-red"
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Destination City (Optional)</label>
+                          <Input 
+                            type="text" 
+                            placeholder="e.g. Karachi / Quetta" 
+                            className="h-11 font-medium focus-visible:ring-spd-red" 
+                            value={customerForm.destinationCity} 
+                            onChange={(e) => setCustomerForm({ ...customerForm, destinationCity: e.target.value })} 
                           />
                         </div>
                       </div>

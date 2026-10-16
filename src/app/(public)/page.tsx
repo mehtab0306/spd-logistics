@@ -58,6 +58,8 @@ export default function HomePage() {
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMsg, setContactMsg] = useState('');
+  const [contactOrigin, setContactOrigin] = useState('');
+  const [contactDestination, setContactDestination] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formSubmitted, setFormSubmitted] = useState(false);
 
@@ -73,28 +75,39 @@ export default function HomePage() {
     setIsSubmitting(true);
 
     try {
+      const payload = {
+        fullName: contactName.trim(),
+        name: contactName.trim(),
+        phone: contactPhone.trim(),
+        email: contactEmail.trim() || '',
+        origin: contactOrigin.trim() || 'Not Specified',
+        destination: contactDestination.trim() || 'Not Specified',
+        originCity: contactOrigin.trim() || 'Not Specified',
+        destinationCity: contactDestination.trim() || 'Not Specified',
+        subject: "[SPD Logistics Booking Inquiry] New Customer Request",
+        message: contactMsg.trim() || 'General Cargo Booking Inquiry',
+        type: 'CUSTOMER_INQUIRY',
+      };
+
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: contactName,
-          phone: contactPhone,
-          email: contactEmail,
-          subject: "[SPD Logistics Booking Inquiry] New Customer Request",
-          message: contactMsg,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setFormSubmitted(true);
-        toast.success("Inquiry sent successfully to superpakdatawale@gmail.com");
+        const successMsg = data.message || "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi.";
+        toast.success(successMsg);
         setContactName('');
         setContactPhone('');
         setContactEmail('');
+        setContactOrigin('');
+        setContactDestination('');
         setContactMsg('');
       } else {
-        toast.error(data.message || "Failed to send inquiry. Please try again.");
+        toast.error(data.error || data.message || "Failed to send inquiry. Please try again.");
       }
     } catch {
       toast.error("Network error. Please contact us via WhatsApp at 0325 2024433.");
@@ -590,15 +603,38 @@ export default function HomePage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Email Address</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Email Address (Optional)</label>
                 <Input
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                   type="email"
                   placeholder="your.email@example.com"
                   className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
-                  required
                 />
+              </div>
+
+              {/* Route Inputs Cleanly in 2-Column Grid (Optional Fields) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Origin City (Optional)</label>
+                  <Input 
+                    type="text" 
+                    placeholder="e.g. Lahore / Karachi" 
+                    className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm" 
+                    value={contactOrigin} 
+                    onChange={(e) => setContactOrigin(e.target.value)} 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Destination City (Optional)</label>
+                  <Input 
+                    type="text" 
+                    placeholder="e.g. Karachi / Quetta" 
+                    className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm" 
+                    value={contactDestination} 
+                    onChange={(e) => setContactDestination(e.target.value)} 
+                  />
+                </div>
               </div>
 
               <div>

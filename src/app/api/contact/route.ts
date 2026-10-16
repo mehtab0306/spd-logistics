@@ -44,11 +44,13 @@ export async function POST(req: Request) {
     } = body;
 
     // Normalizing aliases
-    const fullName = String(rawFullName || brokerName || '').trim();
+    const fullName = String(rawFullName || brokerName || body.name || '').trim();
     const phone = String(rawPhone || whatsapp || '').trim();
     const email = String(rawEmail || '').trim();
-    const origin = String(rawOrigin || originCity || '').trim();
-    const destination = String(rawDestination || destinationCity || '').trim();
+    const parsedOrigin = String(rawOrigin || originCity || '').trim();
+    const parsedDestination = String(rawDestination || destinationCity || '').trim();
+    const origin = parsedOrigin || 'Direct Contact / General Inquiry';
+    const destination = parsedDestination || 'Direct Contact / General Inquiry';
     const cargoDetails = String(rawCargoDetails || cargoDescription || '').trim();
     const weight = String(rawWeight || estimatedWeight || '').trim();
     const message = String(rawMessage || '').trim();
