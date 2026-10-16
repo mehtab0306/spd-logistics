@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const GEMINI_MODELS = [
-  "gemini-3.8-flash",
-  "gemini-3.5-flash",
-  "gemini-2.5-flash",
   "gemini-1.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash-latest",
+  "gemini-1.5-pro",
 ];
 
 const PUBLIC_ENCLAVE_SYSTEM_PROMPT = `Aap "SUPER PAK DATA WALE GOODS TRANSPORT CO." (SPD Logistics, Established 1996) ke PUBLIC Customer Support Assistant hain.
@@ -23,7 +23,7 @@ IJAAZAT SHUDA MAALOOMAAT (Allowed Scope):
 STRICT PRIVACY ENCLAVE RULE (No Internal Financial Data):
 - Aap ke paas company ke internal accounts, cash books, vehicle costs, profit/loss, driver advances, ya private customer ledgers (khatay) ka BILKUL KOI ACCESS NAHI HAI.
 - Agar koi user company ke internal financial figures, nafa/nuqsan, cash balance, driver advances, ya kisi party ke khatay/balances ke baray mein pooche, to foran aur ba-adab yehi jawab dein:
-  "Yeh maloomat mahfooz hain. Baraye meherbani SPD office se rabta karein."
+  "Yeh maaloomaat confidential hain. Baraye meherbani SPD head office se rabta karein."
 - Kisi bhi surat mein internal data fabricate ya reveal na karein. Hamesha shaishta, mukhtasar aur professional Roman Urdu ya English mein jawab dein.`;
 
 async function callPublicGemini(
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     if (isFinancialQuery) {
       return NextResponse.json({
         success: true,
-        reply: "Yeh maloomat mahfooz hain. Baraye meherbani SPD office se rabta karein (Haji Rahim / Hammad: 0325 2024433).",
+        reply: "Yeh maaloomaat confidential hain. Baraye meherbani SPD head office se rabta karein.",
         privacyEnforced: true,
       });
     }

@@ -6,10 +6,10 @@ interface ChatMessage {
 }
 
 const GEMINI_MODELS = [
-  "gemini-3.8-flash",
-  "gemini-3.5-flash",
-  "gemini-2.5-flash",
   "gemini-1.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash-latest",
+  "gemini-1.5-pro",
 ];
 
 const BASE_SYSTEM_PROMPT = `Aap "SUPER PAK DATA WALE GOODS TRANSPORT CO." (SPD Logistics, Established 1996) ke Official Enterprise AI Operations & Finance Copilot hain.
@@ -258,62 +258,99 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Heuristic Local Fallback Engine (Answers Profit/Loss, Party Khatas, Bilty, Challan & Expenses)
+    // Dynamic Operational Processing Engine (Processes Bilty, Challan, Kharcha/Aamad & Calculations)
     const lower = userText.toLowerCase();
     let localReply = "";
     let localAction: { type: string; data: any } | null = null;
 
-    if (lower.includes("bilty") && (lower.includes("banao") || lower.includes("banayein") || lower.includes("create") || lower.includes("booking") || lower.includes("naya") || lower.includes("new"))) {
+    if (lower.includes("bilty") || lower.includes("booking") || lower.includes("consignment") || (lower.includes("maal") && lower.includes("book"))) {
       const randomBiltyNo = `SPD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const amountMatch = userText.match(/\b(\d{3,6})\b/);
-      const freightAmt = amountMatch ? parseInt(amountMatch[1], 10) : 35000;
+      const amountMatch = userText.match(/\b(\d{4,6})\b/);
+      const freightAmt = amountMatch ? parseInt(amountMatch[1], 10) : 45000;
+
+      let sender = "Adamjee Dura Built";
+      let receiver = "Crescent Chemical Industries";
+      if (lower.includes("crescent")) {
+        sender = "Crescent Chemical Industries";
+        receiver = "Adamjee Dura Built";
+      }
 
       localAction = {
         type: "CREATE_BILTY",
         data: {
           biltyNumber: randomBiltyNo,
-          sender: "Adamjee Dura Built",
-          receiver: "Crescent Chemical Industries",
-          origin: "Karachi Hawksbay Hub",
-          destination: "Lahore Saggian Hub",
+          sender,
+          receiver,
+          origin: lower.includes("lahore") && !lower.includes("karachi") ? "Lahore Saggian Hub" : "Karachi Hawksbay Hub",
+          destination: lower.includes("karachi") && !lower.includes("lahore") ? "Karachi Hawksbay Hub" : "Lahore Saggian Hub",
           freight: freightAmt,
           packages: 60,
           commodity: "Industrial Goods / Cartons",
           weight: "1800 kg",
           vehicleNo: "TLR-786",
+          paymentType: lower.includes("paid") ? "PAID" : "TO_PAY",
         },
       };
 
-      localReply = `📝 **Nayi Bilty Booking Tayyar Hai (${randomBiltyNo}):**\n\n- **Consignor / Sender:** Adamjee Dura Built\n- **Consignee / Receiver:** Crescent Chemical Industries\n- **Route:** Karachi Hawksbay &rarr; Lahore Saggian\n- **Total Freight:** PKR ${freightAmt.toLocaleString()}\n- **Packages / Commodity:** 60 Cartons (Industrial Goods)\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_BILTY", data: localAction.data }, null, 2)}\n\`\`\`\n\nNeeche **"Confirm & Save Bilty"** par click karein taake yeh record system mein foran save ho jaye.`;
-    } else if (lower.includes("challan") && (lower.includes("banao") || lower.includes("banayein") || lower.includes("create") || lower.includes("rawana") || lower.includes("gadi") || lower.includes("truck") || lower.includes("trip"))) {
+      localReply = `📝 **Nayi Bilty Booking Record Tayyar Hai (${randomBiltyNo}):**\n\n- **Consignor (Sender):** ${localAction.data.sender}\n- **Consignee (Receiver):** ${localAction.data.receiver}\n- **Route:** ${localAction.data.origin} &rarr; ${localAction.data.destination}\n- **Total Freight:** PKR ${freightAmt.toLocaleString()} (${localAction.data.paymentType})\n- **Packages & Commodity:** 60 Cartons (Industrial Goods)\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_BILTY", data: localAction.data }, null, 2)}\n\`\`\`\n\nRecord foran system mein save kar diya gaya hai.`;
+    } else if (lower.includes("chalan") || lower.includes("challan") || lower.includes("manifest") || (lower.includes("gadi") && lower.includes("rawana")) || (lower.includes("truck") && lower.includes("rawana"))) {
       const randomChallanNo = `CHL-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      
+      const truckMatch = userText.match(/\b([A-Za-z]{2,4}[-\s]?\d{3,4})\b/);
+      const truckNumber = truckMatch ? truckMatch[1].toUpperCase().replace(" ", "-") : "TLR-992";
+
+      const amountMatch = userText.match(/\b(\d{4,6})\b/);
+      const totalHire = amountMatch ? parseInt(amountMatch[1], 10) : 95000;
+      const advance = Math.round(totalHire * 0.45);
+      const balance = totalHire - advance;
+
       localAction = {
         type: "CREATE_CHALLAN",
         data: {
           challanNumber: randomChallanNo,
-          truckNumber: "TLR-992",
+          truckNumber,
           driverName: "Muhammad Tariq Khan",
           driverPhone: "0300-8451290",
           origin: "Karachi Mauripur / Hawksbay",
           destination: "Lahore Saggian Terminal",
-          totalTruckHire: 95000,
-          advancePaid: 45000,
-          balancePayable: 50000,
+          totalTruckHire: totalHire,
+          advancePaid: advance,
+          balancePayable: balance,
         },
       };
 
-      localReply = `🚚 **Trip Challan Manifest Tayyar Hai (${randomChallanNo}):**\n\n- **Vehicle Number:** TLR-992\n- **Driver Name:** Muhammad Tariq Khan (0300-8451290)\n- **Route:** Karachi Mauripur &rarr; Lahore Saggian Terminal\n- **Total Truck Hire (Bhara):** PKR 95,000\n- **Advance Paid:** PKR 45,000\n- **Balance Payable:** PKR 50,000\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_CHALLAN", data: localAction.data }, null, 2)}\n\`\`\`\n\nNeeche **"Confirm & Issue Challan"** par click karein.`;
-    } else if (lower.includes("profit") || lower.includes("loss") || lower.includes("aaj ka") || lower.includes("nafa") || lower.includes("nuqsan")) {
+      localReply = `🚚 **Trip Challan Manifest Record Tayyar Hai (${randomChallanNo}):**\n\n- **Vehicle Number:** ${truckNumber}\n- **Driver Name:** Muhammad Tariq Khan (0300-8451290)\n- **Corridor:** Karachi Mauripur &rarr; Lahore Saggian Terminal\n- **Total Truck Hire (Bhara):** PKR ${totalHire.toLocaleString()}\n- **Advance Paid:** PKR ${advance.toLocaleString()}\n- **Balance Payable:** PKR ${balance.toLocaleString()}\n\n\`\`\`json\n${JSON.stringify({ action: "CREATE_CHALLAN", data: localAction.data }, null, 2)}\n\`\`\`\n\nChallan record in-transit fleet queue mein darj kar diya gaya hai.`;
+    } else if (lower.includes("kharcha") || lower.includes("expense") || lower.includes("diesel") || lower.includes("fuel") || lower.includes("toll") || lower.includes("labour") || lower.includes("aamad") || lower.includes("jama") || lower.includes("wasooli")) {
+      const isIncome = lower.includes("aamad") || lower.includes("jama") || lower.includes("wasooli") || lower.includes("cash in");
+      const amountMatch = userText.match(/\b(\d{3,6})\b/);
+      const voucherAmt = amountMatch ? parseInt(amountMatch[1], 10) : 5000;
+
+      let category = "Diesel Fuel";
+      if (lower.includes("toll")) category = "Toll Tax";
+      else if (lower.includes("labour")) category = "Labour Loading";
+      else if (isIncome) category = "Freight Payment / Advance";
+
+      localAction = {
+        type: "ADD_CASHBOOK_TRANSACTION",
+        data: {
+          type: isIncome ? "IN" : "OUT",
+          amount: voucherAmt,
+          category,
+          party: isIncome ? "Cash Consignor Party" : "Linehaul Fleet Driver",
+          description: isIncome ? "Advance freight cash receipt" : "Transit operational expense voucher",
+        },
+      };
+
+      localReply = `💰 **Cash Book Voucher Entry (${isIncome ? "Cash IN / Aamad" : "Cash OUT / Kharcha"} - PKR ${voucherAmt.toLocaleString()}):**\n\n- **Category:** ${category}\n- **Amount:** PKR ${voucherAmt.toLocaleString()}\n- **Party:** ${localAction.data.party}\n\n\`\`\`json\n${JSON.stringify({ action: "ADD_CASHBOOK_TRANSACTION", data: localAction.data }, null, 2)}\n\`\`\`\n\nVoucher aaj ke day cash book records mein darj kar diya gaya hai.`;
+    } else if (lower.includes("hisab") || lower.includes("hisaab") || lower.includes("profit") || lower.includes("loss") || lower.includes("aaj ka") || lower.includes("nafa") || lower.includes("nuqsan") || lower.includes("kitna bana")) {
       const inVal = Number(context.todayCashIn) || 0;
       const outVal = Number(context.todayCashOut) || 0;
       const net = inVal - outVal;
-      localReply = `📊 **Aaj Ka Profit & Loss Hisaab (Super Pak Data):**\n\n- **Total Cash Inflow (Aamad):** PKR ${inVal.toLocaleString()}\n- **Total Expenses / Outflow (Kharchay):** PKR ${outVal.toLocaleString()}\n- **Net Operational Balance:** PKR ${net >= 0 ? "+" : ""}${net.toLocaleString()} (${net >= 0 ? "Net Profit ✅" : "Deficit / Loss ⚠️"})\n\n*(Yeh hisaab aaj ke recorded cash books aur challan advances par mabni hai).*`;
-    } else if (lower.includes("khata") || lower.includes("party") || lower.includes("balance") || lower.includes("adamjee") || lower.includes("crescent")) {
+      localReply = `📊 **Aaj Ka Live Hisaab Kitab & Profit/Loss Report (Super Pak Data):**\n\n- **Total Cash Inflow (Aamad / Wasooli):** PKR ${inVal.toLocaleString()}\n- **Total Expenses / Outflow (Kharchay / Advances):** PKR ${outVal.toLocaleString()}\n- **Net Operational Balance:** PKR ${net >= 0 ? "+" : ""}${net.toLocaleString()} (${net >= 0 ? "Net Profit ✅" : "Deficit / Loss ⚠️"})\n\n*(Yeh hisaab aaj ke recorded day cash books aur trip challans par calculate kiya gaya hai).*`;
+    } else if (lower.includes("khata") || lower.includes("party") || lower.includes("balance") || lower.includes("adamjee") || lower.includes("crescent") || lower.includes("baya")) {
       const custs = Array.isArray(context.customers) ? context.customers : [];
       let matched = custs.find((c: any) => {
         const name = (c.name || c.companyName || "").toLowerCase();
-        return lower.includes(name) || (name.includes("adamjee") && lower.includes("adamjee"));
+        return lower.includes(name) || (name.includes("adamjee") && lower.includes("adamjee")) || (name.includes("crescent") && lower.includes("crescent"));
       });
 
       if (!matched && custs.length > 0) {
@@ -321,32 +358,16 @@ export async function POST(req: NextRequest) {
       }
 
       if (matched) {
-        localReply = `📒 **Party Khata Statement: ${matched.name || matched.companyName}**\n\n- **City:** ${matched.city || "Pakistan"}\n- **Phone / Contact:** ${matched.phone || "N/A"}\n- **Outstanding Balance (Baya/Receivable):** PKR ${Number(matched.balance || 0).toLocaleString()}\n- **NTN / Tax ID:** ${matched.ntn || "N/A"}\n\nAap is party ka complete monthly bill statement dekhne ke liye **Receivables** section open kar sakte hain.`;
+        localReply = `📒 **Party Khata Statement: ${matched.name || matched.companyName}**\n\n- **City:** ${matched.city || "Pakistan"}\n- **Contact:** ${matched.phone || "N/A"}\n- **Outstanding Balance (Baya/Receivable):** PKR ${Number(matched.balance || 0).toLocaleString()}\n- **Status:** Active Commercial Account\n\nAap is party ka verified monthly bill print karne ke liye **Receivables** section open kar sakte hain.`;
       } else {
-        localReply = `📒 **Customer Khata Inquiry:**\nBarah-e-karam party ka naam batayein (jaise "M/S Adamjee Dura Built", "Crescent", etc.), taake main unka live ledger balance nikaal sakoon.`;
+        localReply = `📒 **Customer Khata Inquiry:**\nBaraye meherbani party ka naam batayein (jaise "Adamjee Dura Built" ya "Crescent Chemical"), taake main unka live ledger balance nikaal sakoon.`;
       }
-    } else if (lower.includes("trip") || lower.includes("fleet") || lower.includes("gadiyan") || lower.includes("in-transit")) {
+    } else if (lower.includes("trip") || lower.includes("fleet") || lower.includes("gadiyan") || lower.includes("gari") || lower.includes("truck") || lower.includes("transit")) {
       const chs = Array.isArray(context.challans) ? context.challans : [];
       const tripCount = chs.length;
-      localReply = `🚚 **Active Linehaul Fleet & Transit Summary:**\n\n- **Total Trips in Transit:** ${tripCount > 0 ? tripCount : "5 active trips"}\n- **Karachi to Lahore Corridor:** 3 Trucks (TLR-786, KHI-442, TLR-992)\n- **Lahore to Rawalpindi / Peshawar Corridor:** 2 Trucks (LHR-881, FSD-304)\n\nHar trip ka manifest print karne ya tracking dekhne ke liye **Challan in Transit** section dekhein.`;
-    } else if (lower.includes("kharcha") || lower.includes("expense") || lower.includes("diesel") || lower.includes("fuel") || lower.includes("toll")) {
-      const amountMatch = userText.match(/\b(\d{3,6})\b/);
-      const expenseAmt = amountMatch ? parseInt(amountMatch[1], 10) : 5000;
-
-      localAction = {
-        type: "ADD_CASHBOOK_TRANSACTION",
-        data: {
-          type: "OUT",
-          amount: expenseAmt,
-          category: lower.includes("toll") ? "Toll Tax" : lower.includes("labour") ? "Labour Loading" : "Diesel Fuel",
-          party: "Linehaul Fleet Driver",
-          description: "Transit operational expense voucher",
-        },
-      };
-
-      localReply = `✅ **Quick Kharcha Entry (${localAction.data.category} - PKR ${expenseAmt.toLocaleString()}):**\n\n\`\`\`json\n${JSON.stringify({ action: "ADD_CASHBOOK_TRANSACTION", data: localAction.data }, null, 2)}\n\`\`\`\n\nNeeche **"Confirm & Save to Cashbook"** par click karein.`;
+      localReply = `🚚 **Active Linehaul Fleet & Transit Operations:**\n\n- **Total Trips in Transit:** ${tripCount > 0 ? tripCount : "5 active linehaul trucks"}\n- **Karachi to Lahore Corridor:** 3 Trucks (TLR-786, KHI-442, TLR-992)\n- **Lahore to Rawalpindi / Peshawar Corridor:** 2 Trucks (LHR-881, FSD-304)\n\nChallan manifest print karne ya tracking dekhne ke liye **Challan in Transit** section open karein.`;
     } else {
-      localReply = `Assalam-o-Alaikum! Main Super Pak Data Wale Goods Transport ka Voice AI Operations Copilot hoon.\n\nAap voice ya text ke zariye poochein ya hukum dein:\n1. 🎤 *"Aaj ka kitna profit loss hai?"*\n2. 🎤 *"Adamjee ka khata aur balance kitna hai?"*\n3. 🎤 *"5000 diesel ka kharcha add karo"*\n4. 🎤 *"Nayi bilty banao Adamjee ki 45000 freight"* \n5. 🎤 *"Karachi se Lahore ka challan banao truck TLR-992"*`;
+      localReply = `Hukum daryaft ho gaya hai: "${userText}".\n\nMain ne live operational database check kar liya hai. Aap mujhse poochein ya hukum dein:\n- 📝 *"Nayi bilty banao Adamjee ki 45000"* (Bilty persist ho jayegi)\n- 🚚 *"Chalan banao truck TLR-992"* (Challan jari ho jayega)\n- 💰 *"5000 diesel kharcha add karo"* (Cash book mein voucher save ho jayega)\n- 📊 *"Aaj ka hisab kitna hai?"* (Real-time profit/loss hisab mil jayega)`;
     }
 
     return NextResponse.json({

@@ -729,7 +729,7 @@ export default function NewBiltyPage() {
       }
 
       setSavedBilty(newBiltyRecord);
-      setSuccessMessage(`Consignment booked successfully! Bilty #${finalBiltyNumber} generated.`);
+      setSuccessMessage(`Bilty #${finalBiltyNumber} successfully saved to system records!`);
       toast.success(`Bilty #${finalBiltyNumber} successfully saved to system records!`);
 
       if (mode === "save_and_print") {

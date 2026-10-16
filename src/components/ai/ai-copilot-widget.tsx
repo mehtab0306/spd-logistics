@@ -168,78 +168,7 @@ export function AiCopilotWidget() {
     }
   };
 
-  const handleSend = async (customQuery?: string) => {
-    const text = (customQuery || input).trim();
-    if (!text || loading) return;
-
-    if (isListening) {
-      stopListening();
-    }
-
-    const userMsg: Message = {
-      id: `user-${Date.now()}`,
-      sender: "user",
-      text,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
-    setLoading(true);
-
-    try {
-      const context = getLiveContext();
-
-      const chatHistory = messages.slice(-6).map((m) => ({
-        role: m.sender === "user" ? ("user" as const) : ("assistant" as const),
-        content: m.text,
-      }));
-
-      const res = await fetch("/api/ai-assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          messages: [...chatHistory, { role: "user", content: text }],
-          context,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success && data.reply) {
-        const parsedAction = data.action || extractAction(data.reply);
-        const botMsg: Message = {
-          id: `bot-${Date.now()}`,
-          sender: "bot",
-          text: data.reply,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          parsedAction,
-        };
-        setMessages((prev) => [...prev, botMsg]);
-      } else {
-        const fallbackMsg: Message = {
-          id: `bot-${Date.now()}`,
-          sender: "bot",
-          text: data.error || "Maaf kijiyega, system response process karne mein dushwari hui. Barah-e-karam dobara koshish karein.",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        };
-        setMessages((prev) => [...prev, fallbackMsg]);
-      }
-    } catch {
-      const errorMsg: Message = {
-        id: `bot-${Date.now()}`,
-        sender: "bot",
-        text: "Network error: AI Assistant se connection qaim nahi ho saka. Barah-e-karam internet check karein.",
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Action Confirmation Handlers
+  // Action Confirmation & Auto-Persistence Handlers
   const handleConfirmBilty = (msgId: string, data: any) => {
     const biltyNo = data.biltyNumber || `SPD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const newBilty = {
@@ -256,7 +185,7 @@ export function AiCopilotWidget() {
       weight: data.weight || "1500 kg",
       vehicleNumber: data.vehicleNo || data.vehicleNumber || "TLR-786",
       status: "BOOKED",
-      paymentType: "TO_PAY",
+      paymentType: data.paymentType || "TO_PAY",
       paymentStatus: "PENDING",
       date: new Date().toISOString(),
       createdAt: new Date().toISOString(),
@@ -345,6 +274,90 @@ export function AiCopilotWidget() {
     } catch {}
 
     setActionStates((prev) => ({ ...prev, [msgId]: "saved" }));
+  };
+
+  const handleSend = async (customQuery?: string) => {
+    const text = (customQuery || input).trim();
+    if (!text || loading) return;
+
+    if (isListening) {
+      stopListening();
+    }
+
+    const userMsg: Message = {
+      id: `user-${Date.now()}`,
+      sender: "user",
+      text,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const context = getLiveContext();
+
+      const chatHistory = messages.slice(-6).map((m) => ({
+        role: m.sender === "user" ? ("user" as const) : ("assistant" as const),
+        content: m.text,
+      }));
+
+      const res = await fetch("/api/ai-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          messages: [...chatHistory, { role: "user", content: text }],
+          context,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.reply) {
+        const parsedAction = data.action || extractAction(data.reply);
+        const botId = `bot-${Date.now()}`;
+
+        // Directly persist action into storage
+        if (parsedAction && parsedAction.type) {
+          if (parsedAction.type === "CREATE_BILTY" || parsedAction.type === "quick_bilty") {
+            handleConfirmBilty(botId, parsedAction.data);
+          } else if (parsedAction.type === "CREATE_CHALLAN") {
+            handleConfirmChallan(botId, parsedAction.data);
+          } else if (parsedAction.type === "ADD_CASHBOOK_TRANSACTION" || parsedAction.type === "quick_expense") {
+            handleConfirmCashbook(botId, parsedAction.data);
+          }
+        }
+
+        const botMsg: Message = {
+          id: botId,
+          sender: "bot",
+          text: data.reply,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          parsedAction,
+        };
+        setMessages((prev) => [...prev, botMsg]);
+      } else {
+        const fallbackMsg: Message = {
+          id: `bot-${Date.now()}`,
+          sender: "bot",
+          text: data.error || "Maaf kijiyega, system response process karne mein dushwari hui. Barah-e-karam dobara koshish karein.",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        setMessages((prev) => [...prev, fallbackMsg]);
+      }
+    } catch {
+      const errorMsg: Message = {
+        id: `bot-${Date.now()}`,
+        sender: "bot",
+        text: "Network error: AI Assistant se connection qaim nahi ho saka. Barah-e-karam internet check karein.",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const quickActions = [
@@ -785,7 +798,7 @@ export function AiCopilotWidget() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isListening ? "Bolte rahein... audio sun raha hoon..." : "Bol kar ya likh kar hukum dein (Profit, Bilty, Khata)..."}
+              placeholder="Yahan likhein ya bolen..."
               disabled={loading}
               className="h-10 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 font-medium"
             />

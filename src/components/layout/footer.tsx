@@ -116,9 +116,21 @@ export function Footer() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-muted-foreground">
-            &copy; {currentYear} SPD Logistics. All rights reserved.
-          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-2 text-sm text-muted-foreground text-center sm:text-left">
+            <p>&copy; {currentYear} SPD Logistics. All rights reserved.</p>
+            <span className="hidden sm:inline">&bull;</span>
+            <p>
+              Designed &amp; Developed by
+              <a 
+                href="https://wa.me/923147194861?text=Hello%20Mehtab,%20I%20am%20contacting%20you%20regarding%20SPD%20Logistics%20Software" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-red-600 font-semibold hover:underline transition-colors ml-1"
+              >
+                Mehtab
+              </a>
+            </p>
+          </div>
           <div className="flex space-x-6">
             <Link href="/privacy-policy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Privacy Policy
