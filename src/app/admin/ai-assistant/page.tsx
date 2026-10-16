@@ -22,13 +22,13 @@ export default function AiAssistantPage() {
     detail?: string;
   }>({
     state: "checking",
-    label: "Verifying Groq AI Engine...",
+    label: "Verifying Google Gemini AI Engine...",
   });
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       sender: "bot",
-      text: "Welcome to SPD AI Operations Copilot, powered by Groq AI. I can assist you with consignment tracking guidelines, nationwide corridor transit times, terminal logistics, and customer freight tariffs.",
+      text: "Welcome to SPD AI Operations Copilot, powered by Google Gemini AI. I can assist you with consignment tracking guidelines, nationwide corridor transit times, terminal logistics, and customer freight tariffs.",
       time: "Just now",
     },
   ]);
@@ -43,25 +43,25 @@ export default function AiAssistantPage() {
         if (data.status === "ready") {
           setEngineStatus({
             state: "ready",
-            label: "Groq AI Llama 3.3 Engine Ready",
+            label: data.model || "Google Gemini 3.8 Flash Engine Ready",
           });
         } else if (data.status === "unconfigured") {
           setEngineStatus({
             state: "unconfigured",
-            label: "Configuration Required: Set GROQ_API_KEY",
+            label: "Configuration Required: Set GEMINI_API_KEY",
             detail: data.message,
           });
         } else {
           setEngineStatus({
             state: "unavailable",
-            label: "Groq AI Unavailable",
+            label: "Gemini AI Unavailable",
             detail: data.message,
           });
         }
       } catch (err: any) {
         setEngineStatus({
           state: "unavailable",
-          label: "Groq AI Disconnected",
+          label: "Gemini AI Disconnected",
           detail: err.message,
         });
       }

@@ -35,7 +35,12 @@ import {
   ExternalLink,
   ShieldCheck,
   Percent,
+  Sparkles,
+  Printer,
+  CheckCircle,
 } from "lucide-react";
+import { toast } from "sonner";
+import { export4SheetBiltyExcel } from "@/lib/export-excel";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { formatCurrency } from "@/lib/utils";
@@ -70,6 +75,8 @@ export default function NewBiltyPage() {
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [savedBilty, setSavedBilty] = useState<any>(null);
+  const [saveSuccessModalOpen, setSaveSuccessModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
@@ -407,21 +414,150 @@ export default function NewBiltyPage() {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Google Gemini AI Assistant: Automated Remarks Generation
+  const handleGenerateAiRemarks = async () => {
+    setAiLoading(true);
+    try {
+      const commodityList = items
+        .map((i) => i.detail)
+        .filter(Boolean)
+        .join(", ");
+
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "remarks",
+          origin: formData.origin,
+          destination: formData.destination,
+          sender: formData.senderName,
+          receiver: formData.receiverName,
+          commodity: commodityList || "General Commercial Merchandise",
+          weight: totalWeight,
+          quantity: totalQuantity,
+          dispatchMode: formData.dispatchMode,
+          amountType: formData.amountType,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.content) {
+        setFormData((prev) => ({ ...prev, notes: data.content }));
+        toast.success("AI generated consignment remarks!");
+      } else {
+        const fallback = `Handle with care. Cargo: ${items[0]?.detail || "Commercial Merchandise"} (${totalQuantity} pkgs, ${totalWeight} kg). Route: ${formData.origin} to ${formData.destination}. ${formData.dispatchMode === "Urgent" ? "PRIORITY EXPRESS DELIVERY." : "Standard linehaul transit."}`;
+        setFormData((prev) => ({ ...prev, notes: fallback }));
+        toast.info("Generated operational instructions.");
+      }
+    } catch (err) {
+      const fallback = `Handle with care. Cargo: ${items[0]?.detail || "Commercial Merchandise"} (${totalQuantity} pkgs, ${totalWeight} kg). Route: ${formData.origin} to ${formData.destination}.`;
+      setFormData((prev) => ({ ...prev, notes: fallback }));
+      toast.info("Generated standard consignment remarks.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleResetFormForNewBilty = () => {
+    const nextBiltyNo = generateBiltyNumberCandidate(formData.origin || "Lahore");
+    setFormData({
+      billTo: "Sender",
+      amountType: "To Pay",
+      dispatchMode: "Normal",
+      biltyNumber: nextBiltyNo,
+      trackingId: `SPD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+      date: new Date().toISOString().slice(0, 10),
+      warehouse: formData.origin?.toUpperCase().includes("KARACHI") ? "KARACHI" : "LAHORE",
+      origin: formData.origin || "Lahore",
+      destination: formData.destination || "Karachi",
+      customerId: "",
+      senderName: "",
+      senderPhone: "",
+      senderAddress: "",
+      senderNtn: "",
+      receiverName: "",
+      receiverPhone: "",
+      receiverAddress: "",
+      receiverNtn: "",
+      deliveryAddress: "",
+      poNumber: "",
+      blNumber: "",
+      lcNumber: "",
+      containerNumber: "",
+      gdNumber: "",
+      vehicleId: "",
+      vehicleNumber: "",
+      driverId: "",
+      driverName: "",
+      manualBaseFreight: "",
+      discount: "",
+      paidAmount: "",
+      hideAmount: false,
+      shipmentStatus: "BOOKED",
+      notes: "",
+      cargoPhoto: "",
+      biltyPhoto: "",
+      weightSlipPhoto: "",
+    });
+    setItems([
+      {
+        detail: "General Commercial Merchandise",
+        quantity: "1",
+        weight: "100",
+        volume: "",
+        rate: "",
+        freightAsPer: "Fixed Freight",
+        freight: 0,
+      },
+    ]);
+    setAdditionalBreakdown({
+      labour: "",
+      lifterCrane: "",
+      pickupLocal: "",
+      deliveryLocal: "",
+      godownStorage: "",
+      other: "",
+      otherRemark: "",
+    });
+    setSavedBilty(null);
+    setSaveSuccessModalOpen(false);
+    setFormError("");
+    setSuccessMessage("");
+  };
+
+  const handleSaveAction = async (mode: "save_only" | "save_and_print" = "save_only") => {
     setFormError("");
     setSuccessMessage("");
 
     if (!formData.senderName.trim()) {
-      setFormError("Sender name or customer selection is required.");
+      const err = "Sender name or customer selection is required.";
+      setFormError(err);
+      toast.error(err);
       return;
     }
     if (!formData.receiverName.trim()) {
-      setFormError("Receiver / Consignee name is required.");
+      const err = "Receiver / Consignee name is required.";
+      setFormError(err);
+      toast.error(err);
       return;
     }
     if (!formData.receiverPhone.trim()) {
-      setFormError("Receiver mobile phone number is required.");
+      const err = "Receiver mobile phone number is required.";
+      setFormError(err);
+      toast.error(err);
+      return;
+    }
+    if (!formData.origin.trim() || !formData.destination.trim()) {
+      const err = "Origin and Destination routes are required.";
+      setFormError(err);
+      toast.error(err);
+      return;
+    }
+    const validItems = items.filter((i) => i.detail && String(i.detail).trim().length > 0);
+    if (validItems.length === 0) {
+      const err = "Please add at least one cargo item description.";
+      setFormError(err);
+      toast.error(err);
       return;
     }
 
@@ -563,40 +699,61 @@ export default function NewBiltyPage() {
         updatedAt: timestamp,
       };
 
-      // 1. Immediately persist to localStorage (both spd_bilties & spd_local_bilties)
+      // 1. Immediately persist to localStorage (both spd_bilties, spd_local_bilties & bilties)
       saveStoredBilty(newBiltyRecord);
 
-      // 2. Cache in sessionStorage for instant 0ms retrieval on detail page
+      // 2. Cache in sessionStorage and localStorage for instant 0ms retrieval on detail page
       if (typeof window !== "undefined") {
         try {
           sessionStorage.setItem("last_created_bilty", JSON.stringify(newBiltyRecord));
+          localStorage.setItem("spd_selected_bilty", JSON.stringify(newBiltyRecord));
         } catch {}
       }
 
-      // 3. Send to API in background
+      // 3. Send to API in background (POST to /api/admin/bilty & /api/bilties)
       try {
-        await fetch("/api/admin/bilty", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newBiltyRecord),
-        });
+        await Promise.allSettled([
+          fetch("/api/admin/bilty", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newBiltyRecord),
+          }),
+          fetch("/api/bilties", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newBiltyRecord),
+          }),
+        ]);
       } catch (apiErr) {
         console.warn("Serverless API fallback active — saved in local storage:", apiErr);
       }
 
       setSavedBilty(newBiltyRecord);
       setSuccessMessage(`Consignment booked successfully! Bilty #${finalBiltyNumber} generated.`);
+      toast.success(`Bilty #${finalBiltyNumber} successfully saved to system records!`);
 
-      // Immediate redirect to 4-sheet dossier viewer
-      setTimeout(() => {
-        router.push(`/admin/bilty/${encodeURIComponent(finalBiltyNumber)}`);
-      }, 500);
+      if (mode === "save_and_print") {
+        // Immediate redirect to 4-sheet dossier viewer
+        setTimeout(() => {
+          router.push(`/admin/bilty/${encodeURIComponent(finalBiltyNumber)}`);
+        }, 300);
+      } else {
+        // Show the comprehensive saved record modal with full print & export options
+        setSaveSuccessModalOpen(true);
+      }
     } catch (err: any) {
       console.error("[NewBilty] Error:", err);
-      setFormError(err.message || "Failed to create Bilty");
+      const msg = err.message || "Failed to create Bilty";
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleSaveAction("save_only");
   };
 
   const customerOptions = customers.map((c) => ({
@@ -1118,15 +1275,33 @@ export default function NewBiltyPage() {
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Remarks / Special Instructions
-            </Label>
+          <div className="space-y-1.5 sm:col-span-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                Remarks / Special Instructions
+              </Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateAiRemarks}
+                disabled={aiLoading}
+                className="h-7 text-[11px] font-bold rounded-lg border-purple-200 dark:border-purple-800 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 gap-1.5 px-2.5 shadow-2xs"
+                title="Generate smart operational remarks and cargo instructions using Google Gemini AI"
+              >
+                {aiLoading ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-purple-700 dark:text-purple-300" />
+                ) : (
+                  <Sparkles className="w-3 h-3 text-purple-700 dark:text-purple-300" />
+                )}
+                <span>Auto-Generate Remarks (Gemini AI)</span>
+              </Button>
+            </div>
             <Input
               value={formData.notes}
-              placeholder=""
+              placeholder="e.g. Handle with care, fragile glass cargo, deliver before 5:00 PM"
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="rounded-xl h-10 text-xs"
+              className="rounded-xl h-10 text-xs font-medium"
             />
           </div>
         </FormSectionCard>
@@ -1690,20 +1865,44 @@ export default function NewBiltyPage() {
         </FormSectionCard>
 
         {/* Bottom Actions */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-6 border-t border-slate-200 dark:border-slate-800">
           <Link href="/admin/bilty">
-            <Button type="button" variant="outline" className="rounded-xl text-xs font-semibold">
-              Cancel
+            <Button type="button" variant="outline" className="rounded-xl text-xs font-semibold h-11 px-4">
+              <ArrowLeft className="w-4 h-4 mr-1.5" />
+              Back to Bookings
             </Button>
           </Link>
-          <Button
-            type="submit"
-            disabled={submitting}
-            className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-11 px-6"
-          >
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>Book Consignment &amp; View 4-Sheet Dossier</span>
-          </Button>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              onClick={() => handleSaveAction("save_and_print")}
+              disabled={submitting}
+              variant="outline"
+              className="border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl shadow-xs gap-2 h-11 px-5"
+            >
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Printer className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+              )}
+              <span>Save &amp; Print 4-Sheet Dossier</span>
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => handleSaveAction("save_only")}
+              disabled={submitting}
+              className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md gap-2 h-11 px-6"
+            >
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              <span>Save Bilty &amp; Record in System</span>
+            </Button>
+          </div>
         </div>
       </form>
 
@@ -1797,6 +1996,152 @@ export default function NewBiltyPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* SAVED RECORD SUCCESS MODAL */}
+      <Dialog open={saveSuccessModalOpen} onOpenChange={setSaveSuccessModalOpen}>
+        <DialogContent className="max-w-xl rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900 dark:text-white">
+                  Bilty Successfully Saved &amp; Recorded!
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
+                  Consignment #{savedBilty?.biltyNumber} has been persisted in system records and warehouse stock.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {savedBilty && (
+            <div className="space-y-4 py-2">
+              {/* Summary Card */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700/60 pb-2">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Bilty Number</span>
+                    <span className="text-sm font-black font-mono text-red-700 dark:text-red-400">
+                      {savedBilty.biltyNumber}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Tracking ID</span>
+                    <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                      {savedBilty.trackingId}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Route</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                      {savedBilty.origin} &rarr; {savedBilty.destination}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Payment / Mode</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                      {savedBilty.amountType} &bull; {savedBilty.dispatchMode}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Sender (Shipper)</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 truncate block">
+                      {savedBilty.senderName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Receiver (Consignee)</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 truncate block">
+                      {savedBilty.receiverName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Cargo &amp; Weight</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 truncate block">
+                      {savedBilty.quantity} Pkgs &bull; {savedBilty.weight} KG
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Grand Total</span>
+                    <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(savedBilty.totalAmount || 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Note */}
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-[11px] text-emerald-800 dark:text-emerald-300">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span>
+                  This bilty is queued under <strong>Available Warehouse Bilties</strong> and is ready for dispatch Challan grouping.
+                </span>
+              </div>
+
+              {/* Action Buttons Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                <Button
+                  type="button"
+                  onClick={() => router.push(`/admin/bilty/${encodeURIComponent(savedBilty.biltyNumber)}`)}
+                  className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl h-10 gap-2 shadow-xs"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print 4-Sheet Dossier</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    export4SheetBiltyExcel(savedBilty);
+                    toast.success("Exported 4-sheet Excel workbook!");
+                  }}
+                  className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-bold text-xs rounded-xl h-10 gap-2"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span>Export 4-Sheet Excel</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/admin/challan")}
+                  className="border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs rounded-xl h-10 gap-2"
+                >
+                  <Truck className="w-4 h-4 text-blue-600" />
+                  <span>Open Challan Queue</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/admin/bilty")}
+                  className="border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs rounded-xl h-10 gap-2"
+                >
+                  <ExternalLink className="w-4 h-4 text-purple-600" />
+                  <span>View in All Bookings</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="border-t border-slate-200 dark:border-slate-800 pt-3">
+            <Button
+              type="button"
+              onClick={handleResetFormForNewBilty}
+              className="bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 text-white font-bold text-xs rounded-xl h-9 gap-1.5 w-full sm:w-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Another Bilty</span>
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

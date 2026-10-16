@@ -239,6 +239,10 @@ export function saveStoredBilty(bilty: any): any[] {
       }
       localStorage.setItem(LOCAL_TRACKING_KEY, JSON.stringify(trackingList));
     } catch {}
+
+    try {
+      localStorage.setItem("bilties", JSON.stringify(list));
+    } catch {}
   }
 
   return list;
