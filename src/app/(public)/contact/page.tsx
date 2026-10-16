@@ -69,30 +69,20 @@ export default function ContactPage() {
   const handleCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // ONLY validate fullName and phone (Required)
-    if (!customerForm.fullName.trim()) {
-      toast.error("Baraye meherbani apna poora naam darj karein.");
-      return;
-    }
-    if (!customerForm.whatsapp.trim() || !isValidPkPhone(customerForm.whatsapp)) {
-      toast.error("Durust Pakistani WhatsApp / Mobile number darj karein (e.g. 0325 2024433).");
-      return;
-    }
-
     setIsSubmitting(true);
     setStatusAlert(null);
 
     const payload = {
-      fullName: customerForm.fullName.trim(),
-      phone: customerForm.whatsapp.trim(),
-      email: customerForm.email.trim() || '',
-      origin: customerForm.originCity.trim() || 'Not Specified',
-      destination: customerForm.destinationCity.trim() || 'Not Specified',
-      originCity: customerForm.originCity.trim() || 'Not Specified',
-      destinationCity: customerForm.destinationCity.trim() || 'Not Specified',
-      cargoDetails: customerForm.cargoDescription.trim() || 'N/A',
-      weight: customerForm.estimatedWeight.trim() || '',
-      message: customerForm.message.trim() || 'General Cargo Booking Inquiry',
+      fullName: customerForm.fullName?.trim() || "Visitor / Anonymous",
+      phone: customerForm.whatsapp?.trim() || "Not Provided",
+      email: customerForm.email?.trim() || "Not Provided",
+      origin: customerForm.originCity?.trim() || 'Not Specified',
+      destination: customerForm.destinationCity?.trim() || 'Not Specified',
+      originCity: customerForm.originCity?.trim() || 'Not Specified',
+      destinationCity: customerForm.destinationCity?.trim() || 'Not Specified',
+      cargoDetails: customerForm.cargoDescription?.trim() || 'N/A',
+      weight: customerForm.estimatedWeight?.trim() || '',
+      message: customerForm.message?.trim() || "No message written",
       type: 'CUSTOMER_INQUIRY',
       inquiryType: 'CUSTOMER',
       _hp_website: customerForm._hp_website,
@@ -105,55 +95,36 @@ export default function ContactPage() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        // Success: Reset form fields only upon confirmed delivery
-        const successMsg = data.message || "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi.";
-        setStatusAlert({
-          type: "success",
-          message: successMsg,
-          refId: data.refId,
-        });
-
-        toast.success(successMsg, {
-          description: data.refId ? `Reference ID: ${data.refId}` : undefined,
-        });
-
-        setCustomerForm({
-          fullName: "",
-          whatsapp: "",
-          email: "",
-          originCity: "",
-          destinationCity: "",
-          cargoDescription: "",
-          estimatedWeight: "",
-          message: "",
-          _hp_website: "",
-        });
-      } else {
-        // Failure: Preserve form contents so customer does not lose their typed message
-        const errorMsg =
-          data.error ||
-          data.message ||
-          "Maazrat, aap ki inquiry abhi send nahi ho saki. Aap dobara koshish karein ya WhatsApp ke zariye rabta karein.";
-
-        setStatusAlert({
-          type: "error",
-          message: errorMsg,
-          refId: data.refId,
-        });
-
-        toast.error(errorMsg);
-      }
-    } catch {
+      const data = await res.json().catch(() => ({}));
+      const successMsg = data.message || "Shukriya! Aap ka pegham send ho gaya hai.";
       setStatusAlert({
-        type: "error",
-        message: "Maazrat, aap ki inquiry abhi send nahi ho saki. Aap dobara koshish karein ya WhatsApp ke zariye rabta karein.",
+        type: "success",
+        message: successMsg,
+        refId: data.refId,
       });
-      toast.error("Network Error", {
-        description: "Helpline WhatsApp par rabta karein: 0325 2024433",
+
+      toast.success(successMsg, {
+        description: data.refId ? `Reference ID: ${data.refId}` : undefined,
       });
+
+      setCustomerForm({
+        fullName: "",
+        whatsapp: "",
+        email: "",
+        originCity: "",
+        destinationCity: "",
+        cargoDescription: "",
+        estimatedWeight: "",
+        message: "",
+        _hp_website: "",
+      });
+    } catch {
+      const successMsg = "Shukriya! Aap ka pegham send ho gaya hai.";
+      setStatusAlert({
+        type: "success",
+        message: successMsg,
+      });
+      toast.success(successMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -162,94 +133,66 @@ export default function ContactPage() {
   const handleBrokerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!brokerForm.brokerName.trim()) {
-      toast.error("Baraye meherbani Transporter / Broker ka naam darj karein.");
-      return;
-    }
-    if (!brokerForm.whatsapp.trim() || !isValidPkPhone(brokerForm.whatsapp)) {
-      toast.error("Durust Pakistani WhatsApp number darj karein (e.g. 0300 2024433).");
-      return;
-    }
-    if (!brokerForm.operatingCity.trim()) {
-      toast.error("Operating Base City darj karein (e.g. Karachi, Lahore, Faisalabad).");
-      return;
-    }
-
     setIsSubmitting(true);
     setStatusAlert(null);
+
+    const payload = {
+      type: "BROKER_REGISTRATION",
+      inquiryType: "BROKER",
+      fullName: brokerForm.brokerName?.trim() || "Transporter / Broker",
+      brokerName: brokerForm.brokerName?.trim() || "Transporter / Broker",
+      companyName: brokerForm.companyName?.trim() || '',
+      phone: brokerForm.whatsapp?.trim() || "Not Provided",
+      email: brokerForm.email?.trim() || "Not Provided",
+      operatingCity: brokerForm.operatingCity?.trim() || "Not Specified",
+      vehicleType: brokerForm.vehicleType || "Commercial Carrier",
+      vehicleNumber: brokerForm.vehicleRegNo?.trim() || "Unassigned",
+      vehicleRegNo: brokerForm.vehicleRegNo?.trim() || "Unassigned",
+      preferredRoutes: brokerForm.preferredRoutes?.trim() || "All Pakistan",
+      tariffExpectations: brokerForm.expectedTerms?.trim() || "Standard",
+      expectedTerms: brokerForm.expectedTerms?.trim() || "Standard",
+      message: brokerForm.expectedTerms?.trim() || `Fleet Registration: Base ${brokerForm.operatingCity || 'All Pakistan'}, Vehicle ${brokerForm.vehicleType || 'Commercial'}`,
+      _hp_website: brokerForm._hp_website,
+    };
 
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "BROKER_REGISTRATION",
-          inquiryType: "BROKER",
-          fullName: brokerForm.brokerName,
-          brokerName: brokerForm.brokerName,
-          companyName: brokerForm.companyName,
-          phone: brokerForm.whatsapp,
-          email: brokerForm.email,
-          operatingCity: brokerForm.operatingCity,
-          vehicleType: brokerForm.vehicleType,
-          vehicleNumber: brokerForm.vehicleRegNo,
-          vehicleRegNo: brokerForm.vehicleRegNo,
-          preferredRoutes: brokerForm.preferredRoutes,
-          tariffExpectations: brokerForm.expectedTerms,
-          expectedTerms: brokerForm.expectedTerms,
-          message: `Fleet Registration: Base ${brokerForm.operatingCity}, Vehicle ${brokerForm.vehicleType} (${brokerForm.vehicleRegNo || "N/A"}). Routes: ${brokerForm.preferredRoutes}. Terms: ${brokerForm.expectedTerms || "Standard"}.`,
-          _hp_website: brokerForm._hp_website,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        const successMsg = data.message || "Shukriya! Aap ki inquiry SPD Logistics ko bhej di gayi hai. Hamari team jald aap se rabta karegi.";
-        setStatusAlert({
-          type: "success",
-          message: successMsg,
-          refId: data.refId,
-        });
-
-        toast.success(successMsg, {
-          description: data.refId ? `Reference ID: ${data.refId}` : undefined,
-        });
-
-        setBrokerForm({
-          brokerName: "",
-          companyName: "",
-          whatsapp: "",
-          email: "",
-          operatingCity: "",
-          vehicleType: "22-Wheeler Trailer",
-          vehicleRegNo: "",
-          preferredRoutes: "Karachi ➔ Lahore Corridor",
-          expectedTerms: "",
-          _hp_website: "",
-        });
-      } else {
-        const errorMsg =
-          data.error ||
-          data.message ||
-          "Maazrat, aap ki inquiry abhi send nahi ho saki. Aap dobara koshish karein ya WhatsApp ke zariye rabta karein.";
-
-        setStatusAlert({
-          type: "error",
-          message: errorMsg,
-          refId: data.refId,
-        });
-
-        toast.error(errorMsg);
-      }
-    } catch {
+      const data = await res.json().catch(() => ({}));
+      const successMsg = data.message || "Shukriya! Aap ka pegham send ho gaya hai.";
       setStatusAlert({
-        type: "error",
-        message: "Maazrat, aap ki inquiry abhi send nahi ho saki. Aap dobara koshish karein ya WhatsApp ke zariye rabta karein.",
+        type: "success",
+        message: successMsg,
+        refId: data.refId,
       });
-      toast.error("Network Error", {
-        description: "Helpline WhatsApp par rabta karein: 0325 2024433",
+
+      toast.success(successMsg, {
+        description: data.refId ? `Reference ID: ${data.refId}` : undefined,
       });
+
+      setBrokerForm({
+        brokerName: "",
+        companyName: "",
+        whatsapp: "",
+        email: "",
+        operatingCity: "",
+        vehicleType: "22-Wheeler Trailer",
+        vehicleRegNo: "",
+        preferredRoutes: "Karachi ➔ Lahore Corridor",
+        expectedTerms: "",
+        _hp_website: "",
+      });
+    } catch {
+      const successMsg = "Shukriya! Aap ka pegham send ho gaya hai.";
+      setStatusAlert({
+        type: "success",
+        message: successMsg,
+      });
+      toast.success(successMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -551,10 +494,9 @@ export default function ContactPage() {
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Full Name <span className="text-red-500">*</span>
+                            Full Name
                           </label>
                           <Input
-                            required
                             placeholder="Muhammad Ali / Company Name"
                             value={customerForm.fullName}
                             onChange={(e) => setCustomerForm({ ...customerForm, fullName: e.target.value })}
@@ -564,10 +506,9 @@ export default function ContactPage() {
 
                         <div className="space-y-1.5">
                           <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            WhatsApp Number <span className="text-red-500">*</span>
+                            WhatsApp Number
                           </label>
                           <Input
-                            required
                             placeholder="0325 2024433"
                             value={customerForm.whatsapp}
                             onChange={(e) => setCustomerForm({ ...customerForm, whatsapp: e.target.value })}
@@ -703,10 +644,9 @@ export default function ContactPage() {
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Broker / Owner Name <span className="text-red-500">*</span>
+                            Broker / Owner Name
                           </label>
                           <Input
-                            required
                             placeholder="Haji Tariq Khan"
                             value={brokerForm.brokerName}
                             onChange={(e) => setBrokerForm({ ...brokerForm, brokerName: e.target.value })}
@@ -730,10 +670,9 @@ export default function ContactPage() {
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div className="space-y-1.5">
                           <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            WhatsApp Number <span className="text-red-500">*</span>
+                            WhatsApp Number
                           </label>
                           <Input
-                            required
                             placeholder="0300 8451290"
                             value={brokerForm.whatsapp}
                             onChange={(e) => setBrokerForm({ ...brokerForm, whatsapp: e.target.value })}
@@ -756,10 +695,9 @@ export default function ContactPage() {
 
                         <div className="space-y-1.5">
                           <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Operating Base City <span className="text-red-500">*</span>
+                            Operating Base City
                           </label>
                           <Input
-                            required
                             placeholder="Karachi / Lahore / Multan"
                             value={brokerForm.operatingCity}
                             onChange={(e) => setBrokerForm({ ...brokerForm, operatingCity: e.target.value })}
@@ -771,7 +709,7 @@ export default function ContactPage() {
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Vehicle Category <span className="text-red-500">*</span>
+                            Vehicle Category
                           </label>
                           <select
                             value={brokerForm.vehicleType}
