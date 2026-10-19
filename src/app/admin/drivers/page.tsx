@@ -586,8 +586,8 @@ export default function DriversPage() {
       ) : drivers.length === 0 ? (
         <EmptyState
           icon={UserCog}
-          title="No drivers registered"
-          description="Add your first fleet driver to assign shipments and vehicles."
+          title="No records found"
+          description="Click '+ Add New' to create your first entry."
         />
       ) : (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">

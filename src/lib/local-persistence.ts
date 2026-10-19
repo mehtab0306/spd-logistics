@@ -552,58 +552,14 @@ export interface TrashItem {
   data: any;
 }
 
-const DEFAULT_TRASH_SEEDS: TrashItem[] = [
-  {
-    id: "seed-del-bilty-1",
-    type: "bilty",
-    title: "Bilty # SPD-LHR-2026-0099",
-    party: "Lahore → Karachi (Mehran Auto Spares)",
-    deletedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-    amount: 14500,
-    data: {
-      id: "seed-del-bilty-1",
-      biltyNumber: "SPD-LHR-2026-0099",
-      trackingId: "SPD-2026-00099",
-      origin: "Lahore",
-      destination: "Karachi",
-      senderName: "Mehran Auto Spares",
-      senderPhone: "0300-4411223",
-      receiverName: "Karachi Engine House",
-      receiverPhone: "0321-9988776",
-      packageDetails: "Auto Engine Parts & Gears",
-      quantity: 12,
-      weight: 420,
-      freight: 14500,
-      totalAmount: 14500,
-      remainingBalance: 0,
-      date: new Date(Date.now() - 3600000 * 24).toISOString(),
-    },
-  },
-  {
-    id: "seed-del-cust-1",
-    type: "customer",
-    title: "Bismillah Fabrics Pvt Ltd",
-    party: "Faisalabad • 0301-7788990",
-    deletedAt: new Date(Date.now() - 3600000 * 18).toISOString(),
-    amount: 0,
-    data: {
-      id: "seed-del-cust-1",
-      name: "Bismillah Fabrics Pvt Ltd",
-      companyName: "Bismillah Fabrics",
-      phone: "0301-7788990",
-      city: "Faisalabad",
-      address: "Cloth Market, Faisalabad",
-      balance: 0,
-    },
-  },
-];
+const DEFAULT_TRASH_SEEDS: TrashItem[] = [];
 
 export function getTrashItems(): TrashItem[] {
-  if (typeof window === "undefined") return DEFAULT_TRASH_SEEDS;
+  if (typeof window === "undefined") return [];
   const raw = localStorage.getItem(TRASH_KEY);
   if (!raw) {
-    localStorage.setItem(TRASH_KEY, JSON.stringify(DEFAULT_TRASH_SEEDS));
-    return DEFAULT_TRASH_SEEDS;
+    localStorage.setItem(TRASH_KEY, JSON.stringify([]));
+    return [];
   }
   const parsed = safeParseArray(raw);
   return parsed.length > 0 ? parsed : [];

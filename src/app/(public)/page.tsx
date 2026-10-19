@@ -560,7 +560,7 @@ export default function HomePage() {
       <FaqFlipCards />
 
       {/* ========================================================================= */}
-      {/* 5. CONTACT SECTION (Connected to superpakdatawale@gmail.com)               */}
+      {/* 5. CONTACT SECTION (Connected to spdgoodstransport@gmail.com)             */}
       {/* ========================================================================= */}
       <section id="contact-section" className="w-full py-20 bg-slate-50/75 dark:bg-[#0e1422]/75 backdrop-blur-[2px] border-b border-slate-200 dark:border-slate-800 transition-colors duration-300 relative z-10">
         <div className="container px-4 md:px-6 mx-auto max-w-4xl">
@@ -573,7 +573,7 @@ export default function HomePage() {
             />
             <h2 className="text-3xl sm:text-4xl font-black text-slate-950 dark:text-white">Contact Us</h2>
             <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-              Send your cargo inquiry directly to <strong className="text-spd-blue">superpakdatawale@gmail.com</strong> for instant freight quotation and dispatch scheduling.
+              Send your cargo inquiry directly to <strong className="text-spd-blue">spdgoodstransport@gmail.com</strong> for instant freight quotation and dispatch scheduling.
             </p>
           </div>
 
@@ -670,7 +670,7 @@ export default function HomePage() {
               {formSubmitted && (
                 <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Thank you! Your inquiry has been submitted successfully to superpakdatawale@gmail.com. Our dispatch team will contact you shortly.</span>
+                  <span>Thank you! Your inquiry has been submitted successfully to spdgoodstransport@gmail.com. Our dispatch team will contact you shortly.</span>
                 </div>
               )}
             </form>

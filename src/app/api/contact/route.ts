@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       port: 465,
       secure: true, // SSL
       auth: {
-        user: 'superpakdatawale@gmail.com',
+        user: 'spdgoodstransport@gmail.com',
         pass: 'minklfyiagkzceaud'.replace(/\s+/g, '') // Official App Password
       },
       tls: {
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
         </tr>
         <tr>
           <td style="background-color: #f1f5f9; padding: 14px; text-align: center; font-size: 12px; color: #64748b;">
-            Official Inbox: superpakdatawale@gmail.com<br>
+            Official Inbox: spdgoodstransport@gmail.com<br>
             Designed & Developed by <a href="https://wa.me/923147194861" style="color: #dc2626; font-weight: bold; text-decoration: none;">Mehtab</a>
           </td>
         </tr>
@@ -85,10 +85,10 @@ export async function POST(req: Request) {
     </html>
     `;
 
-    // Strictly one recipient: superpakdatawale@gmail.com
+    // Strictly one recipient: spdgoodstransport@gmail.com
     await transporter.sendMail({
-      from: `"SPD Logistics" <superpakdatawale@gmail.com>`,
-      to: 'superpakdatawale@gmail.com',
+      from: `"SPD Logistics" <spdgoodstransport@gmail.com>`,
+      to: 'spdgoodstransport@gmail.com',
       replyTo: (senderEmail && senderEmail !== 'Not Provided' && senderEmail.includes('@')) ? senderEmail : undefined,
       subject: subject,
       html: htmlContent

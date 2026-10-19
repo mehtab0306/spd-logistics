@@ -4,53 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-const DEFAULT_PAYABLES = [
-  {
-    id: "pay-v-1",
-    vendorName: "Pakistan State Oil (PSO) Depot",
-    category: "FUEL",
-    reference: "PSO-88912",
-    vehicleNumber: "LES-8921",
-    driverName: "Muhammad Khan",
-    description: "Diesel fuel refill for 22-wheeler fleet transit",
-    totalAmount: 95000,
-    paidAmount: 50000,
-    remainingAmount: 45000,
-    status: "PARTIAL",
-    dueDate: new Date(Date.now() + 86400000 * 7).toISOString(),
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "pay-v-2",
-    vendorName: "National Highway Authority (M-TAG)",
-    category: "TOLL_TAX",
-    reference: "NHA-TOLL-041",
-    vehicleNumber: "KHI-7720",
-    driverName: "Abdul Ghaffar",
-    description: "M-5 Motorway commercial toll charges",
-    totalAmount: 18000,
-    paidAmount: 18000,
-    remainingAmount: 0,
-    status: "PAID",
-    dueDate: new Date().toISOString(),
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-  },
-  {
-    id: "pay-v-3",
-    vendorName: "Master Tyre Corporation",
-    category: "MAINTENANCE",
-    reference: "TYR-2026-99",
-    vehicleNumber: "TK-4431",
-    driverName: "Sardar Ali",
-    description: "2x Radial tyres replacement and balancing",
-    totalAmount: 64000,
-    paidAmount: 20000,
-    remainingAmount: 44000,
-    status: "PARTIAL",
-    dueDate: new Date(Date.now() + 86400000 * 3).toISOString(),
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-];
+const DEFAULT_PAYABLES: any[] = [];
 
 export async function GET(request: Request) {
   try {
@@ -134,14 +88,14 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error("[Payables GET API Error]", error);
     const summary = {
-      totalPayables: 177000,
-      totalPaid: 88000,
-      totalRemaining: 89000,
+      totalPayables: 0,
+      totalPaid: 0,
+      totalRemaining: 0,
       overdueCount: 0,
     };
     return NextResponse.json({
       success: true,
-      data: { summary, payables: DEFAULT_PAYABLES },
+      data: { summary, payables: [] },
     });
   }
 }

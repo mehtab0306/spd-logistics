@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: Record<
     description: 'Company slogan or tagline',
   },
   companyEmail: {
-    value: 'superpakdatawale@gmail.com',
+    value: 'spdgoodstransport@gmail.com',
     category: 'COMPANY',
     description: 'Primary company email address',
   },
@@ -189,7 +189,7 @@ const DEFAULT_SETTINGS: Record<
     description: 'Alert on public contact form submissions',
   },
   adminNotificationEmail: {
-    value: 'superpakdatawale@gmail.com',
+    value: 'spdgoodstransport@gmail.com',
     category: 'NOTIFICATIONS',
     description: 'Admin alert recipient email',
   },

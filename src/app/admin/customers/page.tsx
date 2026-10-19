@@ -639,8 +639,8 @@ export default function CustomersPage() {
       ) : customers.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No customers found"
-          description="Create customer login credentials manually. Customers can log in at the Customer Portal."
+          title="No records found"
+          description="Click '+ Add New' to create your first entry."
         />
       ) : (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">

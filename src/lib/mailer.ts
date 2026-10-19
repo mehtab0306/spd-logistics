@@ -22,13 +22,13 @@ export interface SendEmailResult {
 
 /**
  * Main dispatch function for inquiries and notifications using Nodemailer with Gmail SMTP.
- * Target recipient: superpakdatawale@gmail.com
+ * Target recipient: spdgoodstransport@gmail.com
  */
 export async function sendContactEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-  const targetRecipient = options.to || process.env.RECEIVER_EMAIL || process.env.NOTIFICATION_EMAIL || "superpakdatawale@gmail.com";
+  const targetRecipient = options.to || process.env.RECEIVER_EMAIL || process.env.NOTIFICATION_EMAIL || "spdgoodstransport@gmail.com";
   const host = process.env.EMAIL_HOST || process.env.SMTP_HOST || "smtp.gmail.com";
   const port = parseInt(process.env.EMAIL_PORT || process.env.SMTP_PORT || "465", 10);
-  const user = (process.env.EMAIL_USER || process.env.SMTP_USER || "superpakdatawale@gmail.com").trim();
+  const user = (process.env.EMAIL_USER || process.env.SMTP_USER || "spdgoodstransport@gmail.com").trim();
   const pass = (process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.SMTP_PASSWORD || "minklfyiagkzceaud").trim();
 
   // If credentials are empty
@@ -122,7 +122,7 @@ export interface EventEmailOptions {
  * Dispatch real event notifications (Bilty Created, Delivered, Payment, etc.) to admin
  */
 export async function sendEventEmail(options: EventEmailOptions): Promise<SendEmailResult> {
-  const targetRecipient = process.env.NOTIFICATION_EMAIL || "superpakdatawale@gmail.com";
+  const targetRecipient = process.env.NOTIFICATION_EMAIL || "spdgoodstransport@gmail.com";
   const timestamp = new Date().toLocaleString("en-PK", { timeZone: "Asia/Karachi" });
 
   if (options.consignmentData && (options.eventType === "BILTY_CREATED" || options.eventType === "BILTY_DELIVERED")) {

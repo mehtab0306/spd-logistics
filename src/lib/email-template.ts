@@ -1,14 +1,14 @@
 /**
  * SPD Logistics — Premium Corporate HTML Email Template Generator
  * Super Pak Data Goods Transport Co. Est. 1996
- * Dispatch Target: superpakdatawale@gmail.com
+ * Dispatch Target: spdgoodstransport@gmail.com
  */
 
 export const SPD_COMPANY_INFO = {
   name: "Super Pak Data Goods Transport Co.",
   shortName: "SPD Logistics",
   est: "1996",
-  email: "superpakdatawale@gmail.com",
+  email: "spdgoodstransport@gmail.com",
   website: "https://spdlogistics.com",
   logoUrl: "https://spdlogistics.com/images/spd-logo.jpg",
   mdName: "Hammad Faisal Bhatti (MD)",

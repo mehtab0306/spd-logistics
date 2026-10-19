@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -551,7 +552,45 @@ function CashBooksContent() {
     if (!deleteTx || !selectedBook) return;
     try {
       setDeletingTx(true);
-      const res = await fetch(`/api/admin/cash-books?txId=${deleteTx.id}`, {
+      const targetTxId = deleteTx.id;
+
+      // 1. Instantly remove from local transaction list and recalculate balances
+      const remainingTxs = transactions.filter((t) => t.id !== targetTxId);
+      const openBal = selectedBook.openingBalance || 0;
+      const newCredits = remainingTxs.reduce((sum, t) => sum + (t.credit || 0), 0);
+      const newDebits = remainingTxs.reduce((sum, t) => sum + (t.debit || 0), 0);
+      const newNetBalance = openBal + newCredits - newDebits;
+
+      // Recompute running balance sequentially for remaining entries
+      let running = openBal;
+      const recomputedTxs = remainingTxs.map((t) => {
+        running = running + (t.credit || 0) - (t.debit || 0);
+        return { ...t, balance: running, runningBalance: running };
+      });
+
+      setTransactions(recomputedTxs);
+
+      const updatedBook: CashBookItem = {
+        ...selectedBook,
+        totalCredits: newCredits,
+        totalDebits: newDebits,
+        currentBalance: newNetBalance,
+        transactionCount: recomputedTxs.length,
+      };
+
+      setSelectedBook(updatedBook);
+
+      // 2. Persist to localStorage
+      setCashBooks((prev) => {
+        const next = prev.map((b) => (b.id === selectedBook.id ? updatedBook : b));
+        try {
+          localStorage.setItem("spd_cash_books", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
+      // 3. Delete from backend API
+      const res = await fetch(`/api/admin/cash-books?txId=${targetTxId}&cashBookId=${selectedBook.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -560,10 +599,10 @@ function CashBooksContent() {
       }
 
       setDeleteTx(null);
-      setFeedback({ type: "success", message: "Transaction removed successfully." });
-      await fetchCashBooks();
-      await fetchTransactions(selectedBook.id);
+      toast.success("Transaction deleted successfully.");
+      setFeedback({ type: "success", message: "Transaction deleted successfully." });
     } catch (err: any) {
+      toast.error(err.message || "Failed to delete entry");
       setFeedback({ type: "error", message: err.message || "Delete error" });
     } finally {
       setDeletingTx(false);
@@ -1235,8 +1274,8 @@ function CashBooksContent() {
           <div className="p-12 text-center">
             <EmptyState
               icon={Wallet}
-              title="No cash transactions recorded"
-              description="Use the + Cash IN or - Cash OUT buttons above to record your first entry."
+              title="No records found"
+              description="Click '+ Add New' to create your first entry."
             />
           </div>
         ) : (
@@ -2329,7 +2368,7 @@ function CashBooksContent() {
               <span>Delete Cash Transaction</span>
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to remove this transaction from the cash book?
+              Are you sure you want to delete this entry?
             </DialogDescription>
           </DialogHeader>
 

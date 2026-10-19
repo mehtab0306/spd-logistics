@@ -490,10 +490,10 @@ export default function TermsAndConditionsPage() {
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-red-400 shrink-0" />
                     <a 
-                      href="mailto:superpakdatawale@gmail.com"
+                      href="mailto:spdgoodstransport@gmail.com"
                       className="text-slate-200 hover:text-white hover:underline break-all text-xs md:text-sm font-mono"
                     >
-                      superpakdatawale@gmail.com
+                      spdgoodstransport@gmail.com
                     </a>
                   </div>
                   <div className="flex items-center gap-2">

@@ -165,7 +165,7 @@ export default function PrivacyPolicyPage() {
                     B. Contact & Inquiry Submissions
                   </h3>
                   <p className="text-sm">
-                    When you contact us via the public website contact form, we collect your name, email address, phone number, subject, and the inquiry message. These submissions are forwarded to our authorized administrative desk (<code className="text-xs bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">superpakdatawale@gmail.com</code>) to respond to your request.
+                    When you contact us via the public website contact form, we collect your name, email address, phone number, subject, and the inquiry message. These submissions are forwarded to our authorized administrative desk (<code className="text-xs bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">spdgoodstransport@gmail.com</code>) to respond to your request.
                   </p>
                 </div>
 
@@ -252,7 +252,7 @@ export default function PrivacyPolicyPage() {
                     Official Email Inquiries
                   </div>
                   <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400">
-                    Website contact inquiries and corporate quotations are dispatched via secure SMTP to <code className="text-xs text-primary font-semibold">superpakdatawale@gmail.com</code>. We do not sell your email address to third-party marketers.
+                    Website contact inquiries and corporate quotations are dispatched via secure SMTP to <code className="text-xs text-primary font-semibold">spdgoodstransport@gmail.com</code>. We do not sell your email address to third-party marketers.
                   </p>
                 </div>
                 <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
@@ -517,10 +517,10 @@ export default function PrivacyPolicyPage() {
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-red-400 shrink-0" />
                     <a 
-                      href="mailto:superpakdatawale@gmail.com"
+                      href="mailto:spdgoodstransport@gmail.com"
                       className="text-slate-200 hover:text-white hover:underline break-all text-xs md:text-sm font-mono"
                     >
-                      superpakdatawale@gmail.com
+                      spdgoodstransport@gmail.com
                     </a>
                   </div>
                   <div className="flex items-center gap-2">

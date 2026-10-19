@@ -96,38 +96,7 @@ export async function GET(request: Request) {
       ];
     }
 
-    const DEFAULT_CHALLANS = [
-      {
-        id: "chl-demo-1",
-        challanNumber: "CHL-2026-0012",
-        truckNumber: "LES-8921",
-        driverName: "Muhammad Khan",
-        driverPhone: "0301 5566778",
-        origin: "Lahore Terminal",
-        destination: "Karachi Hub",
-        status: "IN_TRANSIT",
-        totalFreight: 46000,
-        paidAdvance: 46000,
-        remainingBalance: 0,
-        consignments: [
-          {
-            id: "bilty-mock-1",
-            biltyNumber: "SPD-LHR-2026-0042",
-            trackingId: "SPD-2026-000142",
-            senderName: "Crescent Textile Mills Ltd",
-            receiverName: "Metro Cash & Carry Terminal",
-            destination: "Karachi",
-            totalAmount: 46000,
-            packageDetails: "Textile Fabrics & Yarn Cartons",
-            quantity: 120,
-            weight: 4500,
-          }
-        ],
-        vehicle: { id: "v-1", vehicleNumber: "LES-8921", vehicleType: "10 Wheeler Bedford" },
-        driver: { id: "d-1", name: "Muhammad Khan", phone: "0301 5566778" },
-        createdAt: new Date().toISOString(),
-      }
-    ];
+    const DEFAULT_CHALLANS: any[] = [];
 
     let challans: any[] = [];
     try {

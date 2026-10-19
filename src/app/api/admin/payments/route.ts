@@ -5,56 +5,7 @@ import { sendEventEmail } from '@/lib/mailer';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_PAYMENTS = [
-  {
-    id: 'pay-1',
-    amount: 120000,
-    type: 'RECEIPT',
-    paymentMethod: 'CASH',
-    reference: 'REC-982101',
-    notes: 'Advance freight for Crescent Textile Mills consignment',
-    status: 'COMPLETED',
-    date: new Date().toISOString(),
-    customer: { id: 'c-1', name: 'Mian Muhammad Mansha', companyName: 'Crescent Textile Mills Ltd', phone: '0300 1234567' },
-    consignment: { id: 'bilty-mock-1', biltyNumber: 'SPD-LHR-2026-0042', totalAmount: 46000, remainingBalance: 0 },
-  },
-  {
-    id: 'pay-2',
-    amount: 30000,
-    type: 'RECEIPT',
-    paymentMethod: 'ONLINE',
-    reference: 'REC-982102',
-    notes: 'Partial payment - Al-Rahim Trading Company',
-    status: 'COMPLETED',
-    date: new Date(Date.now() - 86400000).toISOString(),
-    customer: { id: 'c-2', name: 'Haji Rahim', companyName: 'Al-Rahim Trading', phone: '0333 4455667' },
-    consignment: { id: 'bilty-mock-2', biltyNumber: 'SPD-KHI-2026-0038', totalAmount: 84000, remainingBalance: 54000 },
-  },
-  {
-    id: 'pay-3',
-    amount: 39000,
-    type: 'RECEIPT',
-    paymentMethod: 'BANK_TRANSFER',
-    reference: 'REC-982103',
-    notes: 'Full payment - Packages Limited',
-    status: 'COMPLETED',
-    date: new Date(Date.now() - 86400000 * 2).toISOString(),
-    customer: { id: 'c-3', name: 'Syed Babar Ali', companyName: 'Packages Limited', phone: '042 35811544' },
-    consignment: { id: 'bilty-mock-3', biltyNumber: 'SPD-LHR-2026-0035', totalAmount: 39000, remainingBalance: 0 },
-  },
-  {
-    id: 'pay-4',
-    amount: 50000,
-    type: 'RECEIPT',
-    paymentMethod: 'CASH',
-    reference: 'REC-982104',
-    notes: 'Advance payment - National Steel Traders',
-    status: 'COMPLETED',
-    date: new Date(Date.now() - 86400000 * 3).toISOString(),
-    customer: { id: 'c-4', name: 'Malik Usman', companyName: 'National Steel Traders', phone: '0321 7654321' },
-    consignment: { id: 'bilty-mock-4', biltyNumber: 'SPD-LHR-2026-0029', totalAmount: 97000, remainingBalance: 47000 },
-  },
-];
+const DEFAULT_PAYMENTS: any[] = [];
 
 export async function GET(request: Request) {
   try {

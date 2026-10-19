@@ -67,74 +67,7 @@ const LOCAL_DELETED_IDS_KEY = "spd_notifications_deleted_ids";
 const LOCAL_CONTACT_STATUSES_KEY = "spd_contact_message_statuses";
 const LOCAL_CONTACT_INQUIRIES_KEY = "spd_contact_inquiries";
 
-const SEED_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: "seed-notif-1",
-    type: "BILTY",
-    title: "New Consignment Bilty Created",
-    message: "Bilty SPD-LHR-2026-0089 generated for Al-Rehman Textiles (Lahore to Karachi, 18,500 kg, PKR 245,000).",
-    isRead: false,
-    link: "/admin/bilty",
-    createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-  },
-  {
-    id: "seed-notif-2",
-    type: "PAYMENT",
-    title: "Customer Payment Received",
-    message: "Payment of PKR 150,000 received for Bilty SPD-KHI-2026-0042 from Gourmet Foods Lahore via Cash.",
-    isRead: false,
-    link: "/admin/receivables",
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-  },
-  {
-    id: "seed-notif-3",
-    type: "CONTACT",
-    title: "Freight Quote Inquiry: Hammad Faisal Bhatti",
-    message: "22-Wheeler Heavy Trailer Booking: Urgent cargo transport requirement for steel coils from Lahore Terminal to Karachi Port.",
-    isRead: false,
-    link: "#contact-inquiry",
-    createdAt: new Date(Date.now() - 1000 * 60 * 110).toISOString(),
-    contactData: {
-      id: "seed-inq-1",
-      name: "Hammad Faisal Bhatti",
-      phone: "0325 2024433",
-      email: "superpakdatawale@gmail.com",
-      company: "Bhatti Industrial Corporation",
-      subject: "Quote for 22-Wheeler Flatbed Steel Transport",
-      message:
-        "Assalam-o-Alaikum, We require two 22-wheeler flatbed trucks to dispatch 35 tons of industrial steel coils from Lahore Consolidation Hub to Karachi Port on urgent priority. Please advise availability and freight quotation.",
-      createdAt: new Date(Date.now() - 1000 * 60 * 110).toISOString(),
-      status: "NEW",
-    },
-  },
-  {
-    id: "seed-notif-4",
-    type: "DRIVER",
-    title: "Driver Assigned to Fleet",
-    message: "Muhammad Aslam (CNIC: 35201-1234567-1) assigned as primary driver to Hino 700 Prime Mover LES-8899 on Lahore-Karachi route.",
-    isRead: false,
-    link: "/admin/vehicles",
-    createdAt: new Date(Date.now() - 1000 * 60 * 210).toISOString(),
-  },
-  {
-    id: "seed-notif-5",
-    type: "PAYABLE",
-    title: "Fuel & Toll Expense Voucher Approved",
-    message: "Expense voucher PKR 68,000 approved for Diesel & Toll Tax on Hino Truck LES-8899 (Lahore to Karachi Hub).",
-    isRead: true,
-    link: "/admin/payables",
-    createdAt: new Date(Date.now() - 1000 * 60 * 480).toISOString(),
-  },
-  {
-    id: "seed-notif-6",
-    type: "SYSTEM",
-    title: "Database Backup & Ledger Reconciled",
-    message: "Automatic daily snapshot completed. All accounts and party ledger balances are verified and synchronized.",
-    isRead: true,
-    link: "/admin/settings",
-    createdAt: new Date(Date.now() - 1000 * 60 * 1440).toISOString(),
-  },
-];
+const SEED_NOTIFICATIONS: NotificationItem[] = [];
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -261,7 +194,7 @@ export default function NotificationsPage() {
           id: inq.id,
           name: inq.name || "Customer",
           phone: inq.phone || "N/A",
-          email: inq.email || "superpakdatawale@gmail.com",
+          email: inq.email || "spdgoodstransport@gmail.com",
           company: inq.company || "Direct Freight Client",
           subject: inq.subject || "Freight Transport Inquiry",
           message: inq.message || "General cargo inquiry",
@@ -307,7 +240,7 @@ export default function NotificationsPage() {
               id: item.id,
               name: senderName,
               phone: phone,
-              email: "superpakdatawale@gmail.com",
+              email: "spdgoodstransport@gmail.com",
               company: "National Freight Customer",
               subject: item.title,
               message: item.message,
@@ -963,7 +896,7 @@ export default function NotificationsPage() {
                     href={`mailto:${selectedMessage.email}?subject=${encodeURIComponent(
                       `Re: ${selectedMessage.subject} - SPD Logistics Dispatch`
                     )}&body=${encodeURIComponent(
-                      `Dear ${selectedMessage.name},\n\nThank you for reaching out to Super Pak Data Goods Transport Co. (SPD Logistics).\n\nIn response to your inquiry regarding:\n"${selectedMessage.message}"\n\nOur operations team has reviewed your freight requirements...\n\nWarm regards,\nSPD Logistics Central Dispatch\nsuperpakdatawale@gmail.com\n0325 2024433 / 0300 2024433`
+                      `Dear ${selectedMessage.name},\n\nThank you for reaching out to Super Pak Data Goods Transport Co. (SPD Logistics).\n\nIn response to your inquiry regarding:\n"${selectedMessage.message}"\n\nOur operations team has reviewed your freight requirements...\n\nWarm regards,\nSPD Logistics Central Dispatch\nspdgoodstransport@gmail.com\n0325 2024433 / 0300 2024433`
                     )}`}
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black bg-spd-blue hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-colors"
                   >

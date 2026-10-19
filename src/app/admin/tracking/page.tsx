@@ -726,8 +726,8 @@ function AdminTrackingContent() {
       {filteredConsignments.length === 0 ? (
         <EmptyState
           icon={Package}
-          title="No consignments found"
-          description="Try adjusting your search query or filter to locate shipments."
+          title="No records found"
+          description="Click '+ Add New' to create your first entry."
         />
       ) : (
         <div className="grid gap-3">

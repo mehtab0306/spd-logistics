@@ -407,8 +407,8 @@ export default function VehiclesPage() {
       ) : vehicles.length === 0 ? (
         <EmptyState
           icon={Truck}
-          title="No vehicles registered"
-          description="Register your first transport truck or trailer to assign consignments."
+          title="No records found"
+          description="Click '+ Add New' to create your first entry."
         />
       ) : (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">

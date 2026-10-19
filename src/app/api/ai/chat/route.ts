@@ -10,7 +10,7 @@ Your role is to assist corporate clients, traders, factory owners, and shippers 
 • Executive Leadership:
   - Hammad Faisal Bhatti (Owner / Managing Director) - Direct Dispatch: 0325 2024433
   - Faisal Hussain Bhatti (Founder / CEO) - Office: 0300 2024433
-• Official Email: superpakdatawale@gmail.com
+• Official Email: spdgoodstransport@gmail.com
 
 === WAREHOUSE & TERMINAL HUBS ===
 1. Karachi Terminal: Plot No 9, Gate No 1, Street No 4 Truck Stand, Hawksbay Road, Karachi.

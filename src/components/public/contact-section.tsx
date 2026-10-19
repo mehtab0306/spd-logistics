@@ -71,7 +71,7 @@ export default function ContactSection() {
           />
           <h2 className="text-3xl sm:text-4xl font-black text-slate-950 dark:text-white">Contact Us</h2>
           <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-            Send your cargo inquiry directly to <strong className="text-spd-blue">superpakdatawale@gmail.com</strong> for instant freight quotation and dispatch scheduling.
+            Send your cargo inquiry directly to <strong className="text-spd-blue">spdgoodstransport@gmail.com</strong> for instant freight quotation and dispatch scheduling.
           </p>
         </div>
 

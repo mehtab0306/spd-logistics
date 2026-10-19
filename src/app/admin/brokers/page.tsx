@@ -423,8 +423,8 @@ export default function BrokersPage() {
       ) : filteredBrokers.length === 0 ? (
         <EmptyState
           icon={Handshake}
-          title="No brokers found"
-          description="Register third-party commission agents and fleet suppliers to hire market vehicles."
+          title="No records found"
+          description="Click '+ Add New' to create your first entry."
         />
       ) : (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">

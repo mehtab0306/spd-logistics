@@ -653,8 +653,8 @@ export default function PayablesPage() {
       ) : payables.length === 0 ? (
         <EmptyState
           icon={ArrowUpRight}
-          title="No payables found"
-          description="Record trip payouts, fuel receipts, and maintenance costs by clicking 'Add Payable'."
+          title="No records found"
+          description="Click '+ Add New' to create your first entry."
         />
       ) : (
         <div className="rounded-xl border bg-card shadow-sm overflow-hidden">

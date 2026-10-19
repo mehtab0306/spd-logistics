@@ -60,30 +60,6 @@ export async function GET(request: Request) {
         const bookTxs = centralTxs.filter((t) => t.cashBookId === cashBookId);
 
         let txList = bookTxs;
-        if (txList.length === 0 && (cashBookId === 'cb-lhr-main' || cashBookId === 'cb-khi-hub')) {
-          txList = [
-            {
-              id: 'cbt-demo-1',
-              date: new Date().toISOString(),
-              type: 'CREDIT',
-              credit: 46000,
-              debit: 0,
-              description: 'Advance freight payment Bilty #SPD-LHR-2026-0042',
-              paymentMethod: 'CASH',
-              runningBalance: fallback.currentBalance,
-            },
-            {
-              id: 'cbt-demo-2',
-              date: new Date(Date.now() - 86400000).toISOString(),
-              type: 'DEBIT',
-              credit: 0,
-              debit: 15000,
-              description: 'Fuel and highway toll advance for LES-8921',
-              paymentMethod: 'CASH',
-              runningBalance: fallback.currentBalance - 46000,
-            },
-          ];
-        }
 
         let running = fallback.openingBalance || 0;
         const allWithRunning = txList.map((t: any) => {

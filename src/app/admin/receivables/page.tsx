@@ -617,8 +617,8 @@ export default function ReceivablesPage() {
       ) : customers.length === 0 ? (
         <EmptyState
           icon={ArrowDownLeft}
-          title="No receivables found"
-          description="Customer receivables will appear automatically when bilties are booked."
+          title="No records found"
+          description="Click '+ Add New' to create your first entry."
         />
       ) : (
         <div className="rounded-xl border bg-card shadow-sm overflow-hidden">

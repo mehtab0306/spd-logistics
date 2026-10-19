@@ -5,72 +5,7 @@ import { createSystemNotification } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_DRIVERS = [
-  {
-    id: 'd-1',
-    name: 'Muhammad Khan',
-    phone: '0301 5566778',
-    contact: '0301 5566778',
-    cnic: '35201-1234567-1',
-    licenseNumber: 'LHR-DL-98211',
-    vehicleNumber: 'LES-8921',
-    status: 'AVAILABLE',
-    address: 'Baghbanpura, Lahore',
-    user: { id: 'u-d-1', email: 'driver.khan@spdlogistics.com', status: 'ACTIVE' },
-    vehicles: [{ id: 'v-1', vehicleNumber: 'LES-8921' }],
-    consignments: [],
-    _count: { consignments: 18 },
-    notes: 'Senior interstate driver - 8 years experience',
-  },
-  {
-    id: 'd-2',
-    name: 'Abdul Ghaffar',
-    phone: '0345 9988112',
-    contact: '0345 9988112',
-    cnic: '42101-7654321-3',
-    licenseNumber: 'KHI-HTV-44120',
-    vehicleNumber: 'KHI-7720',
-    status: 'ON_TRIP',
-    address: 'Gulshan-e-Iqbal, Karachi',
-    user: { id: 'u-d-2', email: 'driver.ghaffar@spdlogistics.com', status: 'ACTIVE' },
-    vehicles: [{ id: 'v-2', vehicleNumber: 'KHI-7720' }],
-    consignments: [],
-    _count: { consignments: 25 },
-    notes: 'Prime mover container specialist',
-  },
-  {
-    id: 'd-3',
-    name: 'Sardar Ali',
-    phone: '0313 5544332',
-    contact: '0313 5544332',
-    cnic: '17301-9988776-5',
-    licenseNumber: 'PEW-LTV-12890',
-    vehicleNumber: 'TK-4431',
-    status: 'AVAILABLE',
-    address: 'Charsadda Road, Peshawar',
-    user: { id: 'u-d-3', email: 'driver.sardar@spdlogistics.com', status: 'ACTIVE' },
-    vehicles: [{ id: 'v-3', vehicleNumber: 'TK-4431' }],
-    consignments: [],
-    _count: { consignments: 12 },
-    notes: 'Northern route specialist',
-  },
-  {
-    id: 'd-4',
-    name: 'Jan Muhammad',
-    phone: '0302 1122334',
-    contact: '0302 1122334',
-    cnic: '54401-4455667-9',
-    licenseNumber: 'QTA-HTV-88129',
-    vehicleNumber: 'QTA-5512',
-    status: 'RESTING',
-    address: 'Sariab Road, Quetta',
-    user: { id: 'u-d-4', email: 'driver.jan@spdlogistics.com', status: 'ACTIVE' },
-    vehicles: [{ id: 'v-4', vehicleNumber: 'QTA-5512' }],
-    consignments: [],
-    _count: { consignments: 15 },
-    notes: 'Balochistan express driver',
-  },
-];
+const DEFAULT_DRIVERS: any[] = [];
 
 export async function GET(request: Request) {
   try {

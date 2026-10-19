@@ -35,7 +35,7 @@ export function Footer() {
             <div className="text-xs space-y-1.5 text-muted-foreground">
               <p><strong className="text-foreground">Owner:</strong> Hammad Faisal Bhatti</p>
               <p><strong className="text-foreground">Phone:</strong> <a href="tel:03252024433" className="text-spd-red font-bold hover:underline">0325 2024433</a></p>
-              <p><strong className="text-foreground">Email:</strong> <a href="mailto:superpakdatawale@gmail.com" className="text-spd-blue font-bold hover:underline">superpakdatawale@gmail.com</a></p>
+              <p><strong className="text-foreground">Email:</strong> <a href="mailto:spdgoodstransport@gmail.com" className="text-spd-blue font-bold hover:underline">spdgoodstransport@gmail.com</a></p>
             </div>
           </div>
 
@@ -107,8 +107,8 @@ export function Footer() {
               </li>
               <li className="flex items-center">
                 <Mail className="h-4 w-4 text-muted-foreground mr-2 flex-shrink-0" />
-                <a href="mailto:superpakdatawale@gmail.com" className="text-muted-foreground hover:text-foreground transition-colors font-medium break-all">
-                  superpakdatawale@gmail.com
+                <a href="mailto:spdgoodstransport@gmail.com" className="text-muted-foreground hover:text-foreground transition-colors font-medium break-all">
+                  spdgoodstransport@gmail.com
                 </a>
               </li>
             </ul>

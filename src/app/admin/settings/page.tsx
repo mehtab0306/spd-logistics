@@ -640,7 +640,7 @@ export default function SettingsPage() {
                   </Label>
                   <Input
                     type="email"
-                    value={settings.companyEmail || "superpakdatawale@gmail.com"}
+                    value={settings.companyEmail || "spdgoodstransport@gmail.com"}
                     onChange={(e) => handleChange("companyEmail", e.target.value)}
                     className="rounded-xl h-10 text-xs font-mono"
                   />
@@ -1107,10 +1107,10 @@ export default function SettingsPage() {
                 </Label>
                 <Input
                   type="email"
-                  value={settings.adminNotificationEmail || "superpakdatawale@gmail.com"}
+                  value={settings.adminNotificationEmail || "spdgoodstransport@gmail.com"}
                   onChange={(e) => handleChange("adminNotificationEmail", e.target.value)}
                   className="rounded-xl h-10 text-xs font-mono"
-                  placeholder="superpakdatawale@gmail.com"
+                  placeholder="spdgoodstransport@gmail.com"
                 />
                 <p className="text-[11px] text-slate-400">
                   Official recipient address for automated inquiries and dispatch alerts.

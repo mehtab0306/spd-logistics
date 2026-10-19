@@ -243,8 +243,8 @@ export default function ContactPage() {
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-border">
             <Mail className="w-3.5 h-3.5 text-spd-blue" />
             <span>Official Email:</span>
-            <a href="mailto:superpakdatawale@gmail.com" className="text-spd-blue font-bold hover:underline">
-              superpakdatawale@gmail.com
+            <a href="mailto:spdgoodstransport@gmail.com" className="text-spd-blue font-bold hover:underline">
+              spdgoodstransport@gmail.com
             </a>
           </div>
         </div>
@@ -297,8 +297,8 @@ export default function ContactPage() {
                     </div>
                     <div>
                       <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Official Company Email</p>
-                      <a href="mailto:superpakdatawale@gmail.com" className="font-bold text-xs text-spd-blue hover:underline break-all block mt-0.5">
-                        superpakdatawale@gmail.com
+                      <a href="mailto:spdgoodstransport@gmail.com" className="font-bold text-xs text-spd-blue hover:underline break-all block mt-0.5">
+                        spdgoodstransport@gmail.com
                       </a>
                     </div>
                   </div>
@@ -410,7 +410,7 @@ export default function ContactPage() {
                         Dispatch Operations Portal
                       </h2>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                        Delivered securely to official inbox: <strong className="text-spd-blue font-bold">superpakdatawale@gmail.com</strong>
+                        Delivered securely to official inbox: <strong className="text-spd-blue font-bold">spdgoodstransport@gmail.com</strong>
                       </p>
                     </div>
 

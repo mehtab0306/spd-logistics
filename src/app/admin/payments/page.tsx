@@ -200,8 +200,8 @@ export default function PaymentsPage() {
       ) : payments.length === 0 ? (
         <EmptyState
           icon={CreditCard}
-          title="No payments recorded"
-          description="Record customer payments against consignments or account ledgers."
+          title="No records found"
+          description="Click '+ Add New' to create your first entry."
         />
       ) : (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">

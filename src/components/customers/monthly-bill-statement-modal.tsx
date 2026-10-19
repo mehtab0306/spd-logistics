@@ -483,7 +483,7 @@ export function MonthlyBillStatementModal({
                     <span className="font-bold text-blue-950">Phone:</span> 0325-2024433, 0301-8264433, 0300-2928633
                   </p>
                   <p className="text-[8.5px] font-medium text-slate-700">
-                    Email: superpakdatawale@gmail.com &bull; Website: superpakdata.com &bull; <strong className="text-black">IT NTN: 4774077-5</strong>
+                    Email: spdgoodstransport@gmail.com &bull; Website: superpakdata.com &bull; <strong className="text-black">IT NTN: 4774077-5</strong>
                   </p>
                 </div>
               </div>
