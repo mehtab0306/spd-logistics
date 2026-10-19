@@ -249,7 +249,54 @@ export default function NewBiltyPage() {
   // Quick Customer Creation Handler
   const handleQuickCustomerSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+
+    if (quickCustomerSubmitting) return;
     if (!quickCustomerData.name.trim()) return;
+
+    // Check if customer with same phone or name already exists
+    const normPhone = quickCustomerData.phone.trim().replace(/[^0-9]/g, "");
+    const normName = quickCustomerData.name.trim().toLowerCase();
+    const existing = customers.find((c) => {
+      if (!c || c.status === "DELETED") return false;
+      const cPhone = (c.phone || "").replace(/[^0-9]/g, "");
+      const cName = (c.name || "").trim().toLowerCase();
+      const phoneMatch = normPhone.length >= 7 && cPhone.length >= 7 && normPhone === cPhone;
+      const nameMatch = normName.length > 1 && normName === cName;
+      return phoneMatch || nameMatch;
+    });
+
+    if (existing) {
+      if (quickCustomerTarget === "sender") {
+        setFormData((prev) => ({
+          ...prev,
+          customerId: existing.id,
+          senderName: existing.name,
+          senderPhone: existing.phone || prev.senderPhone,
+          senderAddress: existing.address || prev.senderAddress,
+          senderNtn: existing.ntn || prev.senderNtn || "",
+        }));
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          receiverName: existing.name,
+          receiverPhone: existing.phone || prev.receiverPhone,
+          receiverAddress: existing.address || prev.receiverAddress,
+          receiverNtn: existing.ntn || prev.receiverNtn || "",
+        }));
+      }
+
+      setQuickCustomerModalOpen(false);
+      setQuickCustomerData({
+        name: "",
+        phone: "",
+        city: "Lahore",
+        address: "",
+        ntn: "",
+        strn: "",
+      });
+      return;
+    }
 
     setQuickCustomerSubmitting(true);
     try {
@@ -300,7 +347,9 @@ export default function NewBiltyPage() {
     } catch (err) {
       console.error("Failed to save quick customer:", err);
     } finally {
-      setQuickCustomerSubmitting(false);
+      setTimeout(() => {
+        setQuickCustomerSubmitting(false);
+      }, 800);
     }
   };
 

@@ -134,22 +134,24 @@ export default function EditCustomerPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
-    setFormError("");
-    setSuccessMessage("");
+    e.stopPropagation();
+
+    if (submitting) return;
 
     if (!formData.name.trim()) {
       console.log("[EditCustomer] Validation warning: Customer name is missing");
       setFormError("Customer name is required.");
-      setSubmitting(false);
       return;
     }
     if (!formData.phone.trim()) {
       console.log("[EditCustomer] Validation warning: Phone number is missing");
       setFormError("Phone number is required.");
-      setSubmitting(false);
       return;
     }
+
+    setSubmitting(true);
+    setFormError("");
+    setSuccessMessage("");
 
     try {
       let finalPhotoUrl = formData.photo;
@@ -186,7 +188,9 @@ export default function EditCustomerPage() {
     } catch (err: any) {
       setFormError(err.message || "Failed to update customer.");
     } finally {
-      setSubmitting(false);
+      setTimeout(() => {
+        setSubmitting(false);
+      }, 800);
     }
   };
 

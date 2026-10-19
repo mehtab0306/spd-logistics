@@ -117,6 +117,62 @@ export async function POST(request: Request) {
       );
     }
 
+    const cleanPhone = phone ? String(phone).trim() : null;
+    const cleanName = name ? String(name).trim() : null;
+    const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+
+    // Server-Side Deduplication Guard: return existing customer if phone, name or email matches
+    let existingCustomer: any = null;
+    try {
+      existingCustomer = await prisma.customer.findFirst({
+        where: {
+          OR: [
+            ...(cleanPhone ? [{ phone: cleanPhone }] : []),
+            ...(cleanName ? [{ name: cleanName }] : []),
+            ...(cleanEmail ? [{ email: cleanEmail }] : []),
+          ],
+          status: { not: 'DELETED' },
+        },
+        include: {
+          user: { select: { id: true, email: true, status: true } },
+          account: true,
+          _count: true,
+        },
+      });
+    } catch (e) {
+      // Prisma query fallback
+    }
+
+    if (!existingCustomer) {
+      const centralCustomers = getCentralCollection('customers');
+      existingCustomer = centralCustomers.find((c: any) => {
+        if (!c || c.status === 'DELETED') return false;
+        const normPhone = cleanPhone ? cleanPhone.replace(/[^0-9]/g, '') : '';
+        const cPhone = c.phone ? String(c.phone).replace(/[^0-9]/g, '') : '';
+        const phoneMatch = normPhone.length >= 7 && cPhone.length >= 7 && normPhone === cPhone;
+
+        const normName = cleanName ? cleanName.toLowerCase() : '';
+        const cName = c.name ? String(c.name).trim().toLowerCase() : '';
+        const nameMatch = normName.length > 1 && normName === cName;
+
+        const emailMatch = cleanEmail && c.email && c.email.trim().toLowerCase() === cleanEmail;
+        return phoneMatch || nameMatch || emailMatch;
+      });
+    }
+
+    if (existingCustomer) {
+      console.log(`[Customer API] Deduplication hit: customer "${existingCustomer.name}" already exists.`);
+      return NextResponse.json({
+        success: true,
+        data: {
+          customer: existingCustomer,
+          user: existingCustomer.user || null,
+          account: existingCustomer.account || null,
+          alreadyExists: true,
+        },
+      });
+    }
+
     const userEmail = (email || `${(phone || name).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}@spdcustomer.com`).toLowerCase();
 
     let result: any = null;

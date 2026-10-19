@@ -154,9 +154,41 @@ export const LOCAL_CUSTOMERS_KEY = "spd_local_customers";
 export const DELETED_CUSTOMERS_KEY = "spd_local_deleted_customers";
 
 export function getStoredCustomers(): any[] {
-  return readMergedStorage(CUSTOMERS_KEY, LOCAL_CUSTOMERS_KEY, "customer").filter(
+  const raw = readMergedStorage(CUSTOMERS_KEY, LOCAL_CUSTOMERS_KEY, "customer").filter(
     (c) => c && c.id && c.name
   );
+
+  const result: any[] = [];
+  const seenIds = new Set<string>();
+  const seenPhones = new Set<string>();
+  const seenNames = new Set<string>();
+
+  for (const c of raw) {
+    const id = String(c.id);
+    if (seenIds.has(id)) continue;
+
+    const normPhone = c.phone ? String(c.phone).replace(/[^0-9]/g, "") : "";
+    const normName = c.name ? String(c.name).trim().toLowerCase() : "";
+
+    const phoneDuplicate = normPhone.length >= 7 && seenPhones.has(normPhone);
+    const nameDuplicate = normName.length > 1 && seenNames.has(normName);
+
+    if (phoneDuplicate || nameDuplicate) {
+      continue;
+    }
+
+    seenIds.add(id);
+    if (normPhone.length >= 7) seenPhones.add(normPhone);
+    if (normName.length > 1) seenNames.add(normName);
+    result.push(c);
+  }
+
+  // Self-heal storage if duplicates were found and stripped
+  if (raw.length !== result.length) {
+    writeDualStorage(CUSTOMERS_KEY, LOCAL_CUSTOMERS_KEY, result);
+  }
+
+  return result;
 }
 
 export function getDeletedCustomerIds(): string[] {
@@ -167,9 +199,32 @@ export function saveStoredCustomer(customer: any): any[] {
   const clean = unwrapRecord(customer, "customer");
   if (!clean || !clean.id) return getStoredCustomers();
   const list = getStoredCustomers();
-  const idx = list.findIndex((c) => String(c.id) === String(clean.id));
+
+  const normPhone = clean.phone ? String(clean.phone).replace(/[^0-9]/g, "") : "";
+  const normName = clean.name ? String(clean.name).trim().toLowerCase() : "";
+
+  // 1. Match by ID
+  let idx = list.findIndex((c) => String(c.id) === String(clean.id));
+
+  // 2. Fallback: match by normalized phone (>= 7 digits)
+  if (idx === -1 && normPhone.length >= 7) {
+    idx = list.findIndex((c) => {
+      const cPhone = c.phone ? String(c.phone).replace(/[^0-9]/g, "") : "";
+      return cPhone.length >= 7 && cPhone === normPhone;
+    });
+  }
+
+  // 3. Fallback: match by normalized name
+  if (idx === -1 && normName.length > 1) {
+    idx = list.findIndex((c) => {
+      const cName = c.name ? String(c.name).trim().toLowerCase() : "";
+      return cName.length > 1 && cName === normName;
+    });
+  }
+
   if (idx >= 0) {
-    list[idx] = { ...list[idx], ...clean };
+    // Preserve existing ID while updating fields
+    list[idx] = { ...list[idx], ...clean, id: list[idx].id };
   } else {
     list.unshift(clean);
   }

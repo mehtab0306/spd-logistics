@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormSectionCard } from "@/components/shared/form-section-card";
-import { saveStoredCustomer } from "@/lib/local-persistence";
+import { saveStoredCustomer, getStoredCustomers } from "@/lib/local-persistence";
 
 export default function NewCustomerPage() {
   const router = useRouter();
@@ -75,22 +75,42 @@ export default function NewCustomerPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
-    setFormError("");
-    setSuccessMessage("");
+    e.stopPropagation();
+
+    // Prevent concurrent / double execution
+    if (submitting) return;
 
     if (!formData.name.trim()) {
       console.log("[NewCustomer] Validation warning: Customer name is missing");
       setFormError("Customer / Dealer Name is required.");
-      setSubmitting(false);
       return;
     }
     if (!formData.phone.trim()) {
       console.log("[NewCustomer] Validation warning: Phone number is missing");
       setFormError("Phone number is required.");
-      setSubmitting(false);
       return;
     }
+
+    // Client-side deduplication check before proceeding
+    const normPhone = formData.phone.trim().replace(/[^0-9]/g, "");
+    const normName = formData.name.trim().toLowerCase();
+    const existingCust = getStoredCustomers().find((c: any) => {
+      if (!c || c.status === "DELETED") return false;
+      const cPhone = (c.phone || "").replace(/[^0-9]/g, "");
+      const cName = (c.name || "").trim().toLowerCase();
+      const phoneMatch = normPhone.length >= 7 && cPhone.length >= 7 && normPhone === cPhone;
+      const nameMatch = normName.length > 1 && normName === cName;
+      return phoneMatch || nameMatch;
+    });
+
+    if (existingCust) {
+      setFormError(`Customer already exists with this name or phone number (${existingCust.name} - ${existingCust.phone || "N/A"}).`);
+      return;
+    }
+
+    setSubmitting(true);
+    setFormError("");
+    setSuccessMessage("");
 
     try {
       let photoUrl = "";
@@ -203,7 +223,9 @@ export default function NewCustomerPage() {
       console.error("[NewCustomer] Error:", err);
       setFormError(err.message || "Failed to create customer record.");
     } finally {
-      setSubmitting(false);
+      setTimeout(() => {
+        setSubmitting(false);
+      }, 800);
     }
   };
 

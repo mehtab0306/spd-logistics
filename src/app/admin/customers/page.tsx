@@ -206,6 +206,30 @@ export default function CustomersPage() {
       const deletedIds = getDeletedCustomerIds();
       let list = mergeLocalWithApi(localList, apiList, deletedIds);
 
+      // Strict deduplication safeguard across merged list
+      const dedupedList: any[] = [];
+      const seenIds = new Set<string>();
+      const seenPhones = new Set<string>();
+      const seenNames = new Set<string>();
+
+      for (const item of list) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        if (seenIds.has(id)) continue;
+
+        const normPhone = item.phone ? String(item.phone).replace(/[^0-9]/g, "") : "";
+        const normName = item.name ? String(item.name).trim().toLowerCase() : "";
+
+        if (normPhone.length >= 7 && seenPhones.has(normPhone)) continue;
+        if (normName.length > 1 && seenNames.has(normName)) continue;
+
+        seenIds.add(id);
+        if (normPhone.length >= 7) seenPhones.add(normPhone);
+        if (normName.length > 1) seenNames.add(normName);
+        dedupedList.push(item);
+      }
+      list = dedupedList;
+
       // Apply search & filters across merged list
       if (search.trim()) {
         const q = search.trim().toLowerCase();
@@ -332,6 +356,40 @@ export default function CustomersPage() {
 
   const handleSubmitModal = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+
+    if (submitting) return;
+
+    if (!customerForm.name.trim()) {
+      setFormError("Customer name is required.");
+      return;
+    }
+
+    if (!customerForm.phone.trim()) {
+      setFormError("Customer phone number is required.");
+      return;
+    }
+
+    // Deduplication check for newly added customers
+    if (!editingCustomer) {
+      const normPhone = (customerForm.phone || "").replace(/[^0-9]/g, "");
+      const normName = (customerForm.name || "").trim().toLowerCase();
+      const alreadyExists = customers.some((c) => {
+        if (!c || c.status === "DELETED") return false;
+        const cPhone = (c.phone || "").replace(/[^0-9]/g, "");
+        const cName = (c.name || "").trim().toLowerCase();
+        return (
+          (normPhone.length >= 7 && cPhone.length >= 7 && normPhone === cPhone) ||
+          (normName.length > 1 && normName === cName)
+        );
+      });
+
+      if (alreadyExists) {
+        setFormError("Customer with this name or phone number already exists.");
+        return;
+      }
+    }
+
     setSubmitting(true);
     setFormError("");
 
@@ -368,20 +426,20 @@ export default function CustomersPage() {
         const credLim = parseFloat(customerForm.creditLimit) || 0;
         const newCust = {
           id: `c_loc_${Date.now()}`,
-          name: customerForm.name,
-          companyName: customerForm.companyName || null,
-          phone: customerForm.phone,
-          whatsapp: customerForm.whatsapp || customerForm.phone,
-          email: customerForm.email || `${customerForm.name.toLowerCase().replace(/\s+/g, "")}@spdcustomer.com`,
-          cnic: customerForm.cnic || null,
-          businessRef: customerForm.businessRef || null,
-          address: customerForm.address || null,
-          city: customerForm.city || "Lahore",
+          name: customerForm.name.trim(),
+          companyName: customerForm.companyName?.trim() || null,
+          phone: customerForm.phone.trim(),
+          whatsapp: customerForm.whatsapp?.trim() || customerForm.phone.trim(),
+          email: customerForm.email?.trim() || `${customerForm.name.trim().toLowerCase().replace(/\s+/g, "")}@spdcustomer.com`,
+          cnic: customerForm.cnic?.trim() || null,
+          businessRef: customerForm.businessRef?.trim() || null,
+          address: customerForm.address?.trim() || null,
+          city: customerForm.city?.trim() || "Lahore",
           warehouse: customerForm.warehouse || "LAHORE",
           creditLimit: credLim,
           openingBalance: openBal,
           photo: finalPhotoUrl || null,
-          notes: customerForm.notes || null,
+          notes: customerForm.notes?.trim() || null,
           status: "ACTIVE",
           user: { email: customerForm.email, status: "ACTIVE" },
           account: { id: `acc_${Date.now()}`, balance: openBal, transactions: [] },
@@ -406,7 +464,9 @@ export default function CustomersPage() {
       setFormError(err.message || "Failed to save customer");
     } finally {
       setUploadingPhoto(false);
-      setSubmitting(false);
+      setTimeout(() => {
+        setSubmitting(false);
+      }, 800);
     }
   };
 
