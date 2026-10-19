@@ -27,7 +27,7 @@ export interface SendEmailResult {
 export async function sendContactEmail(options: SendEmailOptions): Promise<SendEmailResult> {
   const targetRecipient = options.to || process.env.RECEIVER_EMAIL || process.env.NOTIFICATION_EMAIL || "spdgoodstransport@gmail.com";
   const host = process.env.EMAIL_HOST || process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = parseInt(process.env.EMAIL_PORT || process.env.SMTP_PORT || "465", 10);
+  const port = parseInt(process.env.EMAIL_PORT || process.env.SMTP_PORT || "587", 10);
   const user = (process.env.EMAIL_USER || process.env.SMTP_USER || "spdgoodstransport@gmail.com").trim();
   const pass = (process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.SMTP_PASSWORD || "minklfyiagkzceaud").trim();
 
@@ -54,9 +54,13 @@ export async function sendContactEmail(options: SendEmailOptions): Promise<SendE
       user,
       pass: pass.replace(/\s+/g, ""), // Clean spaces from 16-character Google app password
     },
-    connectionTimeout: 15000,
-    greetingTimeout: 10000,
-    socketTimeout: 20000,
+    connectionTimeout: 10000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
+    tls: {
+      ciphers: "SSLv3",
+      rejectUnauthorized: false,
+    },
   });
 
   try {
