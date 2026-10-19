@@ -266,7 +266,7 @@ export default function BiltyPage() {
       const localBilties = getLocalBilties();
       const deletedIds = getDeletedBiltyIds();
       let items = mergeLocalWithApi(localBilties, apiItems, deletedIds, "biltyNumber").filter(
-        (b) => b.shipmentStatus !== "DELETED"
+        (b) => b && b.shipmentStatus !== "DELETED" && !String(b.id || "").startsWith("bilty-demo-")
       );
 
       // Apply search and filter to merged list
@@ -714,45 +714,71 @@ export default function BiltyPage() {
     setFormError("");
 
     try {
-      const freightNum = parseFloat(formData.freight) || 0;
-      const addlNum = parseFloat(formData.additionalCharges) || 0;
-      const discNum = parseFloat(formData.discount) || 0;
-      const paidNum = parseFloat(formData.paidAmount) || 0;
-      const tot = Math.max(0, freightNum + addlNum - discNum);
-      const rem = Math.max(0, tot - paidNum);
-      const pStatus = rem <= 0 ? "PAID" : paidNum > 0 ? "PARTIAL" : "PENDING";
+      const manualBiltyNo = formData.biltyNumber?.trim();
+      const finalBiltyNumber = manualBiltyNo
+        ? manualBiltyNo
+        : `SPD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      const freightAmount = Number(formData.freight) || 0;
+      const labourCharges = Number(formData.additionalCharges) || 0;
+      const otherCharges = 0;
+      const discNum = Number(formData.discount) || 0;
+      const totalAmount = Math.max(0, freightAmount + labourCharges + otherCharges - discNum);
+      const paidAmount = Number(formData.paidAmount) || 0;
+      const remainingBalance = Math.max(0, totalAmount - paidAmount);
+      const paymentMode = remainingBalance <= 0 ? "PAID" : paidAmount > 0 ? "PARTIAL" : "TO-PAY";
+      const bookingDate = formData.date ? formData.date.slice(0, 10) : new Date().toISOString().split("T")[0];
+      const itemDesc = formData.packageDetails?.trim() || "General Commercial Cargo";
+      const pkgCount = Number(formData.quantity) || 1;
+      const grossWeight = Number(formData.weight) || 0;
 
       const createdBilty = {
-        id: `bilty_loc_${Date.now()}`,
-        biltyNumber: formData.biltyNumber || `SPD-LHR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        trackingId: formData.trackingId || `SPD-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
-        date: formData.date || new Date().toISOString().slice(0, 10),
-        customerId: formData.customerId || undefined,
-        senderName: formData.senderName || "Valued Shipper",
-        senderPhone: formData.senderPhone || "",
-        senderAddress: formData.senderAddress || "",
-        receiverName: formData.receiverName || "Valued Consignee",
-        receiverPhone: formData.receiverPhone || "",
-        receiverAddress: formData.receiverAddress || "",
-        origin: formData.origin || "Lahore",
-        destination: formData.destination || "Karachi",
+        id: finalBiltyNumber,
+        biltyNumber: finalBiltyNumber,
+        trackingId: formData.trackingId?.trim() || `SPD-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
+        date: formData.date ? new Date(formData.date).toISOString() : new Date().toISOString(),
+        bookingDate,
+
+        // Consignor & Consignee
+        senderName: formData.senderName?.trim() || "",
+        senderPhone: formData.senderPhone?.trim() || "",
+        senderAddress: formData.senderAddress?.trim() || "",
+        receiverName: formData.receiverName?.trim() || "",
+        receiverPhone: formData.receiverPhone?.trim() || "",
+        receiverAddress: formData.receiverAddress?.trim() || "",
+
+        // Route
+        origin: formData.origin?.trim() || "Lahore",
+        destination: formData.destination?.trim() || "Karachi",
         warehouse: formData.warehouse || "LAHORE",
+
+        // Cargo Details (MUST NOT BE DROPPED)
+        itemDescription: itemDesc,
+        packageDetails: itemDesc,
+        packagingType: "Bags / Cartons",
+        packagesCount: pkgCount,
+        quantity: pkgCount,
+        weight: grossWeight,
+
+        // Financials & Terms
+        freightAmount,
+        freight: freightAmount,
+        labourCharges,
+        otherCharges,
+        additionalCharges: labourCharges + otherCharges,
+        discount: discNum,
+        totalAmount,
+        paidAmount,
+        remainingBalance,
+        paymentMode,
+        paymentStatus: paymentMode === "PAID" ? "PAID" : "TO_PAY",
+
+        status: "Booked",
+        shipmentStatus: formData.shipmentStatus || "BOOKED",
         vehicleId: formData.vehicleId || undefined,
         vehicleNumber: formData.vehicleNumber || "LES-8921",
         driverId: formData.driverId || undefined,
         driverName: formData.driverName || "Muhammad Khan",
-        packageDetails: formData.packageDetails || "General Commercial Cargo",
-        quantity: parseInt(formData.quantity) || 1,
-        weight: formData.weight ? parseFloat(formData.weight) : 50,
-        cpm: formData.cpm ? parseFloat(formData.cpm) : null,
-        freight: freightNum,
-        additionalCharges: addlNum,
-        discount: discNum,
-        totalAmount: tot,
-        paidAmount: paidNum,
-        remainingBalance: rem,
-        paymentStatus: pStatus,
-        shipmentStatus: formData.shipmentStatus || "BOOKED",
         notes: formData.notes || "",
         photos: formData.photos || [],
         createdAt: new Date().toISOString(),
@@ -761,30 +787,38 @@ export default function BiltyPage() {
             id: `te_${Date.now()}`,
             status: formData.shipmentStatus || "BOOKED",
             location: `${formData.origin || "Lahore"} Dispatch Station`,
-            description: `Consignment Bilty #${formData.biltyNumber} booked for transit to ${formData.destination || "Karachi"}.`,
+            description: `Consignment Bilty #${finalBiltyNumber} booked for transit to ${formData.destination || "Karachi"}.`,
             timestamp: new Date(),
           },
         ],
-        payments: paidNum > 0 ? [
-          { id: `p_${Date.now()}`, amount: paidNum, paymentMethod: "CASH", paymentType: "ADVANCE", date: new Date() }
+        payments: paidAmount > 0 ? [
+          { id: `p_${Date.now()}`, amount: paidAmount, paymentMethod: "CASH", paymentType: "ADVANCE", date: new Date() }
         ] : [],
       };
 
-      // Save to localStorage immediately
-      saveLocalBilty(createdBilty);
+      // Load existing bilties & deduplicate (Section 2)
+      const saved = typeof window !== "undefined" ? localStorage.getItem("spd_bilties") : null;
+      const existingBilties = saved ? JSON.parse(saved) : [];
+      const updated = [createdBilty, ...existingBilties.filter((b: any) => String(b.biltyNumber || b.id).trim().toUpperCase() !== finalBiltyNumber.toUpperCase())];
 
-      // Prepend to consignments state immediately
-      setConsignments((prev) => [createdBilty, ...prev]);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("spd_bilties", JSON.stringify(updated));
+        localStorage.setItem("spd_local_bilties", JSON.stringify(updated));
+        localStorage.setItem("bilties", JSON.stringify(updated));
+      }
+      saveStoredBilty(createdBilty);
+      setConsignments(updated);
 
       // Background API attempt
       fetch("/api/admin/bilty", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(createdBilty),
       }).catch((err) => console.warn("Background bilty API save:", err));
 
       setNewBiltyOpen(false);
-      setActionFeedback({ type: "success", text: `Bilty #${createdBilty.biltyNumber} saved successfully.` });
+      const successMsg = `Bilty [${finalBiltyNumber}] saved successfully with all cargo particulars.`;
+      setActionFeedback({ type: "success", text: successMsg });
       setTimeout(() => setActionFeedback(null), 4000);
       setPrintBilty(createdBilty);
     } catch (err: any) {
@@ -1049,48 +1083,69 @@ export default function BiltyPage() {
             {consignments.map((c) => {
               const targetPhone = c.receiver?.whatsapp || c.receiverPhone || c.receiver?.phone || c.customer?.whatsapp || c.customer?.phone;
               const waMsg = targetPhone ? getBiltyTrackingWhatsAppMessage({
-                biltyNumber: c.biltyNumber,
+                biltyNumber: c.biltyNumber || c.id,
                 trackingId: c.trackingId,
-                status: c.shipmentStatus,
+                status: c.shipmentStatus || c.status,
                 origin: c.origin,
                 destination: c.destination,
               }) : "";
 
+              const mode = String(c.paymentMode || c.paymentStatus || c.amountType || "").toUpperCase();
+              const isPaid = mode === "PAID";
+              const isBilled = mode === "BILLED" || mode === "TO_BE_BILLED" || mode === "TO BE BILLED";
+              const isToPay = mode === "TO-PAY" || mode === "TO_PAY" || mode === "TO PAY" || mode === "UNPAID" || (!isPaid && !isBilled);
+
+              const cargoDesc = c.itemDescription || c.packageDetails || (c.items && c.items[0]?.detail) || "-";
+              const pkgsCount = c.packagesCount || c.quantity || "-";
+              const cargoWeight = c.weight !== null && c.weight !== undefined && Number(c.weight) > 0 ? `${Number(c.weight).toLocaleString()} KG` : "-";
+
               return (
                 <div
-                  key={c.id}
+                  key={c.id || c.biltyNumber}
                   className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3"
                 >
                   {/* Card Header: Bilty #, Tracking & Status */}
                   <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-2.5">
                     <div>
-                      <p className="font-black text-sm text-slate-900 dark:text-white">{c.biltyNumber}</p>
-                      <p className="text-[11px] text-spd-blue font-mono font-bold">{c.trackingId}</p>
-                      <p className="text-[10px] text-slate-400">{formatDate(c.date)}</p>
+                      <Link
+                        href={`/admin/bilty/${encodeURIComponent(c.id || c.biltyNumber)}`}
+                        className="font-black text-sm text-spd-blue hover:text-spd-red hover:underline block font-mono"
+                        title="View / Print 4-Sheet Dossier"
+                      >
+                        {c.biltyNumber || c.id || "-"}
+                      </Link>
+                      <p className="text-[11px] text-slate-500 font-mono font-bold">{c.trackingId || "-"}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {c.bookingDate ? formatDate(c.bookingDate) : c.date ? formatDate(c.date) : "-"}
+                      </p>
                     </div>
-                    <span
-                      className={`text-[10px] px-2.5 py-1 rounded-full font-bold shrink-0 ${
-                        c.shipmentStatus === "DELIVERED"
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
-                          : c.shipmentStatus === "IN_TRANSIT" || c.shipmentStatus === "DRIVER_ON_THE_WAY"
-                          ? "bg-blue-100 text-spd-blue dark:bg-blue-950/60 dark:text-blue-400"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400"
-                      }`}
-                    >
-                      {c.shipmentStatus.replace(/_/g, " ")}
-                    </span>
+                    <div>
+                      {isPaid ? (
+                        <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-300">
+                          PAID
+                        </span>
+                      ) : isBilled ? (
+                        <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-300">
+                          BILLED
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-400 border border-red-300">
+                          TO-PAY
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Route & Hub */}
                   <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-black">{c.origin}</span>
+                      <span className="font-black">{c.origin || "-"}</span>
                       <span className="text-slate-400">&rarr;</span>
-                      <span className="font-black text-spd-blue">{c.destination}</span>
+                      <span className="font-black text-spd-blue">{c.destination || "-"}</span>
                     </div>
                     <span
                       className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                        c.warehouse === "KARACHI"
+                        (c.warehouse || c.origin || "").toUpperCase().includes("KARACHI")
                           ? "bg-blue-100 text-spd-blue dark:bg-blue-950/60 dark:text-blue-400"
                           : "bg-red-100 text-spd-red dark:bg-red-950/60 dark:text-red-400"
                       }`}
@@ -1102,34 +1157,40 @@ export default function BiltyPage() {
                   {/* Parties Info */}
                   <div className="text-xs space-y-1 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-slate-900 dark:text-white font-bold truncate">
-                      <span className="text-slate-400 font-normal">From: </span>
-                      {c.customer?.companyName || c.senderName}
+                      <span className="text-slate-400 font-normal">Sender: </span>
+                      {c.senderName || c.customer?.companyName || c.customer?.name || "-"}
+                      {c.senderPhone && <span className="text-slate-500 font-normal"> ({c.senderPhone})</span>}
                     </p>
                     <p className="text-slate-700 dark:text-slate-300 truncate">
-                      <span className="text-slate-400 font-normal">To: </span>
-                      {c.receiverName} {c.receiverPhone && `(${c.receiverPhone})`}
+                      <span className="text-slate-400 font-normal">Receiver: </span>
+                      {c.receiverName || "-"}
+                      {c.receiverPhone && <span className="text-slate-500 font-normal"> ({c.receiverPhone})</span>}
                     </p>
-                    {c.packageDetails && (
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        <span className="text-slate-400 font-normal">Cargo: </span>
-                        {c.packageDetails} ({c.quantity} pcs &bull; {c.weight} kg)
-                      </p>
-                    )}
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                      <span className="text-slate-400 font-normal">Cargo: </span>
+                      {cargoDesc} ({pkgsCount} pkgs &bull; {cargoWeight})
+                    </p>
                   </div>
 
                   {/* Fleet & Financials */}
                   <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                     <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
                       <p className="text-[10px] text-slate-400 font-bold uppercase">Total Freight</p>
-                      <p className="font-black text-slate-900 dark:text-white">{formatCurrency(c.totalAmount)}</p>
-                      <p className="text-[10px] text-emerald-600 font-semibold">Paid: {formatCurrency(c.paidAmount)}</p>
+                      <p className="font-black text-slate-900 dark:text-white">
+                        {formatCurrency(c.totalAmount || c.freightAmount || c.freight || 0)}
+                      </p>
+                      <p className="text-[10px] text-emerald-600 font-semibold">
+                        Paid: {formatCurrency(c.paidAmount || 0)}
+                      </p>
                     </div>
                     <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Balance</p>
-                      <p className={`font-black ${c.remainingBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                        {formatCurrency(c.remainingBalance)}
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Payment Terms</p>
+                      <p className="font-black text-slate-900 dark:text-white">
+                        {c.paymentMode || c.paymentStatus || c.amountType || "TO-PAY"}
                       </p>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">{c.paymentStatus}</p>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        Balance: {formatCurrency(c.remainingBalance || 0)}
+                      </p>
                     </div>
                   </div>
 
@@ -1137,10 +1198,10 @@ export default function BiltyPage() {
                   <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
                     <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
                       <Truck className="w-3.5 h-3.5 text-slate-400" />
-                      {c.vehicleNumber || c.vehicle?.vehicleNumber || "No Truck"}
+                      {c.vehicleNumber || c.vehicle?.vehicleNumber || "-"}
                     </span>
                     <span className="truncate max-w-[150px]">
-                      Driver: {c.driverName || c.driver?.name || "Unassigned"}
+                      Driver: {c.driverName || c.driver?.name || "-"}
                     </span>
                   </div>
 
@@ -1160,7 +1221,7 @@ export default function BiltyPage() {
                         size="sm"
                         variant="ghost"
                         className="h-8 px-2 rounded-lg text-blue-600 hover:text-blue-900 text-xs font-semibold gap-1"
-                        onClick={() => router.push(`/admin/bilty/${c.id}/edit`)}
+                        onClick={() => router.push(`/admin/bilty/${encodeURIComponent(c.id || c.biltyNumber)}/edit`)}
                       >
                         <Edit className="w-3.5 h-3.5" />
                         <span>Edit</span>
@@ -1215,8 +1276,8 @@ export default function BiltyPage() {
                       onClick={() => {
                         setStatusModalBilty(c);
                         setStatusUpdate({
-                          shipmentStatus: c.shipmentStatus,
-                          location: `${c.destination} Terminal`,
+                          shipmentStatus: c.shipmentStatus || "IN_TRANSIT",
+                          location: `${c.destination || "Karachi"} Terminal`,
                           statusNote: "",
                           receivedBy: c.receiverName || "",
                           deliveryDate: new Date().toISOString().slice(0, 10),
@@ -1235,205 +1296,239 @@ export default function BiltyPage() {
           {/* DESKTOP TABLE VIEW (>= 768px) */}
           <div className="hidden md:block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
             <div className="overflow-x-auto scrollbar-thin">
-              <Table className="min-w-[950px]">
+              <Table className="min-w-[1100px]">
                 <TableHeader className="bg-slate-50/70 dark:bg-slate-800/50">
                   <TableRow>
-                    <TableHead className="text-xs font-bold">Bilty # / Tracking</TableHead>
-                    <TableHead className="text-xs font-bold">Shipper & Receiver</TableHead>
-                    <TableHead className="text-xs font-bold">Route & Station</TableHead>
-                    <TableHead className="text-xs font-bold">Truck & Driver</TableHead>
-                    <TableHead className="text-xs font-bold">Total Freight</TableHead>
-                    <TableHead className="text-xs font-bold">Balance</TableHead>
-                    <TableHead className="text-xs font-bold">Status</TableHead>
-                    <TableHead className="text-xs font-bold text-right">Actions</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Bilty # / Tracking</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Booking Date</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Sender & Receiver</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Route (Origin ➔ Destination)</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Cargo Items & Pkgs</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Gross Weight</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Total Freight & Terms</TableHead>
+                    <TableHead className="text-xs font-bold text-right whitespace-nowrap">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {consignments.map((c) => (
-                    <TableRow
-                      key={c.id}
-                      id={`record-${c.id}`}
-                      data-record-id={c.id}
-                      className={cn(
-                        "hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all",
-                        highlightClass(c.id) || highlightClass(c.biltyNumber)
-                      )}
-                    >
-                      <TableCell>
-                        <div>
-                          <p className="font-black text-xs text-slate-900 dark:text-white">{c.biltyNumber}</p>
-                          <p className="text-[10px] text-spd-blue font-mono font-bold">{c.trackingId}</p>
-                          <p className="text-[10px] text-slate-400">{formatDate(c.date)}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-bold text-slate-900 dark:text-white">
-                            From: {c.customer?.companyName || c.senderName}
-                          </p>
-                          <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                            To: {c.receiverName} ({c.receiverPhone || "No phone"})
-                          </p>
-                          <p className="text-[10px] text-slate-400 truncate max-w-xs">{c.packageDetails}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
-                            <span>{c.origin}</span>
-                            <span>&rarr;</span>
-                            <span>{c.destination}</span>
+                  {consignments.map((c) => {
+                    const mode = String(c.paymentMode || c.paymentStatus || c.amountType || "").toUpperCase();
+                    const isPaid = mode === "PAID";
+                    const isBilled = mode === "BILLED" || mode === "TO_BE_BILLED" || mode === "TO BE BILLED";
+                    const isToPay = mode === "TO-PAY" || mode === "TO_PAY" || mode === "TO PAY" || mode === "UNPAID" || (!isPaid && !isBilled);
+
+                    const cargoDesc = c.itemDescription || c.packageDetails || (c.items && c.items[0]?.detail) || "-";
+                    const pkgsCount = c.packagesCount || c.quantity || "-";
+                    const cargoWeight = c.weight !== null && c.weight !== undefined && Number(c.weight) > 0 ? `${Number(c.weight).toLocaleString()} KG` : "-";
+
+                    return (
+                      <TableRow
+                        key={c.id || c.biltyNumber}
+                        id={`record-${c.id}`}
+                        data-record-id={c.id}
+                        className={cn(
+                          "hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all text-xs",
+                          highlightClass(c.id) || highlightClass(c.biltyNumber)
+                        )}
+                      >
+                        {/* 1. Bilty # & Tracking (with Clickable preview link) */}
+                        <TableCell>
+                          <div>
+                            <Link
+                              href={`/admin/bilty/${encodeURIComponent(c.id || c.biltyNumber)}`}
+                              className="font-black text-xs text-spd-blue hover:text-spd-red hover:underline block font-mono"
+                              title="Click to view / print 4-Sheet Dossier"
+                            >
+                              {c.biltyNumber || c.id || "-"}
+                            </Link>
+                            <p className="text-[10px] text-slate-500 font-mono">{c.trackingId || "-"}</p>
                           </div>
-                          <span
-                            className={`text-[10px] px-2 py-0.2 rounded-full font-bold mt-1 inline-block ${
-                              c.warehouse === "KARACHI"
-                                ? "bg-blue-100 text-spd-blue dark:bg-blue-950/60 dark:text-blue-400"
-                                : "bg-red-100 text-spd-red dark:bg-red-950/60 dark:text-red-400"
-                            }`}
-                          >
-                            {c.warehouse || "LAHORE"}
+                        </TableCell>
+
+                        {/* 2. Booking Date */}
+                        <TableCell>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            {c.bookingDate ? formatDate(c.bookingDate) : c.date ? formatDate(c.date) : "-"}
                           </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                            <Truck className="w-3.5 h-3.5 text-slate-400" />
-                            {c.vehicleNumber || c.vehicle?.vehicleNumber || "Unassigned"}
-                          </p>
-                          <p className="text-[10px] text-slate-500">
-                            Driver: {c.driverName || c.driver?.name || "Unassigned"}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <p className="text-xs font-black text-slate-900 dark:text-white">
-                          {formatCurrency(c.totalAmount)}
-                        </p>
-                        <p className="text-[10px] text-emerald-600 font-semibold">
-                          Paid: {formatCurrency(c.paidAmount)}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`text-xs font-black ${
-                            c.remainingBalance > 0 ? "text-amber-600" : "text-emerald-600"
-                          }`}
-                        >
-                          {formatCurrency(c.remainingBalance)}
-                        </span>
-                        <p className="text-[10px] uppercase font-bold text-slate-400">{c.paymentStatus}</p>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`text-[10px] px-2.5 py-1 rounded-full font-bold ${
-                            c.shipmentStatus === "DELIVERED"
-                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
-                              : c.shipmentStatus === "IN_TRANSIT" || c.shipmentStatus === "DRIVER_ON_THE_WAY"
-                              ? "bg-blue-100 text-spd-blue dark:bg-blue-950/60 dark:text-blue-400"
-                              : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400"
-                          }`}
-                        >
-                          {c.shipmentStatus.replace(/_/g, " ")}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 px-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 text-xs font-semibold gap-1"
-                            title="View Shipment Details & Contacts"
-                            onClick={() => setViewDetailsBilty(c)}
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span className="hidden xl:inline">Details</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 px-2 rounded-lg text-blue-600 hover:text-blue-900 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-white dark:hover:bg-blue-950/50 text-xs font-semibold gap-1"
-                            title="Edit Bilty & Assignments"
-                            onClick={() => router.push(`/admin/bilty/${c.id}/edit`)}
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                            <span className="hidden xl:inline">Edit</span>
-                          </Button>
-                          {(() => {
-                            const targetPhone = c.receiver?.whatsapp || c.receiverPhone || c.receiver?.phone || c.customer?.whatsapp || c.customer?.phone;
-                            if (!targetPhone) return null;
-                            const msg = getBiltyTrackingWhatsAppMessage({
-                              biltyNumber: c.biltyNumber,
-                              trackingId: c.trackingId,
-                              status: c.shipmentStatus,
-                              origin: c.origin,
-                              destination: c.destination,
-                            });
-                            return (
-                              <a
-                                href={buildWhatsAppUrl(targetPhone, msg)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
-                                title="WhatsApp Customer / Consignee"
-                              >
-                                <MessageSquare className="w-4 h-4" />
-                              </a>
-                            );
-                          })()}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 rounded-lg text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
-                            title="Export 4-Sheet Excel (.xlsx)"
-                            onClick={() => export4SheetBiltyExcel(c)}
-                          >
-                            <FileSpreadsheet className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 rounded-lg text-spd-blue hover:bg-blue-50 dark:hover:bg-blue-950/50"
-                            title="4-Sheet Dossier & Print"
-                            onClick={() => setPrintBilty(c)}
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
-                            title="Delete Bilty"
-                            onClick={() => {
-                              setDeletingBilty(c);
-                              setDeleteStep(1);
-                            }}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 px-2.5 rounded-lg text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-xs font-bold gap-1 shadow-sm"
-                            title="Update Shipment Status"
-                            onClick={() => {
-                              setStatusModalBilty(c);
-                              setStatusUpdate({
-                                shipmentStatus: c.shipmentStatus,
-                                location: `${c.destination} Terminal`,
-                                statusNote: "",
-                                receivedBy: c.receiverName || "",
-                                deliveryDate: new Date().toISOString().slice(0, 10),
+                        </TableCell>
+
+                        {/* 3. Sender & Receiver (Name + Contact) */}
+                        <TableCell>
+                          <div className="space-y-0.5 max-w-[210px]">
+                            <p className="font-bold text-slate-900 dark:text-white truncate">
+                              <span className="text-slate-400 font-normal">Sender: </span>
+                              {c.senderName || c.customer?.companyName || c.customer?.name || "-"}
+                              {c.senderPhone && <span className="text-slate-500 font-normal"> ({c.senderPhone})</span>}
+                            </p>
+                            <p className="text-slate-700 dark:text-slate-300 truncate">
+                              <span className="text-slate-400 font-normal">Receiver: </span>
+                              {c.receiverName || "-"}
+                              {c.receiverPhone && <span className="text-slate-500 font-normal"> ({c.receiverPhone})</span>}
+                            </p>
+                          </div>
+                        </TableCell>
+
+                        {/* 4. Origin ➔ Destination */}
+                        <TableCell>
+                          <div>
+                            <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                              <span>{c.origin || "-"}</span>
+                              <span className="text-slate-400">&rarr;</span>
+                              <span className="text-spd-blue">{c.destination || "-"}</span>
+                            </div>
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold mt-1 inline-block ${
+                                (c.warehouse || c.origin || "").toUpperCase().includes("KARACHI")
+                                  ? "bg-blue-100 text-spd-blue dark:bg-blue-950/60 dark:text-blue-400"
+                                  : "bg-red-100 text-spd-red dark:bg-red-950/60 dark:text-red-400"
+                              }`}
+                            >
+                              {c.warehouse || "LAHORE"}
+                            </span>
+                          </div>
+                        </TableCell>
+
+                        {/* 5. Cargo Items & Packages Count */}
+                        <TableCell>
+                          <div className="space-y-0.5 max-w-[190px]">
+                            <p className="font-bold text-slate-800 dark:text-slate-200 truncate" title={cargoDesc}>
+                              {cargoDesc}
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              {pkgsCount !== "-" ? `${pkgsCount} ${c.packagingType || "pkgs"}` : "-"}
+                            </p>
+                          </div>
+                        </TableCell>
+
+                        {/* 6. Gross Weight (KG) */}
+                        <TableCell>
+                          <span className="font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                            {cargoWeight}
+                          </span>
+                        </TableCell>
+
+                        {/* 7. Total Freight & Payment Status Badge */}
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="font-black text-slate-900 dark:text-white whitespace-nowrap">
+                              {formatCurrency(c.totalAmount || c.freightAmount || c.freight || 0)}
+                            </p>
+                            <div>
+                              {isPaid ? (
+                                <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-300">
+                                  PAID
+                                </span>
+                              ) : isBilled ? (
+                                <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-300">
+                                  BILLED
+                                </span>
+                              ) : (
+                                <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-400 border border-red-300">
+                                  TO-PAY
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        {/* 8. Actions */}
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 px-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 text-xs font-semibold gap-1"
+                              title="View Shipment Details & Contacts"
+                              onClick={() => setViewDetailsBilty(c)}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span className="hidden xl:inline">Details</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 px-2 rounded-lg text-blue-600 hover:text-blue-900 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-white dark:hover:bg-blue-950/50 text-xs font-semibold gap-1"
+                              title="Edit Bilty & Assignments"
+                              onClick={() => router.push(`/admin/bilty/${encodeURIComponent(c.id || c.biltyNumber)}/edit`)}
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                              <span className="hidden xl:inline">Edit</span>
+                            </Button>
+                            {(() => {
+                              const targetPhone = c.receiver?.whatsapp || c.receiverPhone || c.receiver?.phone || c.customer?.whatsapp || c.customer?.phone;
+                              if (!targetPhone) return null;
+                              const msg = getBiltyTrackingWhatsAppMessage({
+                                biltyNumber: c.biltyNumber || c.id,
+                                trackingId: c.trackingId,
+                                status: c.shipmentStatus || c.status,
+                                origin: c.origin,
+                                destination: c.destination,
                               });
-                            }}
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            <span>Update Status</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                              return (
+                                <a
+                                  href={buildWhatsAppUrl(targetPhone, msg)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
+                                  title="WhatsApp Customer / Consignee"
+                                >
+                                  <MessageSquare className="w-4 h-4" />
+                                </a>
+                              );
+                            })()}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 rounded-lg text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                              title="Export 4-Sheet Excel (.xlsx)"
+                              onClick={() => export4SheetBiltyExcel(c)}
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 rounded-lg text-spd-blue hover:bg-blue-50 dark:hover:bg-blue-950/50"
+                              title="4-Sheet Dossier & Print"
+                              onClick={() => setPrintBilty(c)}
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
+                              title="Delete Bilty"
+                              onClick={() => {
+                                setDeletingBilty(c);
+                                setDeleteStep(1);
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 px-2.5 rounded-lg text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-xs font-bold gap-1 shadow-sm"
+                              title="Update Shipment Status"
+                              onClick={() => {
+                                setStatusModalBilty(c);
+                                setStatusUpdate({
+                                  shipmentStatus: c.shipmentStatus || "IN_TRANSIT",
+                                  location: `${c.destination || "Karachi"} Terminal`,
+                                  statusNote: "",
+                                  receivedBy: c.receiverName || "",
+                                  deliveryDate: new Date().toISOString().slice(0, 10),
+                                });
+                              }}
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              <span className="hidden xl:inline">Status</span>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

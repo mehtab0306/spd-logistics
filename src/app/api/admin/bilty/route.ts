@@ -149,9 +149,11 @@ export async function GET(request: Request) {
         const central = getCentralCollection('bilties');
         single = central.find(
           (b: any) =>
-            String(b.id) === String(id) ||
-            String(b.biltyNumber || '').toUpperCase() === String(id).toUpperCase() ||
-            String(b.trackingId || '').toUpperCase() === String(id).toUpperCase()
+            b &&
+            !String(b.id || '').startsWith('bilty-demo-') &&
+            (String(b.id) === String(id) ||
+              String(b.biltyNumber || '').toUpperCase() === String(id).toUpperCase() ||
+              String(b.trackingId || '').toUpperCase() === String(id).toUpperCase())
         );
       }
 
@@ -240,11 +242,16 @@ export async function GET(request: Request) {
     const centralBilties = getCentralCollection('bilties');
     const existingIds = new Set((consignments || []).map((b: any) => b.id));
     for (const b of centralBilties) {
-      if (!existingIds.has(b.id)) {
+      if (b && !String(b.id || '').startsWith('bilty-demo-') && !existingIds.has(b.id)) {
         consignments.unshift(b);
         existingIds.add(b.id);
       }
     }
+
+    // Filter out any mock/dummy records
+    consignments = (consignments || []).filter(
+      (b: any) => b && !String(b.id || '').startsWith('bilty-demo-')
+    );
 
     return NextResponse.json({ success: true, data: consignments });
   } catch (error: any) {
@@ -627,10 +634,11 @@ export async function POST(request: Request) {
   } catch (dbErr: any) {
     console.warn("Database consignment creation notice (using fallback object):", dbErr);
     consignment = {
-      id: `bilty-demo-${Date.now()}`,
+      id: biltyNumber || body.id || `SPD-${Date.now()}`,
       biltyNumber,
       trackingId,
       date: body.date ? new Date(body.date).toISOString() : new Date().toISOString(),
+      bookingDate: body.bookingDate || (body.date ? String(body.date).slice(0, 10) : new Date().toISOString().split("T")[0]),
       senderName: resolvedSenderName || senderName || 'Consignor',
       senderPhone: resolvedSenderPhone || senderPhone || 'N/A',
       senderAddress: senderAddress || '',
@@ -642,23 +650,32 @@ export async function POST(request: Request) {
       warehouse,
       vehicleNumber: resolvedVehicleNumber || vehicleNumber || 'Pending',
       driverName: resolvedDriverName || driverName || 'Pending',
-      packageDetails: packageDetails || 'General Merchandise Goods',
-      quantity: parseInt(quantity) || 1,
-      weight: weight ? parseFloat(weight) : null,
+      packageDetails: body.itemDescription || packageDetails || 'General Merchandise Goods',
+      itemDescription: body.itemDescription || packageDetails || 'General Merchandise Goods',
+      packagingType: body.packagingType || 'Standard',
+      quantity: parseInt(body.packagesCount || quantity) || 1,
+      packagesCount: parseInt(body.packagesCount || quantity) || 1,
+      weight: (weight !== undefined && weight !== null) ? parseFloat(weight) : (body.weight !== undefined && body.weight !== null) ? parseFloat(body.weight) : null,
       cpm: cpm ? parseFloat(cpm) : null,
       freight: freightNum,
+      freightAmount: freightNum,
+      labourCharges: body.labourCharges !== undefined ? parseFloat(body.labourCharges) || 0 : (body.additionalChargesBreakdown?.labour ? parseFloat(body.additionalChargesBreakdown.labour) || 0 : 0),
+      otherCharges: body.otherCharges !== undefined ? parseFloat(body.otherCharges) || 0 : (body.additionalChargesBreakdown?.other ? parseFloat(body.additionalChargesBreakdown.other) || 0 : 0),
       additionalCharges: addlNum,
       discount: discNum,
       totalAmount,
       paidAmount: paidNum,
       remainingBalance,
+      paymentMode: body.paymentMode || (paymentStatus === 'PAID' ? 'PAID' : (paymentStatus as string) === 'TO_BE_BILLED' ? 'BILLED' : 'TO-PAY'),
       paymentStatus,
+      status: 'Booked',
       shipmentStatus: body.shipmentStatus || 'BOOKED',
       notes: notes || null,
       createdAt: new Date().toISOString(),
       customer: resolvedSenderName ? { id: resolvedSenderId || 'c-demo', name: resolvedSenderName } : null,
       vehicle: resolvedVehicleNumber ? { vehicleNumber: resolvedVehicleNumber } : null,
       driver: resolvedDriverName ? { name: resolvedDriverName } : null,
+      items: body.items || [],
       trackingEvents: [
         {
           id: `te-${Date.now()}`,
@@ -670,6 +687,23 @@ export async function POST(request: Request) {
       ],
     };
   }
+
+  // Ensure all cargo particulars are present on the consignment object before notification, email and central store
+  consignment = {
+    ...consignment,
+    bookingDate: body.bookingDate || consignment.bookingDate || (consignment.date ? String(consignment.date).slice(0, 10) : new Date().toISOString().split("T")[0]),
+    itemDescription: body.itemDescription || consignment.itemDescription || consignment.packageDetails || 'General Merchandise Goods',
+    packageDetails: body.itemDescription || consignment.packageDetails || 'General Merchandise Goods',
+    packagingType: body.packagingType || consignment.packagingType || 'Standard',
+    packagesCount: parseInt(body.packagesCount || consignment.packagesCount || consignment.quantity) || 1,
+    quantity: parseInt(body.packagesCount || consignment.quantity) || 1,
+    freightAmount: consignment.freightAmount !== undefined ? consignment.freightAmount : (consignment.freight !== undefined ? consignment.freight : freightNum),
+    labourCharges: body.labourCharges !== undefined ? parseFloat(body.labourCharges) || 0 : (consignment.labourCharges || 0),
+    otherCharges: body.otherCharges !== undefined ? parseFloat(body.otherCharges) || 0 : (consignment.otherCharges || 0),
+    paymentMode: body.paymentMode || consignment.paymentMode || (consignment.paymentStatus === 'PAID' ? 'PAID' : consignment.paymentStatus === 'TO_BE_BILLED' ? 'BILLED' : 'TO-PAY'),
+    status: consignment.status || 'Booked',
+    items: body.items || consignment.items || [],
+  };
 
     // 1. Generate real persistent Notification in SQLite
     createSystemNotification({

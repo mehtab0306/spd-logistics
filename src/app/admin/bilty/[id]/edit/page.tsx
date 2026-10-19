@@ -45,6 +45,7 @@ import {
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
+import { toast } from "sonner";
 
 export interface BiltyCargoItem {
   detail: string;
@@ -241,7 +242,7 @@ export default function EditBiltyPage() {
           driverId: found.driverId || "",
           driverName: found.driverName || (found.driver ? found.driver.name : ""),
 
-          manualBaseFreight: found.freight ? String(found.freight) : "",
+          manualBaseFreight: (found.freightAmount !== undefined && found.freightAmount !== null) ? String(found.freightAmount) : (found.freight !== undefined && found.freight !== null) ? String(found.freight) : "",
           discount: found.discount ? String(found.discount) : "",
           paidAmount: found.paidAmount ? String(found.paidAmount) : "",
           hideAmount: Boolean(found.hideAmount),
@@ -255,29 +256,35 @@ export default function EditBiltyPage() {
 
         if (Array.isArray(found.items) && found.items.length > 0) {
           setItems(found.items);
-        } else if (found.packageDetails) {
+        } else if (found.itemDescription || found.packageDetails) {
           setItems([
             {
-              detail: found.packageDetails,
-              quantity: found.quantity || 1,
+              detail: found.itemDescription || found.packageDetails,
+              quantity: found.packagesCount || found.quantity || 1,
               weight: found.weight || 0,
               volume: found.cpm || "",
-              rate: found.freight || 0,
+              rate: found.freightAmount || found.freight || 0,
               freightAsPer: "Fixed Freight",
-              freight: parseFloat(found.freight) || 0,
+              freight: parseFloat(found.freightAmount || found.freight) || 0,
             },
           ]);
         }
 
         if (found.additionalChargesBreakdown) {
           setAdditionalBreakdown({
-            labour: found.additionalChargesBreakdown.labour ? String(found.additionalChargesBreakdown.labour) : "",
+            labour: found.additionalChargesBreakdown.labour ? String(found.additionalChargesBreakdown.labour) : found.labourCharges ? String(found.labourCharges) : "",
             lifterCrane: found.additionalChargesBreakdown.lifterCrane ? String(found.additionalChargesBreakdown.lifterCrane) : "",
             pickupLocal: found.additionalChargesBreakdown.pickupLocal ? String(found.additionalChargesBreakdown.pickupLocal) : "",
             deliveryLocal: found.additionalChargesBreakdown.deliveryLocal ? String(found.additionalChargesBreakdown.deliveryLocal) : "",
             godownStorage: found.additionalChargesBreakdown.godownStorage ? String(found.additionalChargesBreakdown.godownStorage) : "",
-            other: found.additionalChargesBreakdown.other ? String(found.additionalChargesBreakdown.other) : "",
+            other: found.additionalChargesBreakdown.other ? String(found.additionalChargesBreakdown.other) : found.otherCharges ? String(found.otherCharges) : "",
           });
+        } else if (found.labourCharges || found.otherCharges) {
+          setAdditionalBreakdown((prev) => ({
+            ...prev,
+            labour: found.labourCharges ? String(found.labourCharges) : "",
+            other: found.otherCharges ? String(found.otherCharges) : "",
+          }));
         } else if (found.additionalCharges) {
           setAdditionalBreakdown((prev) => ({
             ...prev,
@@ -512,6 +519,24 @@ export default function EditBiltyPage() {
       const selectedDrv = drivers.find((d) => String(d.id) === String(formData.driverId));
       const selectedVeh = vehicles.find((v) => String(v.id) === String(formData.vehicleId));
 
+      const bookingDate = formData.date ? formData.date.slice(0, 10) : new Date().toISOString().split("T")[0];
+      const primaryItem = items && items[0];
+      const itemDesc = primaryPackageDetail?.trim() || primaryItem?.detail?.trim() || "General Commercial Merchandise";
+      const pkgType = primaryItem?.freightAsPer ? `${primaryItem.freightAsPer} Packages` : "Bags / Cartons";
+      const packagesCount = Number(totalQuantity) || Number(primaryItem?.quantity) || 1;
+      const grossWeight = Number(totalWeight) || (primaryItem?.weight ? Number(primaryItem.weight) : 0) || 0;
+      const freightAmt = Number(baseFreightNum) || Number(formData.manualBaseFreight) || 0;
+      const labourAmt = Number(labourNum) || Number(additionalBreakdown.labour) || 0;
+      const otherAmt =
+        (Number(otherNum) || Number(additionalBreakdown.other) || 0) +
+        (Number(lifterNum) || 0) +
+        (Number(pickupNum) || 0) +
+        (Number(deliveryNum) || 0) +
+        (Number(godownNum) || 0);
+
+      const paymentMode =
+        formData.amountType === "Paid" ? "PAID" : formData.amountType === "To Be Billed" ? "BILLED" : "TO-PAY";
+
       const paymentStatus =
         formData.amountType === "Paid" || (remainingBalance <= 0 && totalAmount > 0)
           ? "PAID"
@@ -526,6 +551,7 @@ export default function EditBiltyPage() {
         biltyNumber: formData.biltyNumber,
         trackingId: formData.trackingId,
         date: formData.date ? new Date(formData.date).toISOString() : timestamp,
+        bookingDate,
         warehouse: formData.warehouse,
         origin: formData.origin,
         destination: formData.destination,
@@ -560,11 +586,18 @@ export default function EditBiltyPage() {
         driverName: formData.driverName || null,
 
         items,
-        packageDetails: primaryPackageDetail,
-        quantity: totalQuantity,
-        weight: totalWeight || 100,
+        packageDetails: itemDesc,
+        itemDescription: itemDesc,
+        packagingType: pkgType,
+        packagesCount,
+        quantity: packagesCount,
+        weight: grossWeight || 100,
         cpm: parseFloat(String(items[0]?.volume)) || null,
 
+        freightAmount: freightAmt,
+        freight: freightAmt,
+        labourCharges: labourAmt,
+        otherCharges: otherAmt,
         additionalChargesBreakdown: {
           labour: labourNum,
           lifterCrane: lifterNum,
@@ -573,7 +606,6 @@ export default function EditBiltyPage() {
           godownStorage: godownNum,
           other: otherNum,
         },
-        freight: baseFreightNum,
         additionalCharges: totalAdditionalCharges,
         discount: discountNum,
         subTotal,
@@ -581,7 +613,9 @@ export default function EditBiltyPage() {
         totalAmount,
         paidAmount: paidNum,
         remainingBalance,
+        paymentMode,
         paymentStatus,
+        status: "Booked",
         shipmentStatus: formData.shipmentStatus,
 
         notes: formData.notes.trim() || null,
@@ -606,7 +640,9 @@ export default function EditBiltyPage() {
         console.warn("Background API update:", apiErr);
       }
 
-      setSuccessMessage("Consignment booking updated successfully!");
+      const successMsg = `Bilty [${updatedRecord.biltyNumber || biltyId}] saved successfully with all cargo particulars.`;
+      setSuccessMessage(successMsg);
+      toast.success(successMsg);
       setTimeout(() => {
         router.push(`/admin/bilty/${biltyId}`);
       }, 700);

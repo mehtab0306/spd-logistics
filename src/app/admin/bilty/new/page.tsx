@@ -613,92 +613,88 @@ export default function NewBiltyPage() {
     setSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
-      const year = new Date().getFullYear();
-      const hubCode = formData.origin.toUpperCase().includes("KARACHI") ? "KHI" : "LHR";
-
-      const finalBiltyNumber =
-        formData.biltyNumber.trim().toUpperCase() ||
-        `SPD-${hubCode}-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const manualBiltyNo = formData.biltyNumber?.trim();
+      const finalBiltyNumber = manualBiltyNo
+        ? manualBiltyNo
+        : `SPD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
       const finalTrackingId =
-        formData.trackingId.trim().toUpperCase() ||
-        `SPD-${year}-${Math.floor(100000 + Math.random() * 900000)}`;
+        formData.trackingId.trim() ||
+        `SPD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
-      // Use clean string biltyNumber as primary ID to ensure route `/admin/bilty/[id]` always resolves
-      const uniqueId = finalBiltyNumber;
+      const bookingDate = formData.date ? formData.date.slice(0, 10) : new Date().toISOString().split("T")[0];
+      const primaryItem = items && items[0];
+      const itemDesc = primaryPackageDetail?.trim() || primaryItem?.detail?.trim() || "General Commercial Merchandise";
+      const pkgType = primaryItem?.freightAsPer ? `${primaryItem.freightAsPer} Packages` : "Bags / Cartons";
+      const packagesCount = Number(totalQuantity) || Number(primaryItem?.quantity) || 1;
+      const grossWeight = Number(totalWeight) || (primaryItem?.weight ? Number(primaryItem.weight) : 0) || 0;
+      const freightAmt = Number(baseFreightNum) || Number(formData.manualBaseFreight) || 0;
+      const labourAmt = Number(labourNum) || Number(additionalBreakdown.labour) || 0;
+      const otherAmt =
+        (Number(otherNum) || Number(additionalBreakdown.other) || 0) +
+        (Number(lifterNum) || 0) +
+        (Number(pickupNum) || 0) +
+        (Number(deliveryNum) || 0) +
+        (Number(godownNum) || 0);
+
+      const paymentMode =
+        formData.amountType === "Paid" ? "PAID" : formData.amountType === "To Be Billed" ? "BILLED" : "TO-PAY";
 
       const paymentStatus =
-        formData.amountType === "Paid" || (remainingBalance <= 0 && grandTotal > 0)
+        paymentMode === "PAID" || (remainingBalance <= 0 && grandTotal > 0)
           ? "PAID"
-          : formData.amountType === "To Be Billed"
+          : paymentMode === "BILLED"
           ? "TO_BE_BILLED"
           : paidNum > 0
           ? "PARTIAL"
-          : "UNPAID";
+          : "TO-PAY";
 
       const selectedCust = customers.find((c) => String(c.id) === String(formData.customerId));
       const selectedDrv = drivers.find((d) => String(d.id) === String(formData.driverId));
       const selectedVeh = vehicles.find((v) => String(v.id) === String(formData.vehicleId));
 
       const newBiltyRecord = {
-        id: uniqueId,
+        id: finalBiltyNumber,
         biltyNumber: finalBiltyNumber,
         trackingId: finalTrackingId,
         date: formData.date ? new Date(formData.date).toISOString() : timestamp,
-        warehouse: formData.warehouse || (formData.origin.toUpperCase().includes("KARACHI") ? "KARACHI" : "LAHORE"),
-        origin: formData.origin || "Lahore",
-        destination: formData.destination || "Karachi",
+        bookingDate,
 
-        // Sheet 1 Specific Controls
-        billTo: formData.billTo,
-        amountType: formData.amountType,
-        dispatchMode: formData.dispatchMode,
-        hideAmount: formData.hideAmount,
-
-        // Commercial Identifiers
-        poNumber: formData.poNumber.trim() || null,
-        blNumber: formData.blNumber.trim() || null,
-        lcNumber: formData.lcNumber.trim() || null,
-        containerNumber: formData.containerNumber.trim() || null,
-        gdNumber: formData.gdNumber.trim() || null,
-
-        // Parties
-        customerId: formData.customerId || null,
-        customer: selectedCust ? { id: selectedCust.id, name: selectedCust.name, companyName: selectedCust.companyName } : null,
-        senderName: formData.senderName.trim(),
-        senderPhone: formData.senderPhone.trim() || "0300-0000000",
+        // Consignor & Consignee
+        senderName: formData.senderName.trim() || "",
+        senderPhone: formData.senderPhone.trim() || "",
         senderAddress: formData.senderAddress.trim() || `${formData.origin}, Pakistan`,
         senderNtn: formData.senderNtn || selectedCust?.ntn || null,
 
-        receiverName: formData.receiverName.trim(),
-        receiverPhone: formData.receiverPhone.trim(),
+        receiverName: formData.receiverName.trim() || "",
+        receiverPhone: formData.receiverPhone.trim() || "",
         receiverAddress: formData.receiverAddress.trim() || `${formData.destination}, Pakistan`,
         receiverNtn: formData.receiverNtn || null,
         deliveryAddress: formData.deliveryAddress.trim() || formData.receiverAddress.trim(),
 
-        // Fleet Assignment
-        vehicleId: formData.vehicleId || null,
-        vehicleNumber: formData.vehicleNumber || selectedVeh?.registrationNumber || selectedVeh?.vehicleNumber || null,
-        vehicle: selectedVeh
-          ? {
-              id: selectedVeh.id,
-              registrationNumber: selectedVeh.registrationNumber || selectedVeh.vehicleNumber,
-              vehicleNumber: selectedVeh.vehicleNumber || selectedVeh.registrationNumber,
-              type: selectedVeh.type || selectedVeh.make,
-            }
-          : null,
-        driverId: formData.driverId || null,
-        driverName: formData.driverName || selectedDrv?.name || null,
-        driver: selectedDrv ? { id: selectedDrv.id, name: selectedDrv.name, phone: selectedDrv.phone } : null,
+        // Route
+        origin: formData.origin?.trim() || "Lahore",
+        destination: formData.destination?.trim() || "Karachi",
+        warehouse: formData.warehouse || (formData.origin.toUpperCase().includes("KARACHI") ? "KARACHI" : "LAHORE"),
+
+        // Cargo Details (MUST NOT BE DROPPED)
+        itemDescription: itemDesc,
+        packageDetails: itemDesc,
+        packagingType: pkgType,
+        packagesCount,
+        quantity: packagesCount,
+        weight: grossWeight,
 
         // Dynamic Items
         items,
-        packageDetails: primaryPackageDetail,
-        quantity: totalQuantity,
-        weight: totalWeight || 100,
         cpm: parseFloat(String(items[0]?.volume)) || null,
 
-        // Financials & Breakdown
+        // Financials & Terms
+        freightAmount: freightAmt,
+        freight: freightAmt,
+        labourCharges: labourAmt,
+        otherCharges: otherAmt,
+        additionalCharges: totalAdditionalCharges,
         additionalChargesBreakdown: {
           labour: labourNum,
           lifterCrane: lifterNum,
@@ -712,8 +708,6 @@ export default function NewBiltyPage() {
           other: otherNum,
           otherRemark: additionalBreakdown.otherRemark.trim() || "Other Operational Charges",
         },
-        freight: baseFreightNum,
-        additionalCharges: totalAdditionalCharges,
         discount: discountNum,
         subTotal,
         incomeTax: incomeTaxAmount,
@@ -725,8 +719,41 @@ export default function NewBiltyPage() {
         totalAmount: grandTotal,
         paidAmount: paidNum,
         remainingBalance,
+        paymentMode,
+        amountType: formData.amountType,
         paymentStatus,
+
+        status: "Booked",
         shipmentStatus: formData.shipmentStatus || "BOOKED",
+
+        // Sheet 1 Specific Controls
+        billTo: formData.billTo,
+        dispatchMode: formData.dispatchMode,
+        hideAmount: formData.hideAmount,
+
+        // Commercial Identifiers
+        poNumber: formData.poNumber.trim() || null,
+        blNumber: formData.blNumber.trim() || null,
+        lcNumber: formData.lcNumber.trim() || null,
+        containerNumber: formData.containerNumber.trim() || null,
+        gdNumber: formData.gdNumber.trim() || null,
+
+        // Fleet Assignment
+        customerId: formData.customerId || null,
+        customer: selectedCust ? { id: selectedCust.id, name: selectedCust.name, companyName: selectedCust.companyName } : null,
+        vehicleId: formData.vehicleId || null,
+        vehicleNumber: formData.vehicleNumber || selectedVeh?.registrationNumber || selectedVeh?.vehicleNumber || null,
+        vehicle: selectedVeh
+          ? {
+              id: selectedVeh.id,
+              registrationNumber: selectedVeh.registrationNumber || selectedVeh.vehicleNumber,
+              vehicleNumber: selectedVeh.vehicleNumber || selectedVeh.registrationNumber,
+              type: selectedVeh.type || selectedVeh.make,
+            }
+          : null,
+        driverId: formData.driverId || null,
+        driverName: formData.driverName || selectedDrv?.name || null,
+        driver: selectedDrv ? { id: selectedDrv.id, name: selectedDrv.name, phone: selectedDrv.phone } : null,
 
         challanId: null,
         notes: formData.notes.trim() || null,
@@ -748,7 +775,7 @@ export default function NewBiltyPage() {
         updatedAt: timestamp,
       };
 
-      // 1. Immediately persist to localStorage (both spd_bilties, spd_local_bilties & bilties)
+      // 1. Immediately persist to localStorage using Section 2 deduplication logic
       saveStoredBilty(newBiltyRecord);
 
       // 2. Cache in sessionStorage and localStorage for instant 0ms retrieval on detail page
@@ -778,8 +805,8 @@ export default function NewBiltyPage() {
       }
 
       setSavedBilty(newBiltyRecord);
-      setSuccessMessage(`Bilty #${finalBiltyNumber} successfully saved to system records!`);
-      toast.success(`Bilty #${finalBiltyNumber} successfully saved to system records!`);
+      setSuccessMessage(`Bilty [${finalBiltyNumber}] saved successfully with all cargo particulars.`);
+      toast.success(`Bilty [${finalBiltyNumber}] saved successfully with all cargo particulars.`);
 
       if (mode === "save_and_print") {
         // Immediate redirect to 4-sheet dossier viewer

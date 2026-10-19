@@ -13,7 +13,7 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
 
   const biltyNumber = bilty.biltyNumber || "BLT-PENDING";
   const taxInvoiceNo = `STI-${biltyNumber}`;
-  const invoiceDate = bilty.date ? formatDate(bilty.date) : formatDate(new Date());
+  const invoiceDate = bilty.bookingDate ? formatDate(bilty.bookingDate) : bilty.date ? formatDate(bilty.date) : formatDate(new Date());
 
   // Determine Buyer based on bilty.billTo
   const isReceiver = bilty.billTo === "Receiver";
@@ -27,14 +27,14 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
 
   // Financial calculations
   const breakdown = bilty.additionalChargesBreakdown || {};
-  const labour = parseFloat(breakdown.labour) || 0;
+  const labour = parseFloat(breakdown.labour) || parseFloat(bilty.labourCharges) || 0;
   const lifterCrane = parseFloat(breakdown.lifterCrane) || 0;
   const pickupLocal = parseFloat(breakdown.pickupLocal) || 0;
   const deliveryLocal = parseFloat(breakdown.deliveryLocal) || 0;
   const godownStorage = parseFloat(breakdown.godownStorage) || 0;
-  const otherCharges = parseFloat(breakdown.other) || 0;
+  const otherCharges = parseFloat(breakdown.other) || parseFloat(bilty.otherCharges) || 0;
 
-  const initialFreight = parseFloat(bilty.freight) || 0;
+  const initialFreight = parseFloat(bilty.freightAmount !== undefined ? bilty.freightAmount : bilty.freight) || 0;
   const totalAdditional =
     labour + lifterCrane + pickupLocal + deliveryLocal + godownStorage + otherCharges > 0
       ? labour + lifterCrane + pickupLocal + deliveryLocal + godownStorage + otherCharges
@@ -166,7 +166,7 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
                   <span className="font-bold uppercase text-red-700">{bilty.destination || "Karachi"}</span> under Bilty #{biltyNumber}.
                   <br />
                   <span className="text-[9px] text-slate-500 font-normal">
-                    Commodity: {bilty.packageDetails || "Commercial Cargo"} • Qty: {bilty.quantity || 1} • Weight: {bilty.weight ? `${bilty.weight} kg` : "N/A"}
+                    Commodity: {bilty.itemDescription || bilty.packageDetails || "Commercial Cargo"} • Qty: {bilty.packagesCount || bilty.quantity || 1} • Weight: {bilty.weight ? `${bilty.weight} kg` : "N/A"}
                   </span>
                 </td>
                 <td className="p-2 border-r border-black text-center font-mono text-[9.5px]">

@@ -14,7 +14,7 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
 
   const biltyNumber = bilty.biltyNumber || "BLT-PENDING";
   const billNumber = `BILL-${biltyNumber}`;
-  const billDate = bilty.date ? formatDate(bilty.date) : formatDate(new Date());
+  const billDate = bilty.bookingDate ? formatDate(bilty.bookingDate) : bilty.date ? formatDate(bilty.date) : formatDate(new Date());
 
   // Determine Bill To party based on bilty.billTo
   const isBillToReceiver = bilty.billTo === "Receiver";
@@ -39,26 +39,26 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
     ? bilty.items
     : [
         {
-          detail: bilty.packageDetails || "General Commercial Merchandise",
-          quantity: bilty.quantity || 1,
+          detail: bilty.itemDescription || bilty.packageDetails || "General Commercial Merchandise",
+          quantity: bilty.packagesCount || bilty.quantity || 1,
           weight: bilty.weight || 0,
           volume: bilty.cpm || 0,
-          rate: bilty.freight || 0,
+          rate: bilty.freightAmount !== undefined ? bilty.freightAmount : (bilty.freight || 0),
           freightAsPer: "Fixed Freight",
-          freight: bilty.freight || 0,
+          freight: bilty.freightAmount !== undefined ? bilty.freightAmount : (bilty.freight || 0),
         },
       ];
 
   // Additional charges breakdown
   const breakdown = bilty.additionalChargesBreakdown || {};
-  const labour = parseFloat(breakdown.labour) || 0;
+  const labour = parseFloat(breakdown.labour) || parseFloat(bilty.labourCharges) || 0;
   const lifterCrane = parseFloat(breakdown.lifterCrane) || 0;
   const pickupLocal = parseFloat(breakdown.pickupLocal) || 0;
   const deliveryLocal = parseFloat(breakdown.deliveryLocal) || 0;
   const godownStorage = parseFloat(breakdown.godownStorage) || 0;
-  const otherCharges = parseFloat(breakdown.other) || 0;
+  const otherCharges = parseFloat(breakdown.other) || parseFloat(bilty.otherCharges) || 0;
 
-  const initialFreight = parseFloat(bilty.freight) || 0;
+  const initialFreight = parseFloat(bilty.freightAmount !== undefined ? bilty.freightAmount : bilty.freight) || 0;
   const totalAdditional =
     labour + lifterCrane + pickupLocal + deliveryLocal + godownStorage + otherCharges > 0
       ? labour + lifterCrane + pickupLocal + deliveryLocal + godownStorage + otherCharges

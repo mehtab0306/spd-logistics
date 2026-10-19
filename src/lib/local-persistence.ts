@@ -253,9 +253,21 @@ export const LOCAL_TRACKING_KEY = "spd_local_tracking";
 export const DELETED_BILTIES_KEY = "spd_local_deleted_bilties";
 
 export function getStoredBilties(): any[] {
-  return readMergedStorage(BILTIES_KEY, LOCAL_BILTIES_KEY, "consignment").filter(
-    (b) => b && b.id && b.biltyNumber
+  const raw = readMergedStorage(BILTIES_KEY, LOCAL_BILTIES_KEY, "consignment").filter(
+    (b) => b && (b.id || b.biltyNumber) && !String(b.id || "").startsWith("bilty-demo-")
   );
+
+  const result: any[] = [];
+  const seenNos = new Set<string>();
+
+  for (const b of raw) {
+    const key = String(b.biltyNumber || b.id || "").trim().toUpperCase();
+    if (!key || seenNos.has(key) || b.shipmentStatus === "DELETED") continue;
+    seenNos.add(key);
+    result.push(b);
+  }
+
+  return result;
 }
 
 export function getDeletedBiltyIds(): string[] {
@@ -264,43 +276,46 @@ export function getDeletedBiltyIds(): string[] {
 
 export function saveStoredBilty(bilty: any): any[] {
   const clean = unwrapRecord(bilty, "consignment");
-  if (!clean || !clean.id) return getStoredBilties();
+  if (!clean || (!clean.id && !clean.biltyNumber)) return getStoredBilties();
+
+  // Use exact user-entered biltyNumber
+  const finalBiltyNo = String(clean.biltyNumber || clean.id).trim();
+  clean.id = finalBiltyNo;
+  clean.biltyNumber = finalBiltyNo;
+
   const list = getStoredBilties();
-  const idx = list.findIndex(
+  // Filter out any matching record by biltyNumber or id to prevent duplicates
+  const filtered = list.filter(
     (b) =>
-      String(b.id) === String(clean.id) ||
-      (clean.biltyNumber && String(b.biltyNumber).toUpperCase() === String(clean.biltyNumber).toUpperCase())
+      String(b.biltyNumber || "").trim().toUpperCase() !== finalBiltyNo.toUpperCase() &&
+      String(b.id || "").trim().toUpperCase() !== finalBiltyNo.toUpperCase()
   );
-  if (idx >= 0) {
-    list[idx] = { ...list[idx], ...clean };
-  } else {
-    list.unshift(clean);
-  }
-  writeDualStorage(BILTIES_KEY, LOCAL_BILTIES_KEY, list);
+
+  // Prepend new/updated bilty to top
+  const updated = [clean, ...filtered];
+
+  writeDualStorage(BILTIES_KEY, LOCAL_BILTIES_KEY, updated);
 
   // Also sync to spd_local_tracking for public & admin tracking
   if (typeof window !== "undefined") {
     try {
-      const trackingList = safeParseArray(localStorage.getItem(LOCAL_TRACKING_KEY));
-      const tIdx = trackingList.findIndex(
-        (t) =>
-          String(t.id) === String(clean.id) ||
-          (clean.biltyNumber && String(t.biltyNumber).toUpperCase() === String(clean.biltyNumber).toUpperCase())
-      );
-      if (tIdx >= 0) {
-        trackingList[tIdx] = { ...trackingList[tIdx], ...clean };
-      } else {
-        trackingList.unshift(clean);
-      }
-      localStorage.setItem(LOCAL_TRACKING_KEY, JSON.stringify(trackingList));
-    } catch {}
+      localStorage.setItem("spd_bilties", JSON.stringify(updated));
+      localStorage.setItem("spd_local_bilties", JSON.stringify(updated));
+      localStorage.setItem("bilties", JSON.stringify(updated));
+      localStorage.setItem("spd_selected_bilty", JSON.stringify(clean));
+      sessionStorage.setItem("last_created_bilty", JSON.stringify(clean));
 
-    try {
-      localStorage.setItem("bilties", JSON.stringify(list));
+      const trackingList = safeParseArray(localStorage.getItem(LOCAL_TRACKING_KEY)).filter(
+        (t) =>
+          String(t.biltyNumber || "").trim().toUpperCase() !== finalBiltyNo.toUpperCase() &&
+          String(t.id || "").trim().toUpperCase() !== finalBiltyNo.toUpperCase()
+      );
+      trackingList.unshift(clean);
+      localStorage.setItem(LOCAL_TRACKING_KEY, JSON.stringify(trackingList));
     } catch {}
   }
 
-  return list;
+  return updated;
 }
 
 export function removeStoredBilty(id: string, recordToTrash?: any): any[] {
