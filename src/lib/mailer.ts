@@ -29,7 +29,7 @@ export async function sendContactEmail(options: SendEmailOptions): Promise<SendE
   const host = process.env.EMAIL_HOST || process.env.SMTP_HOST || "smtp.gmail.com";
   const port = parseInt(process.env.EMAIL_PORT || process.env.SMTP_PORT || "587", 10);
   const user = (process.env.EMAIL_USER || process.env.SMTP_USER || "spdgoodstransport@gmail.com").trim();
-  const pass = (process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.SMTP_PASSWORD || "minklfyiagkzceaud").trim();
+  const pass = (process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.SMTP_PASSWORD || "rturgfirgundlmyf").trim();
 
   // If credentials are empty
   if (!user || !pass) {
