@@ -19,15 +19,30 @@ function safeParseArray(raw: string | null): any[] {
 
 function unwrapRecord(item: any, entityKey?: "customer" | "driver" | "vehicle" | "consignment" | "challan"): any {
   if (!item || typeof item !== "object") return null;
+
+  // Never unwrap customer or driver if this is a bilty/consignment or has bilty properties
+  const isBilty = entityKey === "consignment" || !!(item.biltyNumber || item.trackingId || item.senderName || item.receiverName || item.freight || item.totalFreight || item.totalAmount);
+  if (isBilty && entityKey !== "customer" && entityKey !== "driver") {
+    if (item.consignment && typeof item.consignment === "object") {
+      return { ...item.consignment };
+    }
+    return item;
+  }
+
   if (entityKey && item[entityKey] && typeof item[entityKey] === "object") {
     return { ...item[entityKey], user: item.user || item[entityKey].user, account: item.account || item[entityKey].account };
   }
-  if (item.customer && typeof item.customer === "object" && !item.name) {
+
+  // Only unwrap customer if explicitly dealing with customer entity
+  if (entityKey === "customer" && item.customer && typeof item.customer === "object") {
     return { ...item.customer, user: item.user || item.customer.user, account: item.account || item.customer.account };
   }
-  if (item.driver && typeof item.driver === "object" && !item.name && !item.challanNumber) {
+
+  // Only unwrap driver if explicitly dealing with driver entity
+  if (entityKey === "driver" && item.driver && typeof item.driver === "object" && !item.challanNumber) {
     return { ...item.driver, user: item.user || item.driver.user };
   }
+
   return item;
 }
 
@@ -41,6 +56,15 @@ function readMergedStorage(primaryKey: string, secondaryKey: string, entityKey?:
     const item = unwrapRecord(rawItem, entityKey);
     if (!item || !item.id) continue;
     const id = String(item.id);
+
+    // If reading consignments, discard corrupted customer records or demo entries
+    if (entityKey === "consignment") {
+      const bNum = String(item.biltyNumber || "");
+      if (id.startsWith("cust-") || bNum.startsWith("cust-") || id.startsWith("c-") || bNum.startsWith("c-") || id.startsWith("bilty-demo-")) {
+        continue;
+      }
+    }
+
     if (!seen.has(id)) {
       seen.set(id, item);
     } else {
@@ -105,6 +129,14 @@ export function mergeLocalWithApi(
     if (!item || !item.id) continue;
     const id = String(item.id);
     if (deletedSet.has(id) || item.status === "DELETED") continue;
+
+    if (uniqueField === "biltyNumber") {
+      const bNum = String(item.biltyNumber || "");
+      if (id.startsWith("cust-") || bNum.startsWith("cust-") || id.startsWith("c-") || bNum.startsWith("c-") || id.startsWith("bilty-demo-")) {
+        continue;
+      }
+    }
+
     const uVal = uniqueField && item[uniqueField] ? String(item[uniqueField]).toUpperCase() : null;
 
     if (idIndexMap.has(id)) {
@@ -126,6 +158,14 @@ export function mergeLocalWithApi(
     if (!apiItem || !apiItem.id) continue;
     const id = String(apiItem.id);
     if (deletedSet.has(id) || apiItem.status === "DELETED") continue;
+
+    if (uniqueField === "biltyNumber") {
+      const bNum = String(apiItem.biltyNumber || "");
+      if (id.startsWith("cust-") || bNum.startsWith("cust-") || id.startsWith("c-") || bNum.startsWith("c-") || id.startsWith("bilty-demo-")) {
+        continue;
+      }
+    }
+
     const uVal = uniqueField && apiItem[uniqueField] ? String(apiItem[uniqueField]).toUpperCase() : null;
 
     if (idIndexMap.has(id)) {
@@ -252,9 +292,55 @@ export const LOCAL_BILTIES_KEY = "spd_local_bilties";
 export const LOCAL_TRACKING_KEY = "spd_local_tracking";
 export const DELETED_BILTIES_KEY = "spd_local_deleted_bilties";
 
+/**
+ * One-time and recurring runtime sanitation to purge corrupted customer records ('cust-', 'c-')
+ * or demo records from bilty storage keys.
+ */
+export function purgeCorruptedBiltyStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const keys = [BILTIES_KEY, LOCAL_BILTIES_KEY, "bilties", LOCAL_TRACKING_KEY];
+    for (const key of keys) {
+      const raw = safeParseArray(localStorage.getItem(key));
+      if (!raw || raw.length === 0) continue;
+      const clean = raw.filter((b: any) => {
+        if (!b) return false;
+        const bId = String(b.id || "").trim();
+        const bNum = String(b.biltyNumber || "").trim();
+        if (bId.startsWith("cust-") || bNum.startsWith("cust-") || bId.startsWith("c-") || bNum.startsWith("c-")) {
+          return false;
+        }
+        if (bId.startsWith("bilty-demo-")) {
+          return false;
+        }
+        // Must have at least a legitimate bilty number or sender/receiver
+        if (!b.biltyNumber && !b.senderName && !b.receiverName) {
+          return false;
+        }
+        return true;
+      });
+      if (clean.length !== raw.length) {
+        localStorage.setItem(key, JSON.stringify(clean));
+      }
+    }
+  } catch (err) {
+    console.warn("Error purging corrupted bilty storage:", err);
+  }
+}
+
 export function getStoredBilties(): any[] {
+  purgeCorruptedBiltyStorage();
+
   const raw = readMergedStorage(BILTIES_KEY, LOCAL_BILTIES_KEY, "consignment").filter(
-    (b) => b && (b.id || b.biltyNumber) && !String(b.id || "").startsWith("bilty-demo-")
+    (b) =>
+      b &&
+      (b.id || b.biltyNumber) &&
+      !String(b.id || "").startsWith("bilty-demo-") &&
+      !String(b.id || "").startsWith("cust-") &&
+      !String(b.biltyNumber || "").startsWith("cust-") &&
+      !String(b.id || "").startsWith("c-") &&
+      !String(b.biltyNumber || "").startsWith("c-") &&
+      (b.senderName || b.receiverName || b.biltyNumber)
   );
 
   const result: any[] = [];
@@ -264,7 +350,37 @@ export function getStoredBilties(): any[] {
     const key = String(b.biltyNumber || b.id || "").trim().toUpperCase();
     if (!key || seenNos.has(key) || b.shipmentStatus === "DELETED") continue;
     seenNos.add(key);
-    result.push(b);
+
+    // Standardize unified schema properties
+    const totalFreight = Number(b.totalFreight ?? b.totalAmount ?? b.freightAmount ?? b.freight ?? 0);
+    const grossWeight = Number(b.weight ?? 0);
+    const pkgsCount = Number(b.packagesCount ?? b.quantity ?? 1);
+    const itemDesc = b.itemDescription || b.packageDetails || "General Cargo";
+    const bookingDate = b.bookingDate || (b.date ? String(b.date).split("T")[0] : new Date().toISOString().split("T")[0]);
+    const paymentMode = b.paymentMode || b.paymentStatus || b.amountType || "TO-PAY";
+
+    result.push({
+      ...b,
+      totalFreight,
+      totalAmount: totalFreight,
+      freight: Number(b.freight ?? b.freightAmount ?? totalFreight),
+      freightAmount: Number(b.freightAmount ?? b.freight ?? totalFreight),
+      packagesCount: pkgsCount,
+      quantity: pkgsCount,
+      itemDescription: itemDesc,
+      packageDetails: itemDesc,
+      weight: grossWeight,
+      bookingDate,
+      paymentMode,
+    });
+  }
+
+  // Self-heal storage if duplicates or unstandardized entries were cleaned
+  if (raw.length !== result.length && typeof window !== "undefined") {
+    writeDualStorage(BILTIES_KEY, LOCAL_BILTIES_KEY, result);
+    try {
+      localStorage.setItem("bilties", JSON.stringify(result));
+    } catch {}
   }
 
   return result;
@@ -278,10 +394,32 @@ export function saveStoredBilty(bilty: any): any[] {
   const clean = unwrapRecord(bilty, "consignment");
   if (!clean || (!clean.id && !clean.biltyNumber)) return getStoredBilties();
 
-  // Use exact user-entered biltyNumber
+  // Guard against saving customer objects as bilties
+  const testId = String(clean.id || "");
+  const testBiltyNo = String(clean.biltyNumber || "");
+  if (
+    (testId.startsWith("cust-") || testId.startsWith("c-") || testBiltyNo.startsWith("cust-") || testBiltyNo.startsWith("c-")) &&
+    !clean.senderName &&
+    !clean.receiverName
+  ) {
+    return getStoredBilties();
+  }
+
+  // Standardize unified schema on clean record
   const finalBiltyNo = String(clean.biltyNumber || clean.id).trim();
   clean.id = finalBiltyNo;
   clean.biltyNumber = finalBiltyNo;
+  clean.totalFreight = Number(clean.totalFreight ?? clean.totalAmount ?? clean.freightAmount ?? clean.freight ?? 0);
+  clean.totalAmount = clean.totalFreight;
+  clean.freight = Number(clean.freight ?? clean.freightAmount ?? clean.totalFreight);
+  clean.freightAmount = clean.freight;
+  clean.packagesCount = Number(clean.packagesCount ?? clean.quantity ?? 1);
+  clean.quantity = clean.packagesCount;
+  clean.itemDescription = clean.itemDescription || clean.packageDetails || "General Cargo";
+  clean.packageDetails = clean.itemDescription;
+  clean.weight = Number(clean.weight ?? 0);
+  clean.bookingDate = clean.bookingDate || (clean.date ? String(clean.date).split("T")[0] : new Date().toISOString().split("T")[0]);
+  clean.paymentMode = clean.paymentMode || clean.paymentStatus || clean.amountType || "TO-PAY";
 
   const list = getStoredBilties();
   // Filter out any matching record by biltyNumber or id to prevent duplicates

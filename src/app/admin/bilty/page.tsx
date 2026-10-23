@@ -52,6 +52,7 @@ import {
   getStoredBilties,
   saveStoredBilty,
   removeStoredBilty,
+  purgeCorruptedBiltyStorage,
   getDeletedBiltyIds as getStoredDeletedBiltyIds,
   getStoredCustomers,
   getDeletedCustomerIds,
@@ -244,6 +245,10 @@ export default function BiltyPage() {
   const fetchConsignments = async () => {
     try {
       setLoading(true);
+      if (typeof window !== "undefined") {
+        purgeCorruptedBiltyStorage();
+      }
+
       const params = new URLSearchParams();
       if (search) params.append("search", search);
       if (warehouseFilter) params.append("warehouse", warehouseFilter);
@@ -266,7 +271,15 @@ export default function BiltyPage() {
       const localBilties = getLocalBilties();
       const deletedIds = getDeletedBiltyIds();
       let items = mergeLocalWithApi(localBilties, apiItems, deletedIds, "biltyNumber").filter(
-        (b) => b && b.shipmentStatus !== "DELETED" && !String(b.id || "").startsWith("bilty-demo-")
+        (b) =>
+          b &&
+          b.shipmentStatus !== "DELETED" &&
+          !String(b.id || "").startsWith("bilty-demo-") &&
+          !String(b.id || "").startsWith("cust-") &&
+          !String(b.biltyNumber || "").startsWith("cust-") &&
+          !String(b.id || "").startsWith("c-") &&
+          !String(b.biltyNumber || "").startsWith("c-") &&
+          (b.senderName || b.receiverName || b.biltyNumber)
       );
 
       // Apply search and filter to merged list
@@ -291,8 +304,19 @@ export default function BiltyPage() {
 
       setConsignments(items);
     } catch (err) {
-      console.warn("Error fetching consignments, using demo list:", err);
-      setConsignments(mergeLocalWithApi(getLocalBilties(), DEFAULT_CLIENT_CONSIGNMENTS, getDeletedBiltyIds(), "biltyNumber"));
+      console.warn("Error fetching consignments, using fallback list:", err);
+      const cleanFallback = mergeLocalWithApi(getLocalBilties(), DEFAULT_CLIENT_CONSIGNMENTS, getDeletedBiltyIds(), "biltyNumber").filter(
+        (b) =>
+          b &&
+          b.shipmentStatus !== "DELETED" &&
+          !String(b.id || "").startsWith("bilty-demo-") &&
+          !String(b.id || "").startsWith("cust-") &&
+          !String(b.biltyNumber || "").startsWith("cust-") &&
+          !String(b.id || "").startsWith("c-") &&
+          !String(b.biltyNumber || "").startsWith("c-") &&
+          (b.senderName || b.receiverName || b.biltyNumber)
+      );
+      setConsignments(cleanFallback);
     } finally {
       setLoading(false);
     }
@@ -710,6 +734,7 @@ export default function BiltyPage() {
 
   const handleCreateBilty = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setSubmitting(true);
     setFormError("");
 
@@ -767,6 +792,7 @@ export default function BiltyPage() {
         otherCharges,
         additionalCharges: labourCharges + otherCharges,
         discount: discNum,
+        totalFreight: totalAmount,
         totalAmount,
         paidAmount,
         remainingBalance,
@@ -797,8 +823,7 @@ export default function BiltyPage() {
       };
 
       // Load existing bilties & deduplicate (Section 2)
-      const saved = typeof window !== "undefined" ? localStorage.getItem("spd_bilties") : null;
-      const existingBilties = saved ? JSON.parse(saved) : [];
+      const existingBilties = getStoredBilties();
       const updated = [createdBilty, ...existingBilties.filter((b: any) => String(b.biltyNumber || b.id).trim().toUpperCase() !== finalBiltyNumber.toUpperCase())];
 
       if (typeof window !== "undefined") {
@@ -830,6 +855,7 @@ export default function BiltyPage() {
 
   const handleUpdateBilty = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setSubmitting(true);
     setEditFormError("");
 
@@ -845,14 +871,20 @@ export default function BiltyPage() {
       const updatedBilty = {
         ...editFormData,
         freight: freightNum,
+        freightAmount: freightNum,
         additionalCharges: addlNum,
         discount: discNum,
+        totalFreight: tot,
         totalAmount: tot,
         paidAmount: paidNum,
         remainingBalance: rem,
         paymentStatus: pStatus,
+        paymentMode: rem <= 0 ? "PAID" : paidNum > 0 ? "PARTIAL" : "TO-PAY",
         quantity: parseInt(editFormData.quantity) || 1,
+        packagesCount: parseInt(editFormData.quantity) || 1,
         weight: editFormData.weight ? parseFloat(editFormData.weight) : null,
+        itemDescription: editFormData.packageDetails || "General Cargo",
+        packageDetails: editFormData.packageDetails || "General Cargo",
         photos: editFormData.photos || [],
       };
 
@@ -1177,7 +1209,7 @@ export default function BiltyPage() {
                     <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
                       <p className="text-[10px] text-slate-400 font-bold uppercase">Total Freight</p>
                       <p className="font-black text-slate-900 dark:text-white">
-                        {formatCurrency(c.totalAmount || c.freightAmount || c.freight || 0)}
+                        {formatCurrency(c.totalFreight ?? c.totalAmount ?? c.freightAmount ?? c.freight ?? 0)}
                       </p>
                       <p className="text-[10px] text-emerald-600 font-semibold">
                         Paid: {formatCurrency(c.paidAmount || 0)}
@@ -1410,7 +1442,7 @@ export default function BiltyPage() {
                         <TableCell>
                           <div className="space-y-1">
                             <p className="font-black text-slate-900 dark:text-white whitespace-nowrap">
-                              {formatCurrency(c.totalAmount || c.freightAmount || c.freight || 0)}
+                              {formatCurrency(c.totalFreight ?? c.totalAmount ?? c.freightAmount ?? c.freight ?? 0)}
                             </p>
                             <div>
                               {isPaid ? (

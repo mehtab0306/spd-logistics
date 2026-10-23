@@ -575,6 +575,7 @@ export default function NewBiltyPage() {
   };
 
   const handleSaveAction = async (mode: "save_only" | "save_and_print" = "save_only") => {
+    if (submitting) return;
     setFormError("");
     setSuccessMessage("");
 
@@ -716,6 +717,7 @@ export default function NewBiltyPage() {
         salesTax: salesTaxAmount,
         salesTaxRate: salesTaxRateNum,
         salesTaxEnabled: taxSettings.salesTaxEnabled,
+        totalFreight: grandTotal,
         totalAmount: grandTotal,
         paidAmount: paidNum,
         remainingBalance,
@@ -829,6 +831,7 @@ export default function NewBiltyPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     await handleSaveAction("save_only");
   };
 

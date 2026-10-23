@@ -500,6 +500,7 @@ export default function EditBiltyPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setFormError("");
     setSuccessMessage("");
 
@@ -610,6 +611,7 @@ export default function EditBiltyPage() {
         discount: discountNum,
         subTotal,
         salesTax: salesTax15Pct,
+        totalFreight: totalAmount,
         totalAmount,
         paidAmount: paidNum,
         remainingBalance,
