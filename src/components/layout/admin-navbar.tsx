@@ -206,7 +206,7 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 z-50" align="end" forceMount>
+            <DropdownMenuContent className="w-56 z-[9999]" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">{currentUser?.name || "Admin User"}</p>

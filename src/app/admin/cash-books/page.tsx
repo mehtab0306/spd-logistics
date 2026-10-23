@@ -1279,7 +1279,7 @@ function CashBooksContent() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-visible">
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50/80 dark:bg-slate-800/50">
@@ -1857,7 +1857,7 @@ function CashBooksContent() {
       {/* MODAL 1: + CASH IN (AAMAD) */}
       {/* ======================================================== */}
       <Dialog open={cashInModalOpen} onOpenChange={setCashInModalOpen}>
-        <DialogContent className="sm:max-w-[540px]">
+        <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto overflow-x-visible p-6 pb-28">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-600">
               <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600">
@@ -2045,7 +2045,7 @@ function CashBooksContent() {
       {/* MODAL 2: - CASH OUT (KHARCHA) WITH TRANSPORT LINKING */}
       {/* ======================================================== */}
       <Dialog open={cashOutModalOpen} onOpenChange={setCashOutModalOpen}>
-        <DialogContent className="sm:max-w-[620px]">
+        <DialogContent className="sm:max-w-[640px] max-h-[85vh] overflow-y-auto overflow-x-visible p-6 pb-28">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-rose-600">
               <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-600">

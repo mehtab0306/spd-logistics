@@ -23,11 +23,11 @@ export function FormSectionCard({
   return (
     <div
       className={cn(
-        "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden transition-all",
+        "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-visible transition-all",
         className
       )}
     >
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 flex items-center justify-between gap-4">
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 rounded-t-2xl flex items-center justify-between gap-4">
         <div className="flex items-center gap-2.5 min-w-0">
           {Icon && (
             <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-spd-red shadow-2xs shrink-0">
@@ -51,7 +51,9 @@ export function FormSectionCard({
           </span>
         )}
       </div>
-      <div className={cn("p-5 sm:p-6", bodyClassName)}>{children}</div>
+      <div className={cn("p-5 sm:p-6 overflow-visible", bodyClassName)}>{children}</div>
     </div>
   );
 }
+
+export default FormSectionCard;

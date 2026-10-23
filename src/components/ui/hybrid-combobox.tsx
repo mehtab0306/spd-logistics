@@ -87,7 +87,10 @@ export function HybridCombobox({
   };
 
   return (
-    <div ref={containerRef} className={cn("relative w-full", className)}>
+    <div
+      ref={containerRef}
+      className={cn("relative w-full", isOpen ? "z-[9999]" : "z-10", className)}
+    >
       <div className="relative flex items-center">
         <Input
           id={id}
@@ -126,7 +129,7 @@ export function HybridCombobox({
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-h-56 overflow-y-auto overflow-x-hidden text-xs py-1 animate-in fade-in-0 zoom-in-95">
+        <div className="absolute z-[9999] left-0 right-0 top-full w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto overflow-x-hidden text-xs py-1 animate-in fade-in-0 zoom-in-95">
           {filteredOptions.length > 0 ? (
             filteredOptions.map((opt, idx) => {
               const isSelected =
@@ -144,10 +147,10 @@ export function HybridCombobox({
                     isSelected && "bg-spd-blue/10 text-spd-blue font-bold"
                   )}
                 >
-                  <div className="flex flex-col min-w-0 pr-2">
-                    <span className="truncate">{opt.label}</span>
+                  <div className="flex flex-col min-w-0 pr-2 break-words whitespace-normal">
+                    <span className="break-words font-medium">{opt.label}</span>
                     {opt.subLabel && (
-                      <span className="text-[10px] text-muted-foreground truncate">
+                      <span className="text-[10px] text-muted-foreground break-words">
                         {opt.subLabel}
                       </span>
                     )}
@@ -168,3 +171,5 @@ export function HybridCombobox({
     </div>
   );
 }
+
+export default HybridCombobox;

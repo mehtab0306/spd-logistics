@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Download, CheckCircle, Smartphone, X, Share2, MoreVertical, Sparkles } from "lucide-react";
+import { Download, CheckCircle, Smartphone, X, Share2, MoreVertical, Sparkles, PlusSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -47,7 +47,7 @@ export function PwaInstallButton({ className = "" }: { className?: string }) {
       e.preventDefault();
       (window as any).__spd_deferredPrompt = e;
       setDeferredPrompt(e);
-      console.log("[SPD PWA] beforeinstallprompt captured.");
+      console.log("[SPD PWA] Native beforeinstallprompt captured.");
     };
 
     const handleCustomReady = () => {
@@ -62,8 +62,13 @@ export function PwaInstallButton({ className = "" }: { className?: string }) {
       if (typeof window !== "undefined") {
         (window as any).__spd_deferredPrompt = null;
       }
-      toast.success("SPD Logistics App successfully installed on your Home Screen!");
+      toast.success("SPD Logistics App successfully installed on your device!");
     };
+
+    // Check if prompt was already captured on initial script run
+    if (typeof window !== "undefined" && (window as any).__spd_deferredPrompt) {
+      setDeferredPrompt((window as any).__spd_deferredPrompt);
+    }
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
     window.addEventListener("spd-pwa-ready", handleCustomReady);
@@ -77,6 +82,11 @@ export function PwaInstallButton({ className = "" }: { className?: string }) {
   }, []);
 
   const handleInstallClick = async () => {
+    if (isInstalled) {
+      toast.info("SPD Logistics is already installed on your device.");
+      return;
+    }
+
     const promptEvent =
       deferredPrompt ||
       (typeof window !== "undefined" ? (window as any).__spd_deferredPrompt : null);
@@ -98,7 +108,6 @@ export function PwaInstallButton({ className = "" }: { className?: string }) {
         setShowGuideModal(true);
       }
     } else {
-      // If event has not fired yet or on mobile iOS/Chrome browser, show user-friendly installation guide
       setShowGuideModal(true);
     }
   };
@@ -122,7 +131,7 @@ export function PwaInstallButton({ className = "" }: { className?: string }) {
         variant="outline"
         size="sm"
         className={`relative group font-extrabold text-xs gap-2 px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:border-spd-red hover:text-spd-red dark:hover:text-spd-red shadow-xs transition-all duration-300 hover:shadow-md hover:scale-105 active:scale-95 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs ${className}`}
-        title="Download SPD Logistics App"
+        title="Download & Install SPD Logistics App"
       >
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-spd-red opacity-75"></span>
@@ -132,9 +141,9 @@ export function PwaInstallButton({ className = "" }: { className?: string }) {
         <span className="tracking-tight">Download App</span>
       </Button>
 
-      {/* Clean PWA Install Guidance Popup Modal */}
+      {/* Clean PWA Install Guidance Modal */}
       {showGuideModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-800 relative space-y-4">
             <button
               onClick={() => setShowGuideModal(false)}
@@ -145,55 +154,53 @@ export function PwaInstallButton({ className = "" }: { className?: string }) {
             </button>
 
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-spd-blue flex items-center justify-center shrink-0 border border-blue-200/50 dark:border-blue-800/40">
+              <div className="w-11 h-11 rounded-2xl bg-red-50 dark:bg-red-950/60 text-spd-red flex items-center justify-center shrink-0 border border-red-200/50 dark:border-red-800/40">
                 <Smartphone className="w-5 h-5" />
               </div>
               <div>
                 <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-                  Install SPD Logistics App
+                  Install SPD Logistics
                   <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400">1-Click Home Screen App</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Add to your Home Screen</p>
               </div>
             </div>
 
             <div className="space-y-3 pt-1">
-              {/* Android (Chrome) Instruction */}
-              <div className={`p-3.5 rounded-2xl border transition-all ${
-                !isIosDevice
-                  ? "bg-blue-50/70 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/60"
-                  : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/60"
-              }`}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <MoreVertical className="w-4 h-4 text-spd-blue" />
-                  <span className="font-bold text-xs text-slate-900 dark:text-slate-100">Android (Chrome)</span>
+              {isIosDevice ? (
+                /* iOS (Safari) Instruction */
+                <div className="p-3.5 rounded-2xl border bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/60 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-spd-blue" />
+                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100">iPhone / iPad (Safari)</span>
+                  </div>
+                  <ol className="text-xs text-slate-600 dark:text-slate-300 space-y-1.5 list-decimal list-inside font-medium leading-relaxed">
+                    <li>Tap the <strong>Share</strong> button at the bottom of Safari.</li>
+                    <li>Scroll down and tap <strong>&ldquo;Add to Home Screen&rdquo;</strong>.</li>
+                    <li>Tap <strong>&ldquo;Add&rdquo;</strong> in the top-right corner.</li>
+                  </ol>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                  Browser menu (3 dots) par click karein aur <strong>&ldquo;Install App&rdquo;</strong> ya <strong>&ldquo;Add to Home screen&rdquo;</strong> dabayein.
-                </p>
-              </div>
-
-              {/* iPhone (Safari) Instruction */}
-              <div className={`p-3.5 rounded-2xl border transition-all ${
-                isIosDevice
-                  ? "bg-blue-50/70 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/60"
-                  : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/60"
-              }`}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Share2 className="w-4 h-4 text-spd-blue" />
-                  <span className="font-bold text-xs text-slate-900 dark:text-slate-100">iPhone (Safari)</span>
+              ) : (
+                /* Android / Chrome / Desktop Instruction */
+                <div className="p-3.5 rounded-2xl border bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/60 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MoreVertical className="w-4 h-4 text-spd-blue" />
+                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100">Android / Chrome / Edge</span>
+                  </div>
+                  <ol className="text-xs text-slate-600 dark:text-slate-300 space-y-1.5 list-decimal list-inside font-medium leading-relaxed">
+                    <li>Open your browser menu (<strong>3 dots</strong> in top right).</li>
+                    <li>Select <strong>&ldquo;Install SPD Logistics&rdquo;</strong> or <strong>&ldquo;Add to Home Screen&rdquo;</strong>.</li>
+                    <li>Confirm installation to add the app icon to your device.</li>
+                  </ol>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                  Share button dabayein aur <strong>&ldquo;Add to Home Screen&rdquo;</strong> select karein.
-                </p>
-              </div>
+              )}
             </div>
 
             <Button
               onClick={() => setShowGuideModal(false)}
-              className="w-full bg-spd-blue hover:bg-spd-blueHover text-white rounded-xl text-xs font-bold py-2.5 mt-2 shadow-sm"
+              className="w-full bg-spd-red hover:bg-red-700 text-white rounded-xl text-xs font-bold py-2.5 mt-2 shadow-sm"
             >
-              Samajh Gaya (Close)
+              Close
             </Button>
           </div>
         </div>

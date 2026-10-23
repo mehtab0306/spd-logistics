@@ -1997,7 +1997,7 @@ export default function NewBiltyPage() {
 
       {/* INLINE QUICK ADD CUSTOMER MODAL */}
       <Dialog open={quickCustomerModalOpen} onOpenChange={setQuickCustomerModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto overflow-x-visible rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pb-24">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-red-700" />

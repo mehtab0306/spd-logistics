@@ -1376,8 +1376,8 @@ export default function BiltyPage() {
           </div>
 
           {/* DESKTOP TABLE VIEW (>= 768px) */}
-          <div className="hidden md:block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto scrollbar-thin">
+          <div className="hidden md:block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <div className="overflow-x-auto overflow-y-visible scrollbar-thin">
               <Table className="min-w-[1100px]">
                 <TableHeader className="bg-slate-50/70 dark:bg-slate-800/50">
                   <TableRow>
@@ -1627,7 +1627,7 @@ export default function BiltyPage() {
 
       {/* MODAL 3: UPDATE SHIPMENT STATUS */}
       <Dialog open={!!statusModalBilty} onOpenChange={() => setStatusModalBilty(null)}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto overflow-x-visible rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pb-16">
           <DialogHeader>
             <DialogTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
               <Truck className="w-5 h-5 text-spd-blue" />
@@ -1728,7 +1728,7 @@ export default function BiltyPage() {
 
       {/* MODAL 4: VIEW SHIPMENT DETAILS & CONTACTS (DRIVER & CUSTOMER) */}
       <Dialog open={!!viewDetailsBilty} onOpenChange={() => setViewDetailsBilty(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-visible rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pb-16">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">

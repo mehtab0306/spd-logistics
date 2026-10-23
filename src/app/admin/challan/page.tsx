@@ -546,7 +546,7 @@ export default function ChallanPage() {
         {/* LEFT COLUMN: SELECT WAREHOUSE BILTIES (7 Columns on Large)     */}
         {/* ============================================================== */}
         <div className="lg:col-span-7 space-y-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
             {/* Header / Filter Toolbar */}
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-3">
               <div className="flex items-center justify-between">

@@ -67,7 +67,10 @@ export function SearchableSelect({
   });
 
   return (
-    <div ref={containerRef} className={cn("relative w-full", className)}>
+    <div
+      ref={containerRef}
+      className={cn("relative w-full", open ? "z-[9999]" : "z-10", className)}
+    >
       <div
         role="button"
         tabIndex={disabled ? -1 : 0}
@@ -114,7 +117,7 @@ export function SearchableSelect({
       </div>
 
       {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100">
+        <div className="absolute z-[9999] left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100">
           <div className="p-2 border-b border-slate-100 dark:border-slate-800">
             <div className="relative flex items-center">
               <Search className="w-3.5 h-3.5 absolute left-2.5 text-slate-400 pointer-events-none" />
@@ -123,12 +126,13 @@ export function SearchableSelect({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search..."
                 className="w-full h-8 pl-8 pr-3 text-xs bg-slate-50 dark:bg-slate-800/80 rounded-lg border-0 outline-hidden text-slate-900 dark:text-white"
               />
             </div>
           </div>
 
-          <div className="max-h-56 overflow-y-auto p-1 scrollbar-hide">
+          <div className="max-h-60 overflow-y-auto p-1 scrollbar-hide">
             {filtered.length === 0 ? (
               <div className="p-4 text-center text-xs text-slate-400">
                 {emptyMessage}
@@ -150,10 +154,10 @@ export function SearchableSelect({
                         : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
                     )}
                   >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{opt.label}</p>
+                    <div className="min-w-0 break-words whitespace-normal">
+                      <p className="font-medium break-words">{opt.label}</p>
                       {opt.subLabel && (
-                        <p className="text-[10px] text-slate-400 truncate">
+                        <p className="text-[10px] text-slate-400 break-words">
                           {opt.subLabel}
                         </p>
                       )}
@@ -169,3 +173,5 @@ export function SearchableSelect({
     </div>
   );
 }
+
+export default SearchableSelect;
