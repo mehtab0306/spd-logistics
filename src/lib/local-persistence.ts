@@ -46,10 +46,72 @@ function unwrapRecord(item: any, entityKey?: "customer" | "driver" | "vehicle" |
   return item;
 }
 
+/**
+ * Fallback cookie / sessionStorage cache persistence helper
+ * Ensures browser cache purges or multi-tab reloads do not drop records.
+ */
+export function setCookieCache(name: string, value: string, days: number = 7): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(name, value);
+    }
+    // Also store in document.cookie if within safe size limits (< 3800 bytes)
+    if (value.length < 3800 && typeof document !== "undefined") {
+      const expires = new Date(Date.now() + days * 864e5).toUTCString();
+      document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+    }
+  } catch (err) {
+    // Graceful fallback
+  }
+}
+
+export function getCookieCache(name: string): any[] {
+  if (typeof window === "undefined") return [];
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      const sessionRaw = sessionStorage.getItem(name);
+      if (sessionRaw) {
+        const parsed = JSON.parse(sessionRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    }
+    if (typeof document !== "undefined") {
+      const match = document.cookie.match(new RegExp(`(^|;\\s*)(${name})=([^;]*)`));
+      if (match && match[3]) {
+        const decoded = decodeURIComponent(match[3]);
+        const parsed = JSON.parse(decoded);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+  return [];
+}
+
 function readMergedStorage(primaryKey: string, secondaryKey: string, entityKey?: "customer" | "driver" | "vehicle" | "consignment" | "challan"): any[] {
   if (typeof window === "undefined") return [];
-  const primary = safeParseArray(localStorage.getItem(primaryKey));
-  const secondary = safeParseArray(localStorage.getItem(secondaryKey));
+  let primary = safeParseArray(localStorage.getItem(primaryKey));
+  let secondary = safeParseArray(localStorage.getItem(secondaryKey));
+
+  // Fallback to sessionStorage and cookie cache if localStorage is momentarily empty or unhydrated
+  if (primary.length === 0 && secondary.length === 0) {
+    if (typeof sessionStorage !== "undefined") {
+      primary = safeParseArray(sessionStorage.getItem(primaryKey));
+      secondary = safeParseArray(sessionStorage.getItem(secondaryKey));
+    }
+    if (primary.length === 0 && secondary.length === 0) {
+      primary = getCookieCache(`${primaryKey}_cache`);
+    }
+    // Self-heal localStorage from fallback cache
+    if (primary.length > 0) {
+      try {
+        const serialized = JSON.stringify(primary);
+        localStorage.setItem(primaryKey, serialized);
+        localStorage.setItem(secondaryKey, serialized);
+      } catch {}
+    }
+  }
+
   const seen = new Map<string, any>();
 
   for (const rawItem of [...primary, ...secondary]) {
@@ -80,6 +142,13 @@ function writeDualStorage(primaryKey: string, secondaryKey: string, list: any[])
     const serialized = JSON.stringify(list);
     localStorage.setItem(primaryKey, serialized);
     localStorage.setItem(secondaryKey, serialized);
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(primaryKey, serialized);
+      sessionStorage.setItem(secondaryKey, serialized);
+    }
+    if (primaryKey === "spd_bilties" || primaryKey === "spd_challans") {
+      setCookieCache(`${primaryKey}_cache`, serialized);
+    }
   } catch (err) {
     console.warn(`Failed writing to localStorage (${primaryKey}):`, err);
   }

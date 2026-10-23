@@ -61,6 +61,7 @@ import {
   getStoredVehicles,
   getDeletedVehicleIds,
   mergeLocalWithApi,
+  setCookieCache,
 } from "@/lib/local-persistence";
 import {
   buildWhatsAppUrl,
@@ -78,6 +79,7 @@ export default function BiltyPage() {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -374,6 +376,54 @@ export default function BiltyPage() {
       setDeleteLoading(false);
     }
   };
+
+  // 1. Load data strictly once when client mounts
+  useEffect(() => {
+    try {
+      const raw =
+        localStorage.getItem("spd_bilties") ||
+        localStorage.getItem("spd_local_bilties") ||
+        sessionStorage.getItem("spd_bilties");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const clean = parsed.filter(
+            (b: any) =>
+              b &&
+              (b.id || b.biltyNumber) &&
+              !String(b.id || "").startsWith("cust-") &&
+              !String(b.biltyNumber || "").startsWith("cust-") &&
+              !String(b.id || "").startsWith("c-") &&
+              !String(b.id || "").startsWith("bilty-demo-")
+          );
+          if (clean.length > 0) {
+            setConsignments(clean);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error loading bilties on mount:", err);
+    } finally {
+      setIsLoaded(true); // Mark client ready
+    }
+  }, []);
+
+  // 2. Only write back to localStorage AFTER initial load has completed
+  useEffect(() => {
+    if (!isLoaded) return; // CRITICAL: NEVER overwrite storage before initial load completes!
+    if (consignments.length > 0) {
+      try {
+        const serialized = JSON.stringify(consignments);
+        localStorage.setItem("spd_bilties", serialized);
+        localStorage.setItem("spd_local_bilties", serialized);
+        localStorage.setItem("bilties", serialized);
+        sessionStorage.setItem("spd_bilties", serialized);
+        setCookieCache("spd_bilties_cache", serialized);
+      } catch (err) {
+        console.warn("Sync bilties to storage error:", err);
+      }
+    }
+  }, [consignments, isLoaded]);
 
   useEffect(() => {
     fetchConsignments();
@@ -1097,7 +1147,7 @@ export default function BiltyPage() {
       </div>
 
       {/* Bilties Content */}
-      {loading ? (
+      {!isLoaded || loading ? (
         <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
           <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
           <p className="text-xs text-slate-400 font-semibold">Loading consignments...</p>

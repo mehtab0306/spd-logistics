@@ -38,7 +38,9 @@ import {
   getDeletedDriverIds,
   getStoredBrokers,
   saveStoredChallan,
+  getStoredChallans,
   mergeLocalWithApi,
+  setCookieCache,
 } from "@/lib/local-persistence";
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { exportToExcel } from "@/lib/export-excel";
@@ -48,6 +50,7 @@ export default function ChallanPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -91,6 +94,36 @@ export default function ChallanPage() {
     advancePaidToDriver: "",
     notes: "",
   });
+
+  // Load available warehouse bilties directly on client mount
+  useEffect(() => {
+    try {
+      const raw =
+        localStorage.getItem("spd_bilties") ||
+        localStorage.getItem("spd_local_bilties") ||
+        sessionStorage.getItem("spd_bilties");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const unassigned = parsed.filter(
+            (b: any) =>
+              b &&
+              !b.challanId &&
+              b.shipmentStatus !== "DELIVERED" &&
+              b.shipmentStatus !== "DELETED" &&
+              !String(b.id || "").startsWith("cust-")
+          );
+          if (unassigned.length > 0) {
+            setAvailableBilties(unassigned);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error loading warehouse bilties on mount:", err);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -374,7 +407,11 @@ export default function ChallanPage() {
       };
 
       // 1. Save Challan immediately to localStorage (spd_challans & spd_local_challans)
-      saveStoredChallan(newChallanRecord);
+      const allSavedChallans = saveStoredChallan(newChallanRecord);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("spd_challans", JSON.stringify(allSavedChallans));
+        setCookieCache("spd_challans_cache", JSON.stringify(allSavedChallans));
+      }
 
       // 2. Update selected bilties in localStorage so they show as IN_TRANSIT and linked to this Challan
       for (const updatedBilty of updatedConsignments) {
@@ -584,7 +621,16 @@ export default function ChallanPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredBilties.length === 0 ? (
+                  {!isLoaded || loading ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-spd-red" />
+                          <span>Loading warehouse consignments...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredBilties.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-slate-400">
                         No consignments waiting in warehouse.

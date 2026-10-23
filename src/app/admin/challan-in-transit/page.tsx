@@ -33,12 +33,14 @@ import {
   getDeletedChallanIds,
   saveStoredBilty,
   mergeLocalWithApi,
+  setCookieCache,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
 import { Trash2 } from "lucide-react";
 
 export default function ChallanInTransitPage() {
   const [challans, setChallans] = useState<any[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   const { highlightClass } = useSmartHighlight(challans);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -49,6 +51,47 @@ export default function ChallanInTransitPage() {
   const [printChallan, setPrintChallan] = useState<any>(null);
   // Batch Challan Print modal
   const [printBatchManifests, setPrintBatchManifests] = useState(false);
+
+  // 1. Load data strictly once when client mounts
+  useEffect(() => {
+    try {
+      const raw =
+        localStorage.getItem("spd_challans") ||
+        localStorage.getItem("spd_local_challans") ||
+        sessionStorage.getItem("spd_challans");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const active = parsed.filter(
+            (c: any) => c && (c.status === "IN_TRANSIT" || c.status === "DISPATCHED")
+          );
+          if (active.length > 0) {
+            setChallans(active);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error loading challans on mount:", err);
+    } finally {
+      setIsLoaded(true); // Mark client ready
+    }
+  }, []);
+
+  // 2. Only write back to localStorage AFTER initial load has completed
+  useEffect(() => {
+    if (!isLoaded) return; // CRITICAL: NEVER overwrite storage before initial load completes!
+    if (challans.length > 0) {
+      try {
+        const serialized = JSON.stringify(challans);
+        localStorage.setItem("spd_challans", serialized);
+        localStorage.setItem("spd_local_challans", serialized);
+        sessionStorage.setItem("spd_challans", serialized);
+        setCookieCache("spd_challans_cache", serialized);
+      } catch (err) {
+        console.warn("Sync challans to storage error:", err);
+      }
+    }
+  }, [challans, isLoaded]);
 
   useEffect(() => {
     fetchChallans();
@@ -296,7 +339,7 @@ export default function ChallanInTransitPage() {
       </div>
 
       {/* Trips Grid - Hidden in Print when Printing Single or Batch Manifest */}
-      {loading ? (
+      {!isLoaded || loading ? (
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 print:hidden">
           <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
           <p className="text-xs font-semibold text-slate-500">Loading trips in transit...</p>
