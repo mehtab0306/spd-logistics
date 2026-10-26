@@ -58,6 +58,7 @@ import {
 import { exportToExcel } from "@/lib/export-excel";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
 import { MonthlyBillStatementModal } from "@/components/customers/monthly-bill-statement-modal";
+import { supabase } from "@/lib/supabase";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -190,6 +191,27 @@ export default function CustomersPage() {
       if (warehouseFilter) params.append("warehouse", warehouseFilter);
       if (statusFilter) params.append("status", statusFilter);
 
+      let supabaseCustomers: any[] = [];
+      try {
+        const { data, error } = await supabase
+          .from("customers")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!error && Array.isArray(data) && data.length > 0) {
+          supabaseCustomers = data.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            companyName: r.name,
+            phone: r.phone,
+            city: r.city,
+            createdAt: r.created_at,
+            ...r,
+          }));
+        }
+      } catch (sbErr) {
+        console.warn("Supabase fetch customers warning:", sbErr);
+      }
+
       let apiList: any[] = [];
       try {
         const res = await fetch(`/api/admin/customers?${params.toString()}`);
@@ -201,10 +223,13 @@ export default function CustomersPage() {
         console.warn("API customer fetch error:", err);
       }
 
-      // Merge local customers (kept at top) with API seed customers
+      // Merge local customers + Supabase customers (kept at top) with API seed customers
       const localList = getStoredCustomers();
+      const combinedActive = supabaseCustomers.length > 0
+        ? mergeLocalWithApi(supabaseCustomers, localList, getDeletedCustomerIds())
+        : localList;
       const deletedIds = getDeletedCustomerIds();
-      let list = mergeLocalWithApi(localList, apiList, deletedIds);
+      let list = mergeLocalWithApi(combinedActive, apiList, deletedIds);
 
       // Strict deduplication safeguard across merged list
       const dedupedList: any[] = [];
@@ -552,6 +577,13 @@ export default function CustomersPage() {
 
       if (viewCustomer?.id === deleteCustomer.id) {
         setViewCustomer(null);
+      }
+
+      // Supabase cloud deletion
+      try {
+        await supabase.from("customers").delete().eq("id", deleteCustomer.id);
+      } catch (sbErr) {
+        console.warn("Supabase delete customer warning:", sbErr);
       }
 
       // Background API delete

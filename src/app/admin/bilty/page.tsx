@@ -70,6 +70,7 @@ import {
 } from "@/lib/whatsapp";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
+import { supabase } from "@/lib/supabase";
 
 export default function BiltyPage() {
   const router = useRouter();
@@ -256,6 +257,39 @@ export default function BiltyPage() {
       if (warehouseFilter) params.append("warehouse", warehouseFilter);
       if (statusFilter) params.append("status", statusFilter);
 
+      let supabaseBilties: any[] = [];
+      try {
+        const { data, error } = await supabase
+          .from("bilties")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!error && Array.isArray(data) && data.length > 0) {
+          supabaseBilties = data.map((r: any) => ({
+            id: r.id,
+            biltyNumber: r.bilty_number || r.id,
+            trackingId: r.bilty_number || r.id,
+            bookingDate: r.booking_date || r.created_at,
+            senderName: r.sender_name,
+            senderPhone: r.sender_phone,
+            receiverName: r.receiver_name,
+            receiverPhone: r.receiver_phone,
+            origin: r.origin,
+            destination: r.destination,
+            itemDescription: r.item_description,
+            packagesCount: r.packages_count,
+            weight: r.weight,
+            totalFreight: r.total_freight,
+            totalAmount: r.total_freight,
+            paymentMode: r.payment_mode,
+            shipmentStatus: (r.status || "BOOKED").toUpperCase(),
+            createdAt: r.created_at,
+            ...r,
+          }));
+        }
+      } catch (sbErr) {
+        console.warn("Supabase fetch bilties warning:", sbErr);
+      }
+
       let apiItems: any[] = [];
       try {
         const res = await fetch(`/api/admin/bilty?${params.toString()}`);
@@ -269,10 +303,13 @@ export default function BiltyPage() {
         apiItems = [...DEFAULT_CLIENT_CONSIGNMENTS];
       }
 
-      // Merge locally stored bilties (kept at top) with API seed bilties
+      // Merge Supabase bilties + locally stored bilties (kept at top) with API seed bilties
       const localBilties = getLocalBilties();
+      const combinedActive = supabaseBilties.length > 0
+        ? mergeLocalWithApi(supabaseBilties, localBilties, getDeletedBiltyIds(), "biltyNumber")
+        : localBilties;
       const deletedIds = getDeletedBiltyIds();
-      let items = mergeLocalWithApi(localBilties, apiItems, deletedIds, "biltyNumber").filter(
+      let items = mergeLocalWithApi(combinedActive, apiItems, deletedIds, "biltyNumber").filter(
         (b) =>
           b &&
           b.shipmentStatus !== "DELETED" &&
@@ -358,6 +395,13 @@ export default function BiltyPage() {
       // Remove locally immediately & move to Recycle Bin
       removeLocalBilty(deletingBilty.id, deletingBilty);
       setConsignments((prev) => prev.filter((b) => b.id !== deletingBilty.id));
+
+      // Supabase cloud deletion
+      try {
+        await supabase.from("bilties").delete().eq("id", deletingBilty.id);
+      } catch (sbErr) {
+        console.warn("Supabase bilty delete warning:", sbErr);
+      }
 
       // Background API call
       fetch(`/api/admin/bilty?id=${encodeURIComponent(deletingBilty.id)}`, {
@@ -883,6 +927,31 @@ export default function BiltyPage() {
       }
       saveStoredBilty(createdBilty);
       setConsignments(updated);
+
+      // Supabase cloud database insertion
+      try {
+        await supabase.from("bilties").upsert([
+          {
+            id: String(createdBilty.id),
+            bilty_number: finalBiltyNumber,
+            booking_date: createdBilty.bookingDate,
+            sender_name: createdBilty.senderName,
+            sender_phone: createdBilty.senderPhone,
+            receiver_name: createdBilty.receiverName,
+            receiver_phone: createdBilty.receiverPhone,
+            origin: createdBilty.origin,
+            destination: createdBilty.destination,
+            item_description: createdBilty.itemDescription,
+            packages_count: Number(createdBilty.packagesCount) || 1,
+            weight: Number(createdBilty.weight) || 0,
+            total_freight: Number(createdBilty.totalFreight) || 0,
+            payment_mode: createdBilty.paymentMode || "TO-PAY",
+            status: createdBilty.shipmentStatus || "Booked",
+          },
+        ]);
+      } catch (sbErr) {
+        console.warn("Supabase bilty upsert warning:", sbErr);
+      }
 
       // Background API attempt
       fetch("/api/admin/bilty", {

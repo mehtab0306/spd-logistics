@@ -58,6 +58,7 @@ import {
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
+import { supabase } from "@/lib/supabase";
 
 export interface BiltyCargoItem {
   detail: string;
@@ -315,6 +316,20 @@ export default function NewBiltyPage() {
 
       saveStoredCustomer(newCust);
       setCustomers((prev) => [newCust, ...prev]);
+
+      // Supabase cloud customer upsert
+      try {
+        await supabase.from("customers").upsert([
+          {
+            id: newCust.id,
+            name: newCust.name,
+            phone: newCust.phone,
+            city: newCust.city,
+          },
+        ]);
+      } catch (sbErr) {
+        console.warn("Supabase customer upsert warning:", sbErr);
+      }
 
       if (quickCustomerTarget === "sender") {
         setFormData((prev) => ({
@@ -779,6 +794,31 @@ export default function NewBiltyPage() {
 
       // 1. Immediately persist to localStorage using Section 2 deduplication logic
       saveStoredBilty(newBiltyRecord);
+
+      // 1b. Upsert into Supabase cloud database
+      try {
+        await supabase.from("bilties").upsert([
+          {
+            id: String(newBiltyRecord.id),
+            bilty_number: finalBiltyNumber,
+            booking_date: newBiltyRecord.bookingDate,
+            sender_name: newBiltyRecord.senderName,
+            sender_phone: newBiltyRecord.senderPhone,
+            receiver_name: newBiltyRecord.receiverName,
+            receiver_phone: newBiltyRecord.receiverPhone,
+            origin: newBiltyRecord.origin,
+            destination: newBiltyRecord.destination,
+            item_description: newBiltyRecord.itemDescription,
+            packages_count: Number(newBiltyRecord.packagesCount) || 1,
+            weight: Number(newBiltyRecord.weight) || 0,
+            total_freight: Number(newBiltyRecord.totalFreight) || 0,
+            payment_mode: newBiltyRecord.paymentMode || "TO-PAY",
+            status: newBiltyRecord.shipmentStatus || "Booked",
+          },
+        ]);
+      } catch (sbErr) {
+        console.warn("Supabase bilty upsert warning:", sbErr);
+      }
 
       // 2. Cache in sessionStorage and localStorage for instant 0ms retrieval on detail page
       if (typeof window !== "undefined") {

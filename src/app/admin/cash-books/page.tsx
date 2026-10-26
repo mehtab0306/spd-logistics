@@ -53,6 +53,7 @@ import { exportToExcel } from "@/lib/export-excel";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
 import { VoucherImageAttachment } from "@/components/shared/voucher-image-attachment";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
+import { supabase } from "@/lib/supabase";
 
 interface CashBookItem {
   id: string;
@@ -320,11 +321,45 @@ function CashBooksContent() {
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
 
+      // 1. Check Supabase cloud database
+      let supabaseTxs: any[] = [];
+      try {
+        const { data: sbData, error: sbErr } = await supabase
+          .from("cash_books")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!sbErr && Array.isArray(sbData) && sbData.length > 0) {
+          supabaseTxs = sbData.map((t: any) => ({
+            id: t.id,
+            date: t.date || t.created_at,
+            voucherNumber: t.id.slice(0, 8),
+            description: t.description || "",
+            type: t.type === "IN" ? "IN" : "OUT",
+            amount: Number(t.amount) || 0,
+            credit: t.type === "IN" ? Number(t.amount) || 0 : 0,
+            debit: t.type === "OUT" ? Number(t.amount) || 0 : 0,
+            category: t.description || (t.type === "IN" ? "Cash In" : "Cash Out"),
+            paymentMethod: "CASH",
+            createdAt: t.created_at,
+          }));
+        }
+      } catch (e) {
+        console.warn("Supabase transactions fetch warning:", e);
+      }
+
       const res = await fetch(`/api/admin/cash-books?${params.toString()}`);
       const data = await res.json();
       if (data.success && data.data) {
-        setTransactions(data.data.transactions || []);
-        // Update selectedBook balances directly from server calculation
+        const apiTxs = data.data.transactions || [];
+        const mergedMap = new Map<string, any>();
+        supabaseTxs.forEach((t) => mergedMap.set(t.id, t));
+        apiTxs.forEach((t: any) => mergedMap.set(t.id, t));
+        const finalTxs = Array.from(mergedMap.values()).sort(
+          (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
+        );
+
+        setTransactions(finalTxs);
+        // Update selectedBook balances directly
         setSelectedBook((prev) => {
           if (!prev) return null;
           return {
@@ -332,9 +367,11 @@ function CashBooksContent() {
             totalCredits: data.data.totalCredits ?? prev.totalCredits,
             totalDebits: data.data.totalDebits ?? prev.totalDebits,
             currentBalance: data.data.currentBalance ?? prev.currentBalance,
-            transactionCount: data.data.transactionCount ?? prev.transactionCount,
+            transactionCount: finalTxs.length,
           };
         });
+      } else if (supabaseTxs.length > 0) {
+        setTransactions(supabaseTxs);
       }
     } catch (err) {
       console.error("Error fetching transactions:", err);
@@ -471,6 +508,21 @@ function CashBooksContent() {
         body: JSON.stringify(payload),
       });
 
+      // Supabase cloud insertion
+      try {
+        await supabase.from("cash_books").upsert([
+          {
+            id: `cb-in-${Date.now()}`,
+            date: txFormData.date,
+            description: payload.description || payload.category,
+            type: "IN",
+            amount: amountVal,
+          },
+        ]);
+      } catch (sbErr) {
+        console.warn("Supabase record Cash IN warning:", sbErr);
+      }
+
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to record Cash IN");
@@ -531,6 +583,21 @@ function CashBooksContent() {
         body: JSON.stringify(payload),
       });
 
+      // Supabase cloud insertion
+      try {
+        await supabase.from("cash_books").upsert([
+          {
+            id: `cb-out-${Date.now()}`,
+            date: txFormData.date,
+            description: payload.description || payload.category,
+            type: "OUT",
+            amount: amountVal,
+          },
+        ]);
+      } catch (sbErr) {
+        console.warn("Supabase record Cash OUT warning:", sbErr);
+      }
+
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to record Cash OUT");
@@ -589,7 +656,14 @@ function CashBooksContent() {
         return next;
       });
 
-      // 3. Delete from backend API
+      // 3. Supabase cloud deletion
+      try {
+        await supabase.from("cash_books").delete().eq("id", targetTxId);
+      } catch (sbErr) {
+        console.warn("Supabase delete transaction warning:", sbErr);
+      }
+
+      // 4. Delete from backend API
       const res = await fetch(`/api/admin/cash-books?txId=${targetTxId}&cashBookId=${selectedBook.id}`, {
         method: "DELETE",
       });

@@ -37,6 +37,7 @@ import {
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
 import { Trash2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export default function ChallanInTransitPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -100,6 +101,31 @@ export default function ChallanInTransitPage() {
   const fetchChallans = async () => {
     try {
       setLoading(true);
+
+      let supabaseChallans: any[] = [];
+      try {
+        const { data, error } = await supabase
+          .from("challans")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!error && Array.isArray(data) && data.length > 0) {
+          supabaseChallans = data.map((r: any) => ({
+            id: r.id,
+            challanNumber: r.challan_number || r.id,
+            truckNumber: r.vehicle_number,
+            driverName: r.driver_name,
+            origin: r.origin,
+            destination: r.destination,
+            status: "IN_TRANSIT",
+            dispatchDate: r.created_at,
+            createdAt: r.created_at,
+            ...r,
+          }));
+        }
+      } catch (sbErr) {
+        console.warn("Supabase fetch challans warning:", sbErr);
+      }
+
       let apiChallans: any[] = [];
       try {
         const res = await fetch("/api/admin/challan");
@@ -111,8 +137,13 @@ export default function ChallanInTransitPage() {
           : [];
       } catch {}
 
+      const localChallans = getStoredChallans();
+      const combinedActive = supabaseChallans.length > 0
+        ? mergeLocalWithApi(supabaseChallans, localChallans, getDeletedChallanIds(), "challanNumber")
+        : localChallans;
+
       const merged = mergeLocalWithApi(
-        getStoredChallans(),
+        combinedActive,
         apiChallans,
         getDeletedChallanIds(),
         "challanNumber"
@@ -178,12 +209,20 @@ export default function ChallanInTransitPage() {
     }
   };
 
-  const handleDeleteTrip = (c: any) => {
+  const handleDeleteTrip = async (c: any) => {
     if (typeof window !== "undefined" && !window.confirm(`Are you sure you want to move Challan #${c.challanNumber || c.id} to Recycle Bin?`)) {
       return;
     }
     removeStoredChallan(c.id, c);
     setChallans((prev) => prev.filter((item) => item.id !== c.id));
+
+    // Supabase cloud deletion
+    try {
+      await supabase.from("challans").delete().eq("id", c.id);
+    } catch (sbErr) {
+      console.warn("Supabase challan delete warning:", sbErr);
+    }
+
     setFeedback({
       type: "success",
       text: `Challan #${c.challanNumber || c.id} was moved to Recycle Bin (/admin/trash).`,

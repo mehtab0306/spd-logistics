@@ -45,6 +45,7 @@ import {
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { exportToExcel } from "@/lib/export-excel";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
+import { supabase } from "@/lib/supabase";
 
 export default function ChallanPage() {
   const router = useRouter();
@@ -411,6 +412,23 @@ export default function ChallanPage() {
       if (typeof window !== "undefined") {
         sessionStorage.setItem("spd_challans", JSON.stringify(allSavedChallans));
         setCookieCache("spd_challans_cache", JSON.stringify(allSavedChallans));
+      }
+
+      // 1b. Upsert into Supabase cloud database
+      try {
+        await supabase.from("challans").upsert([
+          {
+            id: String(newChallanRecord.id),
+            challan_number: finalChallanNo,
+            vehicle_number: newChallanRecord.truckNumber || null,
+            driver_name: newChallanRecord.driverName || null,
+            origin: newChallanRecord.origin || null,
+            destination: newChallanRecord.destination || null,
+            status: "In Transit",
+          },
+        ]);
+      } catch (sbErr) {
+        console.warn("Supabase challan upsert warning:", sbErr);
       }
 
       // 2. Update selected bilties in localStorage so they show as IN_TRANSIT and linked to this Challan
