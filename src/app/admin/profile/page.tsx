@@ -63,10 +63,10 @@ const getCurrentUser = () => {
       if (parsed && typeof parsed === "object") {
         return {
           id: parsed.id || "admin_root",
-          fullName: parsed.fullName || parsed.name || "System Admin",
-          name: parsed.name || parsed.fullName || "System Admin",
-          email: parsed.email || "admin@gmail.com",
-          phone: parsed.phone || "0325 2024433",
+          fullName: parsed.fullName || parsed.name || "",
+          name: parsed.name || parsed.fullName || "",
+          email: parsed.email || "",
+          phone: parsed.phone || "",
           role: parsed.role || "SUPER_ADMIN",
           avatar: parsed.avatar || null,
           createdAt: parsed.createdAt || "2026-01-01T00:00:00.000Z",
@@ -82,10 +82,10 @@ const getCurrentUser = () => {
   // Default system admin fallback if session was cleared
   return {
     id: "admin_root",
-    fullName: "System Admin",
-    name: "System Admin",
-    email: "admin@gmail.com",
-    phone: "0325 2024433",
+    fullName: "",
+    name: "",
+    email: "",
+    phone: "",
     role: "SUPER_ADMIN",
     avatar: null,
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -102,10 +102,10 @@ function AdminProfileContent() {
   const [uploading, setUploading] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
 
-  // Form states initialized with safe fallback values
-  const [name, setName] = useState(initialUser.fullName || initialUser.name || "System Admin");
-  const [email, setEmail] = useState(initialUser.email || "admin@gmail.com");
-  const [phone, setPhone] = useState(initialUser.phone || "0325 2024433");
+  // Form states initialized with clean values
+  const [name, setName] = useState(initialUser.fullName || initialUser.name || "");
+  const [email, setEmail] = useState(initialUser.email || "");
+  const [phone, setPhone] = useState(initialUser.phone || "");
   const [avatar, setAvatar] = useState<string | null>(initialUser.avatar || null);
   const [previewAvatar, setPreviewAvatar] = useState<string | null>(initialUser.avatar || null);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
@@ -714,7 +714,7 @@ function AdminProfileContent() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Admin Name"
+                  placeholder="Enter full name"
                   className="rounded-xl h-10 text-xs"
                 />
               </div>
@@ -726,7 +726,7 @@ function AdminProfileContent() {
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="0325 2024433"
+                  placeholder="Enter phone number"
                   className="rounded-xl h-10 text-xs"
                 />
               </div>
@@ -740,7 +740,7 @@ function AdminProfileContent() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@gmail.com"
+                  placeholder="Enter email address"
                   className="rounded-xl h-10 text-xs font-mono"
                 />
               </div>

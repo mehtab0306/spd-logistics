@@ -89,11 +89,22 @@ export function exportToExcel<T = any>(
   const link = document.createElement("a");
   link.setAttribute("href", url);
   link.setAttribute("download", fullFilename);
+  link.setAttribute("target", "_self");
   link.style.display = "none";
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+
+  // Defer cleanup for iOS Safari / WebKit asynchronous download processing
+  setTimeout(() => {
+    try {
+      if (link.parentNode) {
+        document.body.removeChild(link);
+      }
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      // Safe cleanup fallback
+    }
+  }, 1500);
 
   return true;
 }
@@ -623,11 +634,23 @@ export function export4SheetBiltyExcel(bilty: any): boolean {
   const link = document.createElement("a");
   link.setAttribute("href", url);
   link.setAttribute("download", `SPD_4Sheet_Bilty_${(biltyNo || "Record").replace(/[^a-zA-Z0-9_-]/g, "_")}.xls`);
+  link.setAttribute("target", "_self");
   link.style.display = "none";
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+
+  // Defer cleanup for iOS Safari / WebKit asynchronous download processing
+  setTimeout(() => {
+    try {
+      if (link.parentNode) {
+        document.body.removeChild(link);
+      }
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      // Safe cleanup fallback
+    }
+  }, 1500);
+
   return true;
 }
 

@@ -199,10 +199,22 @@ export default function ReportsPage() {
     const link = document.createElement("a");
     link.href = url;
     link.setAttribute("download", `SPD_Executive_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("target", "_self");
+    link.style.display = "none";
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+
+    // Defer cleanup for iOS Safari / WebKit asynchronous download processing
+    setTimeout(() => {
+      try {
+        if (link.parentNode) {
+          document.body.removeChild(link);
+        }
+        window.URL.revokeObjectURL(url);
+      } catch (e) {
+        // Safe cleanup fallback
+      }
+    }, 1500);
   };
 
   return (

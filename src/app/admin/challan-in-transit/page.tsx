@@ -160,7 +160,22 @@ export default function ChallanInTransitPage() {
       const active = merged.filter(
         (c: any) => c.status === "IN_TRANSIT" || c.status === "DISPATCHED"
       );
-      setChallans(active);
+
+      const dedupedActive: any[] = [];
+      const seenChallanIds = new Set<string>();
+      const seenChallanNumbers = new Set<string>();
+      for (const item of active) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        const cNum = String(item.challanNumber || "").trim().toUpperCase();
+        if (seenChallanIds.has(id)) continue;
+        if (cNum && seenChallanNumbers.has(cNum)) continue;
+        seenChallanIds.add(id);
+        if (cNum) seenChallanNumbers.add(cNum);
+        dedupedActive.push(item);
+      }
+
+      setChallans(dedupedActive);
     } catch (err) {
       console.error("Error fetching challans in transit:", err);
       const active = getStoredChallans().filter(
@@ -195,6 +210,20 @@ export default function ChallanInTransitPage() {
       }
 
       setChallans((prev) => prev.filter((c) => String(c.id) !== String(challan.id)));
+
+      // Cloud Supabase sync
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("challans").update({ status: "ARRIVED", arrival_date: arrivalDate }).eq("id", challan.id);
+          if (Array.isArray(challan.consignments)) {
+            for (const b of challan.consignments) {
+              await supabase.from("bilties").update({ status: "ARRIVED_AT_DESTINATION" }).eq("id", b.id);
+            }
+          }
+        } catch (sbErr) {
+          console.warn("Supabase arrival update error:", sbErr);
+        }
+      }
 
       try {
         await fetch("/api/admin/challan", {

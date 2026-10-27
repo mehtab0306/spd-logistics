@@ -387,19 +387,19 @@ export function AiCopilotWidget() {
   return (
     <>
       {/* Floating Trigger Pill (Bottom-Right) */}
-      <div className="fixed bottom-5 right-5 z-50 select-none">
+      <div className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-50 select-none">
         {!isOpen && (
           <button
             onClick={() => setIsOpen(true)}
             aria-label="Open SPD Voice AI Operations Copilot"
-            className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-red-500/30 group"
+            className="flex items-center justify-center sm:justify-start w-12 h-12 sm:w-auto sm:h-auto p-0 sm:px-4 sm:py-3 rounded-full bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-red-500/30 group"
           >
-            <div className="relative">
+            <div className="relative flex items-center justify-center">
               <Bot className="w-5 h-5 text-white" />
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white" />
             </div>
-            <div className="text-left">
+            <div className="hidden sm:block text-left ml-2.5">
               <span className="text-xs font-black tracking-wide block leading-tight flex items-center gap-1">
                 SPD Voice AI Copilot
                 <Mic className="w-3 h-3 text-red-300" />
@@ -408,7 +408,7 @@ export function AiCopilotWidget() {
                 Gemini 1.5 Flash &bull; Urdu / English Voice
               </span>
             </div>
-            <Sparkles className="w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform ml-0.5" />
+            <Sparkles className="hidden sm:block w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform ml-1.5" />
           </button>
         )}
       </div>

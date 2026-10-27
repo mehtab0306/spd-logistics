@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -209,6 +209,48 @@ export default function NewBiltyPage() {
 
   const fetchPrerequisites = async () => {
     try {
+      let supabaseCustomers: any[] = [];
+      let supabaseDrivers: any[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbCust } = await supabase.from("customers").select("*").order("created_at", { ascending: false });
+          if (Array.isArray(sbCust)) {
+            supabaseCustomers = sbCust.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              companyName: c.company_name || c.name,
+              phone: c.phone,
+              email: c.email,
+              address: c.address,
+              city: c.city,
+              ntn: c.ntn,
+              status: c.status || "ACTIVE",
+              ...c,
+            }));
+          }
+        } catch (e) {
+          console.warn("Supabase customer fetch warning:", e);
+        }
+        try {
+          const { data: sbDrv } = await supabase.from("drivers").select("*").order("created_at", { ascending: false });
+          if (Array.isArray(sbDrv)) {
+            supabaseDrivers = sbDrv.map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              phone: d.phone,
+              contact: d.phone,
+              cnic: d.cnic,
+              licenseNumber: d.license_number,
+              vehicleNumber: d.vehicle_number,
+              status: d.status || "AVAILABLE",
+              ...d,
+            }));
+          }
+        } catch (e) {
+          console.warn("Supabase driver fetch warning:", e);
+        }
+      }
+
       const [custRes, drvRes, vehRes] = await Promise.all([
         fetch("/api/admin/customers").catch(() => null),
         fetch("/api/admin/drivers").catch(() => null),
@@ -232,12 +274,58 @@ export default function NewBiltyPage() {
       const drvArr = Array.isArray(drvData.data) ? drvData.data : Array.isArray(drvData.drivers) ? drvData.drivers : [];
       const vehArr = Array.isArray(vehData.data) ? vehData.data : Array.isArray(vehData.vehicles) ? vehData.vehicles : [];
 
-      const mergedCustomers = mergeLocalWithApi(getStoredCustomers(), custArr, getDeletedCustomerIds());
-      const mergedDrivers = mergeLocalWithApi(getStoredDrivers(), drvArr, getDeletedDriverIds());
+      const localCust = getStoredCustomers();
+      const combinedActiveCust = supabaseCustomers.length > 0
+        ? mergeLocalWithApi(supabaseCustomers, localCust, getDeletedCustomerIds())
+        : localCust;
+      const rawCustomers = mergeLocalWithApi(combinedActiveCust, custArr, getDeletedCustomerIds());
+
+      const dedupedCustomers: any[] = [];
+      const seenCustIds = new Set<string>();
+      const seenCustPhones = new Set<string>();
+      const seenCustNames = new Set<string>();
+      for (const item of rawCustomers) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        if (seenCustIds.has(id)) continue;
+        const normPhone = item.phone ? String(item.phone).replace(/[^0-9]/g, "") : "";
+        const normName = item.name ? String(item.name).trim().toLowerCase() : "";
+        if (normPhone.length >= 7 && seenCustPhones.has(normPhone)) continue;
+        if (normName.length > 1 && seenCustNames.has(normName)) continue;
+        seenCustIds.add(id);
+        if (normPhone.length >= 7) seenCustPhones.add(normPhone);
+        if (normName.length > 1) seenCustNames.add(normName);
+        dedupedCustomers.push(item);
+      }
+
+      const localDrv = getStoredDrivers();
+      const combinedActiveDrv = supabaseDrivers.length > 0
+        ? mergeLocalWithApi(supabaseDrivers, localDrv, getDeletedDriverIds())
+        : localDrv;
+      const rawDrivers = mergeLocalWithApi(combinedActiveDrv, drvArr, getDeletedDriverIds());
+
+      const dedupedDrivers: any[] = [];
+      const seenDrvIds = new Set<string>();
+      const seenDrvPhones = new Set<string>();
+      const seenDrvNames = new Set<string>();
+      for (const item of rawDrivers) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        if (seenDrvIds.has(id)) continue;
+        const normPhone = item.phone ? String(item.phone).replace(/[^0-9]/g, "") : "";
+        const normName = item.name ? String(item.name).trim().toLowerCase() : "";
+        if (normPhone.length >= 7 && seenDrvPhones.has(normPhone)) continue;
+        if (normName.length > 1 && seenDrvNames.has(normName)) continue;
+        seenDrvIds.add(id);
+        if (normPhone.length >= 7) seenDrvPhones.add(normPhone);
+        if (normName.length > 1) seenDrvNames.add(normName);
+        dedupedDrivers.push(item);
+      }
+
       const mergedVehicles = mergeLocalWithApi(getStoredVehicles(), vehArr, getDeletedVehicleIds(), "registrationNumber");
 
-      setCustomers(mergedCustomers);
-      setDrivers(mergedDrivers);
+      setCustomers(dedupedCustomers);
+      setDrivers(dedupedDrivers);
       setVehicles(mergedVehicles);
     } catch (err) {
       console.error("Error loading bilty prerequisites:", err);
@@ -879,12 +967,56 @@ export default function NewBiltyPage() {
     await handleSaveAction("save_only");
   };
 
-  const customerOptions = customers.map((c) => ({
-    value: c.id,
-    label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
-    subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
-    meta: c,
-  }));
+  const customerOptions = useMemo(() => {
+    const map = new Map<string, any>();
+    customers.forEach((c) => {
+      if (!c || !c.id) return;
+      const key = String(c.id);
+      if (!map.has(key)) {
+        map.set(key, {
+          value: c.id,
+          label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
+          subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
+          meta: c,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [customers]);
+
+  const senderReceiverOptions = useMemo(() => {
+    const map = new Map<string, any>();
+    customers.forEach((c) => {
+      const name = (c.name || c.companyName || "").trim();
+      const normKey = name.toLowerCase();
+      if (name && !map.has(normKey)) {
+        map.set(normKey, {
+          value: name,
+          label: `${name} (${c.phone || "No phone"})`,
+          subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
+          meta: c,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [customers]);
+
+  const driverSelectOptions = useMemo(() => {
+    const map = new Map<string, any>();
+    drivers.forEach((d) => {
+      const name = (d.name || "").trim();
+      const normKey = (d.id || name).toLowerCase();
+      if (name && !map.has(normKey)) {
+        map.set(normKey, {
+          value: name,
+          label: `${name} (${d.phone || d.contact || "No phone"})`,
+          subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status || "AVAILABLE"}`,
+          meta: d,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [drivers]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-24">
@@ -1191,12 +1323,7 @@ export default function NewBiltyPage() {
                     }));
                   }
                 }}
-                options={customers.map((c) => ({
-                  value: c.name || c.companyName || "",
-                  label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
-                  subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
-                  meta: c,
-                }))}
+                options={senderReceiverOptions}
                 inputClassName="h-10 rounded-xl font-semibold"
               />
             </div>
@@ -1267,12 +1394,7 @@ export default function NewBiltyPage() {
                       }));
                     }
                   }}
-                  options={customers.map((c) => ({
-                    value: c.name || c.companyName || "",
-                    label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
-                    subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
-                    meta: c,
-                  }))}
+                  options={senderReceiverOptions}
                   inputClassName="h-10 rounded-xl font-semibold"
                 />
               </div>
@@ -1985,12 +2107,7 @@ export default function NewBiltyPage() {
                   }));
                 }
               }}
-              options={drivers.map((d) => ({
-                value: d.name || "",
-                label: `${d.name} (${d.phone || d.contact || "No phone"})`,
-                subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status || "AVAILABLE"}`,
-                meta: d,
-              }))}
+              options={driverSelectOptions}
               placeholder=""
               inputClassName="h-10 rounded-xl"
             />

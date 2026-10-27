@@ -1433,14 +1433,11 @@ export default function SettingsPage() {
                     <Input
                       type="password"
                       required
-                      placeholder="••••••••"
+                      placeholder="Enter current password"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       className="rounded-xl h-10 text-xs bg-slate-50 dark:bg-slate-800/60"
                     />
-                    <p className="text-[10px] text-slate-400">
-                      Standard initial system password is <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded font-mono">admin123</code>
-                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -1451,7 +1448,7 @@ export default function SettingsPage() {
                     <Input
                       type="password"
                       required
-                      placeholder="••••••••"
+                      placeholder="Enter new password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       className="rounded-xl h-10 text-xs bg-slate-50 dark:bg-slate-800/60"
@@ -1469,7 +1466,7 @@ export default function SettingsPage() {
                     <Input
                       type="password"
                       required
-                      placeholder="••••••••"
+                      placeholder="Confirm new password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="rounded-xl h-10 text-xs bg-slate-50 dark:bg-slate-800/60"

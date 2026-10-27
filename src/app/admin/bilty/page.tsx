@@ -350,7 +350,24 @@ export default function BiltyPage() {
         items = items.filter((b) => b.shipmentStatus === statusFilter);
       }
 
-      setConsignments(items);
+      // Strict deduplication safeguard across consignments
+      const dedupedItems: any[] = [];
+      const seenBiltyIds = new Set<string>();
+      const seenBiltyNumbers = new Set<string>();
+
+      for (const item of items) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        const bNum = String(item.biltyNumber || "").trim().toUpperCase();
+        if (seenBiltyIds.has(id)) continue;
+        if (bNum && seenBiltyNumbers.has(bNum)) continue;
+
+        seenBiltyIds.add(id);
+        if (bNum) seenBiltyNumbers.add(bNum);
+        dedupedItems.push(item);
+      }
+
+      setConsignments(dedupedItems);
     } catch (err) {
       console.warn("Error fetching consignments, using fallback list:", err);
       const cleanFallback = mergeLocalWithApi(getLocalBilties(), DEFAULT_CLIENT_CONSIGNMENTS, getDeletedBiltyIds(), "biltyNumber").filter(
@@ -373,6 +390,48 @@ export default function BiltyPage() {
 
   const fetchDependencies = async () => {
     try {
+      let supabaseCustomers: any[] = [];
+      let supabaseDrivers: any[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbCust } = await supabase.from("customers").select("*").order("created_at", { ascending: false });
+          if (Array.isArray(sbCust)) {
+            supabaseCustomers = sbCust.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              companyName: c.company_name || c.name,
+              phone: c.phone,
+              email: c.email,
+              address: c.address,
+              city: c.city,
+              ntn: c.ntn,
+              status: c.status || "ACTIVE",
+              ...c,
+            }));
+          }
+        } catch (e) {
+          console.warn("Supabase fetch customers warning in bilty:", e);
+        }
+        try {
+          const { data: sbDrv } = await supabase.from("drivers").select("*").order("created_at", { ascending: false });
+          if (Array.isArray(sbDrv)) {
+            supabaseDrivers = sbDrv.map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              phone: d.phone,
+              contact: d.phone,
+              cnic: d.cnic,
+              licenseNumber: d.license_number,
+              vehicleNumber: d.vehicle_number,
+              status: d.status || "AVAILABLE",
+              ...d,
+            }));
+          }
+        } catch (e) {
+          console.warn("Supabase fetch drivers warning in bilty:", e);
+        }
+      }
+
       const [custRes, drivRes, vehRes] = await Promise.all([
         fetch("/api/admin/customers").catch(() => null),
         fetch("/api/admin/drivers").catch(() => null),
@@ -387,14 +446,62 @@ export default function BiltyPage() {
       const apiDrivers = drivData.success && drivData.data?.length ? drivData.data : DEFAULT_DRIVERS;
       const apiVehicles = vehData.success && vehData.data?.length ? vehData.data : DEFAULT_VEHICLES;
 
-      setCustomers(mergeLocalWithApi(getStoredCustomers(), apiCustomers, getDeletedCustomerIds()));
-      setDrivers(mergeLocalWithApi(getStoredDrivers(), apiDrivers, getDeletedDriverIds()));
+      const localCust = getStoredCustomers();
+      const combinedActiveCust = supabaseCustomers.length > 0
+        ? mergeLocalWithApi(supabaseCustomers, localCust, getDeletedCustomerIds())
+        : localCust;
+      const rawCustomers = mergeLocalWithApi(combinedActiveCust, apiCustomers, getDeletedCustomerIds());
+
+      const dedupedCust: any[] = [];
+      const seenCustIds = new Set<string>();
+      const seenCustPhones = new Set<string>();
+      const seenCustNames = new Set<string>();
+      for (const item of rawCustomers) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        if (seenCustIds.has(id)) continue;
+        const normPhone = item.phone ? String(item.phone).replace(/[^0-9]/g, "") : "";
+        const normName = item.name ? String(item.name).trim().toLowerCase() : "";
+        if (normPhone.length >= 7 && seenCustPhones.has(normPhone)) continue;
+        if (normName.length > 1 && seenCustNames.has(normName)) continue;
+        seenCustIds.add(id);
+        if (normPhone.length >= 7) seenCustPhones.add(normPhone);
+        if (normName.length > 1) seenCustNames.add(normName);
+        dedupedCust.push(item);
+      }
+
+      const localDrv = getStoredDrivers();
+      const combinedActiveDrv = supabaseDrivers.length > 0
+        ? mergeLocalWithApi(supabaseDrivers, localDrv, getDeletedDriverIds())
+        : localDrv;
+      const rawDrivers = mergeLocalWithApi(combinedActiveDrv, apiDrivers, getDeletedDriverIds());
+
+      const dedupedDrv: any[] = [];
+      const seenDrvIds = new Set<string>();
+      const seenDrvPhones = new Set<string>();
+      const seenDrvNames = new Set<string>();
+      for (const item of rawDrivers) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        if (seenDrvIds.has(id)) continue;
+        const normPhone = item.phone ? String(item.phone).replace(/[^0-9]/g, "") : "";
+        const normName = item.name ? String(item.name).trim().toLowerCase() : "";
+        if (normPhone.length >= 7 && seenDrvPhones.has(normPhone)) continue;
+        if (normName.length > 1 && seenDrvNames.has(normName)) continue;
+        seenDrvIds.add(id);
+        if (normPhone.length >= 7) seenDrvPhones.add(normPhone);
+        if (normName.length > 1) seenDrvNames.add(normName);
+        dedupedDrv.push(item);
+      }
+
+      setCustomers(dedupedCust);
+      setDrivers(dedupedDrv);
       setVehicles(mergeLocalWithApi(getStoredVehicles(), apiVehicles, getDeletedVehicleIds(), "registrationNumber"));
     } catch (err) {
       console.warn("Error fetching dependencies, using fallbacks:", err);
-      setCustomers(mergeLocalWithApi(getStoredCustomers(), DEFAULT_CUSTOMERS, getDeletedCustomerIds()));
-      setDrivers(mergeLocalWithApi(getStoredDrivers(), DEFAULT_DRIVERS, getDeletedDriverIds()));
-      setVehicles(mergeLocalWithApi(getStoredVehicles(), DEFAULT_VEHICLES, getDeletedVehicleIds(), "registrationNumber"));
+      setCustomers(getStoredCustomers());
+      setDrivers(getStoredDrivers());
+      setVehicles(getStoredVehicles());
     }
   };
 
@@ -1136,9 +1243,6 @@ export default function BiltyPage() {
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
             Bilty & Consignments Management
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Generate official consignment bilty vouchers, assign fleet drivers, update status, and print vouchers.
-          </p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
           <Button

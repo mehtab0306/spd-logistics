@@ -53,6 +53,7 @@ import {
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function DriversPage() {
   const router = useRouter();
@@ -148,6 +149,42 @@ export default function DriversPage() {
       if (search) params.append("search", search);
       if (statusFilter) params.append("status", statusFilter);
 
+      let supabaseDrivers: any[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Supabase timeout")), 2500)
+          );
+          const fetchPromise = supabase
+            .from("drivers")
+            .select("*")
+            .order("created_at", { ascending: false });
+          const { data, error }: any = await Promise.race([fetchPromise, timeoutPromise]);
+          if (!error && Array.isArray(data) && data.length > 0) {
+            supabaseDrivers = data.map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              phone: d.phone,
+              contact: d.phone,
+              email: d.email,
+              cnic: d.cnic,
+              licenseNumber: d.license_number,
+              licenseExpiry: d.license_expiry,
+              address: d.address,
+              emergencyContact: d.emergency_contact,
+              vehicleNumber: d.vehicle_number,
+              status: d.status || "AVAILABLE",
+              photo: d.photo || null,
+              notes: d.notes,
+              createdAt: d.created_at,
+              ...d,
+            }));
+          }
+        } catch (sbErr) {
+          console.warn("Supabase fetch drivers warning:", sbErr);
+        }
+      }
+
       let apiList: any[] = [];
       try {
         const res = await fetch(`/api/admin/drivers?${params.toString()}`);
@@ -159,10 +196,37 @@ export default function DriversPage() {
         console.warn("API driver fetch error:", err);
       }
 
-      // Merge local drivers (kept at top) with API seed drivers
+      // Merge local drivers + Supabase drivers (kept at top) with API seed drivers
       const localList = getStoredDrivers();
+      const combinedActive = supabaseDrivers.length > 0
+        ? mergeLocalWithApi(supabaseDrivers, localList, getDeletedDriverIds())
+        : localList;
       const deletedIds = getDeletedDriverIds();
-      let list = mergeLocalWithApi(localList, apiList, deletedIds);
+      let list = mergeLocalWithApi(combinedActive, apiList, deletedIds);
+
+      // Strict deduplication safeguard across merged drivers list
+      const dedupedList: any[] = [];
+      const seenIds = new Set<string>();
+      const seenPhones = new Set<string>();
+      const seenNames = new Set<string>();
+
+      for (const item of list) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        if (seenIds.has(id)) continue;
+
+        const normPhone = item.phone ? String(item.phone).replace(/[^0-9]/g, "") : "";
+        const normName = item.name ? String(item.name).trim().toLowerCase() : "";
+
+        if (normPhone.length >= 7 && seenPhones.has(normPhone)) continue;
+        if (normName.length > 1 && seenNames.has(normName)) continue;
+
+        seenIds.add(id);
+        if (normPhone.length >= 7) seenPhones.add(normPhone);
+        if (normName.length > 1) seenNames.add(normName);
+        dedupedList.push(item);
+      }
+      list = dedupedList;
 
       if (search.trim()) {
         const q = search.trim().toLowerCase();
@@ -296,6 +360,31 @@ export default function DriversPage() {
       // Prepend to state immediately
       setDrivers((prev) => [newDrv, ...prev]);
 
+      // Cloud Supabase sync
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("drivers").upsert([
+            {
+              id: newDrv.id,
+              name: newDrv.name,
+              phone: newDrv.phone,
+              email: newDrv.email,
+              cnic: newDrv.cnic,
+              license_number: newDrv.licenseNumber,
+              license_expiry: newDrv.licenseExpiry,
+              address: newDrv.address,
+              emergency_contact: newDrv.emergencyContact,
+              vehicle_number: newDrv.vehicleNumber,
+              status: newDrv.status,
+              notes: newDrv.notes,
+              created_at: newDrv.createdAt,
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase driver create warning:", sbErr);
+        }
+      }
+
       // Fire background API call
       fetch("/api/admin/drivers", {
         method: "POST",
@@ -362,6 +451,30 @@ export default function DriversPage() {
       // Update state immediately
       setDrivers((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
 
+      // Cloud Supabase sync
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("drivers").upsert([
+            {
+              id: updated.id,
+              name: updated.name,
+              phone: updated.phone,
+              email: updated.email,
+              cnic: updated.cnic,
+              license_number: updated.licenseNumber,
+              license_expiry: updated.licenseExpiry,
+              address: updated.address,
+              emergency_contact: updated.emergencyContact,
+              vehicle_number: updated.vehicleNumber,
+              status: updated.status,
+              notes: updated.notes,
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase driver update warning:", sbErr);
+        }
+      }
+
       // Background API call
       fetch("/api/admin/drivers", {
         method: "PUT",
@@ -423,6 +536,15 @@ export default function DriversPage() {
         setViewDriver(null);
       }
 
+      // Supabase cloud delete
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("drivers").delete().eq("id", deleteDriver.id);
+        } catch (sbErr) {
+          console.warn("Supabase driver delete warning:", sbErr);
+        }
+      }
+
       // Background API delete
       fetch(`/api/admin/drivers?id=${deleteDriver.id}`, {
         method: "DELETE",
@@ -444,6 +566,15 @@ export default function DriversPage() {
       setDrivers((prev) =>
         prev.map((d) => (d.id === driverId ? { ...d, status: newStatus } : d))
       );
+
+      // Cloud Supabase sync
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("drivers").update({ status: newStatus }).eq("id", driverId);
+        } catch (sbErr) {
+          console.warn("Supabase driver status change warning:", sbErr);
+        }
+      }
 
       // 2. Persist in localStorage
       const current = drivers.find((d) => d.id === driverId);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -143,6 +143,52 @@ export default function ChallanPage() {
       ]);
       clearTimeout(timeoutId);
 
+      let supabaseBilties: any[] = [];
+      let supabaseDrivers: any[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbBilties } = await supabase.from("bilties").select("*").order("created_at", { ascending: false });
+          if (Array.isArray(sbBilties)) {
+            supabaseBilties = sbBilties.map((r: any) => ({
+              id: r.id,
+              biltyNumber: r.bilty_number || r.id,
+              trackingId: r.bilty_number || r.id,
+              senderName: r.sender_name,
+              receiverName: r.receiver_name,
+              origin: r.origin,
+              destination: r.destination,
+              packagesCount: r.packages_count,
+              weight: r.weight,
+              totalFreight: r.total_freight,
+              totalAmount: r.total_freight,
+              shipmentStatus: (r.status || "BOOKED").toUpperCase(),
+              challanId: r.challan_id,
+              ...r,
+            }));
+          }
+        } catch (e) {
+          console.warn("Supabase bilties fetch error in challan:", e);
+        }
+        try {
+          const { data: sbDrivers } = await supabase.from("drivers").select("*").order("created_at", { ascending: false });
+          if (Array.isArray(sbDrivers)) {
+            supabaseDrivers = sbDrivers.map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              phone: d.phone,
+              contact: d.phone,
+              cnic: d.cnic,
+              licenseNumber: d.license_number,
+              vehicleNumber: d.vehicle_number,
+              status: d.status || "AVAILABLE",
+              ...d,
+            }));
+          }
+        } catch (e) {
+          console.warn("Supabase drivers fetch error in challan:", e);
+        }
+      }
+
       const biltyData = biltyRes ? await biltyRes.json().catch(() => ({})) : {};
       const vehData = vehRes ? await vehRes.json().catch(() => ({})) : {};
       const drvData = drvRes ? await drvRes.json().catch(() => ({})) : {};
@@ -165,8 +211,27 @@ export default function ChallanPage() {
         : [];
       const apiBrokers = Array.isArray(brkData.data) ? brkData.data : [];
 
-      const allBilties = mergeLocalWithApi(getStoredBilties(), apiBilties, getDeletedBiltyIds(), "biltyNumber");
-      const unassigned = allBilties.filter(
+      const localBilties = getStoredBilties();
+      const combinedActiveBilties = supabaseBilties.length > 0
+        ? mergeLocalWithApi(supabaseBilties, localBilties, getDeletedBiltyIds(), "biltyNumber")
+        : localBilties;
+      const allBilties = mergeLocalWithApi(combinedActiveBilties, apiBilties, getDeletedBiltyIds(), "biltyNumber");
+
+      const dedupedBilties: any[] = [];
+      const seenBiltyIds = new Set<string>();
+      const seenBiltyNumbers = new Set<string>();
+      for (const item of allBilties) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        const bNum = String(item.biltyNumber || "").trim().toUpperCase();
+        if (seenBiltyIds.has(id)) continue;
+        if (bNum && seenBiltyNumbers.has(bNum)) continue;
+        seenBiltyIds.add(id);
+        if (bNum) seenBiltyNumbers.add(bNum);
+        dedupedBilties.push(item);
+      }
+
+      const unassigned = dedupedBilties.filter(
         (b: any) =>
           !b.challanId &&
           b.shipmentStatus !== "DELIVERED" &&
@@ -174,8 +239,32 @@ export default function ChallanPage() {
       );
       setAvailableBilties(unassigned);
 
+      const localDrivers = getStoredDrivers();
+      const combinedActiveDrivers = supabaseDrivers.length > 0
+        ? mergeLocalWithApi(supabaseDrivers, localDrivers, getDeletedDriverIds())
+        : localDrivers;
+      const allDrivers = mergeLocalWithApi(combinedActiveDrivers, apiDrivers, getDeletedDriverIds());
+
+      const dedupedDrivers: any[] = [];
+      const seenDrvIds = new Set<string>();
+      const seenDrvPhones = new Set<string>();
+      const seenDrvNames = new Set<string>();
+      for (const item of allDrivers) {
+        if (!item || !item.id) continue;
+        const id = String(item.id);
+        if (seenDrvIds.has(id)) continue;
+        const normPhone = item.phone ? String(item.phone).replace(/[^0-9]/g, "") : "";
+        const normName = item.name ? String(item.name).trim().toLowerCase() : "";
+        if (normPhone.length >= 7 && seenDrvPhones.has(normPhone)) continue;
+        if (normName.length > 1 && seenDrvNames.has(normName)) continue;
+        seenDrvIds.add(id);
+        if (normPhone.length >= 7) seenDrvPhones.add(normPhone);
+        if (normName.length > 1) seenDrvNames.add(normName);
+        dedupedDrivers.push(item);
+      }
+
       setVehicles(mergeLocalWithApi(getStoredVehicles(), apiVehicles, getDeletedVehicleIds(), "registrationNumber"));
-      setDrivers(mergeLocalWithApi(getStoredDrivers(), apiDrivers, getDeletedDriverIds()));
+      setDrivers(dedupedDrivers);
       setBrokers(mergeLocalWithApi(getStoredBrokers(), apiBrokers, []));
 
       // Auto-suggest sequential Challan number
@@ -490,12 +579,38 @@ export default function ChallanPage() {
     meta: v,
   }));
 
-  const driverOptions = drivers.map((d) => ({
-    value: d.id,
-    label: `${d.name} (${d.phone || d.contact || "No phone"})`,
-    subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status || "AVAILABLE"}`,
-    meta: d,
-  }));
+  const driverOptions = useMemo(() => {
+    const map = new Map<string, any>();
+    drivers.forEach((d) => {
+      if (!d || !d.id) return;
+      const key = String(d.id);
+      if (!map.has(key)) {
+        map.set(key, {
+          value: d.id,
+          label: `${d.name} (${d.phone || d.contact || "No phone"})`,
+          subLabel: `CNIC: ${d.cnic || "N/A"} • Status: ${d.status || "AVAILABLE"}`,
+          meta: d,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [drivers]);
+
+  const driverNameOptions = useMemo(() => {
+    const map = new Map<string, any>();
+    drivers.forEach((d) => {
+      const name = (d.name || "").trim();
+      const normKey = name.toLowerCase();
+      if (name && !map.has(normKey)) {
+        map.set(normKey, {
+          value: name,
+          label: name,
+          sublabel: d.phone || d.contact || "Driver",
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [drivers]);
 
   return (
     <div className="space-y-6 pb-24">
@@ -920,11 +1035,7 @@ export default function ChallanPage() {
                           driverPhone: d ? d.phone || d.contact || challanData.driverPhone : challanData.driverPhone,
                         });
                       }}
-                      options={drivers.map((d) => ({
-                        value: d.name,
-                        label: d.name,
-                        sublabel: d.phone || "Driver",
-                      }))}
+                      options={driverNameOptions}
                     />
                   </div>
 
