@@ -1224,8 +1224,8 @@ export default function BiltyPage() {
       ) : consignments.length === 0 ? (
         <EmptyState
           icon={Package}
-          title="No records found"
-          description="Click '+ Add New' to create your first entry."
+          title="No bilties booked yet"
+          description="Click + New Consignment Bilty to create your first record."
         />
       ) : (
         <>

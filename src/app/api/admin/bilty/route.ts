@@ -672,7 +672,7 @@ export async function POST(request: Request) {
       shipmentStatus: body.shipmentStatus || 'BOOKED',
       notes: notes || null,
       createdAt: new Date().toISOString(),
-      customer: resolvedSenderName ? { id: resolvedSenderId || 'c-demo', name: resolvedSenderName } : null,
+      customer: resolvedSenderName ? { id: resolvedSenderId || `c-${Date.now()}`, name: resolvedSenderName } : null,
       vehicle: resolvedVehicleNumber ? { vehicleNumber: resolvedVehicleNumber } : null,
       driver: resolvedDriverName ? { name: resolvedDriverName } : null,
       items: body.items || [],

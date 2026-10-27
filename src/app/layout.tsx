@@ -59,6 +59,32 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              try {
+                var hasReset = localStorage.getItem('spd_production_clean_v1');
+                if (!hasReset) {
+                  localStorage.removeItem('spd_bilties');
+                  localStorage.removeItem('spd_local_bilties');
+                  localStorage.removeItem('spd_challans');
+                  localStorage.removeItem('spd_local_challans');
+                  localStorage.removeItem('spd_customers');
+                  localStorage.removeItem('spd_local_customers');
+                  localStorage.removeItem('spd_cash_books');
+                  localStorage.removeItem('spd_local_cash_books');
+                  localStorage.removeItem('spd_local_tracking');
+                  localStorage.removeItem('spd_local_deleted_bilties');
+                  localStorage.removeItem('spd_local_deleted_challans');
+                  localStorage.removeItem('spd_local_deleted_customers');
+                  localStorage.setItem('spd_bilties', JSON.stringify([]));
+                  localStorage.setItem('spd_local_bilties', JSON.stringify([]));
+                  localStorage.setItem('spd_challans', JSON.stringify([]));
+                  localStorage.setItem('spd_local_challans', JSON.stringify([]));
+                  localStorage.setItem('spd_customers', JSON.stringify([]));
+                  localStorage.setItem('spd_local_customers', JSON.stringify([]));
+                  localStorage.setItem('spd_cash_books', JSON.stringify([]));
+                  localStorage.setItem('spd_local_cash_books', JSON.stringify([]));
+                  localStorage.setItem('spd_production_clean_v1', 'true');
+                }
+              } catch (cleanErr) {}
               window.__spd_deferredPrompt = null;
               window.addEventListener('beforeinstallprompt', function(e) {
                 e.preventDefault();

@@ -62,3 +62,10 @@ alter table bilties disable row level security;
 alter table customers disable row level security;
 alter table cash_books disable row level security;
 alter table challans disable row level security;
+
+-- Zero-Meter Clean Slate Guarantee (Wipes any existing test rows)
+truncate table bilties;
+truncate table challans;
+truncate table cash_books;
+truncate table customers;
+
