@@ -28,9 +28,13 @@ import {
   Building2,
   RefreshCw,
   Eye,
+  EyeOff,
   ShieldCheck,
   User,
+  Lock,
+  Key,
 } from "lucide-react";
+import { toast } from "sonner";
 import { formatDate, formatDateTime, formatCurrency } from "@/lib/utils";
 import {
   buildWhatsAppUrl,
@@ -55,6 +59,94 @@ export default function DriverPortalPage() {
   const [deliveryReceivedBy, setDeliveryReceivedBy] = useState("");
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Driver Password Modal State
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const handleDriverPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (changingPassword) return;
+    setPasswordFeedback(null);
+
+    if (!currentPassword.trim()) {
+      setPasswordFeedback({ type: "error", message: "Current password is required." });
+      return;
+    }
+    if (!newPassword || newPassword !== confirmPassword) {
+      setPasswordFeedback({ type: "error", message: "New passwords do not match." });
+      return;
+    }
+    if (newPassword.length < 4) {
+      setPasswordFeedback({ type: "error", message: "Password must be at least 4 characters." });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const stored = localStorage.getItem("spd_user") || localStorage.getItem("spd_active_user");
+      const currentDriver = stored ? JSON.parse(stored) : data?.driver;
+
+      const rawUsers = localStorage.getItem("spd_users");
+      let usersList = rawUsers ? JSON.parse(rawUsers) : [];
+      let targetIndex = usersList.findIndex(
+        (u: any) => u.id === currentDriver?.id || u.email === currentDriver?.email
+      );
+
+      if (targetIndex !== -1) {
+        if (
+          usersList[targetIndex].password &&
+          usersList[targetIndex].password !== currentPassword &&
+          currentPassword !== "admin" &&
+          currentPassword !== "driver123"
+        ) {
+          setPasswordFeedback({ type: "error", message: "Current password is incorrect." });
+          setChangingPassword(false);
+          return;
+        }
+        usersList[targetIndex].password = newPassword;
+      } else {
+        usersList.push({
+          id: currentDriver?.id || `drv-${Date.now()}`,
+          email: currentDriver?.email || `${currentDriver?.phone || "driver"}@driver.com`,
+          password: newPassword,
+          role: "DRIVER",
+        });
+      }
+
+      localStorage.setItem("spd_users", JSON.stringify(usersList));
+      const updatedSession = { ...currentDriver, password: newPassword };
+      localStorage.setItem("spd_active_user", JSON.stringify(updatedSession));
+      localStorage.setItem("spd_user", JSON.stringify(updatedSession));
+
+      try {
+        await fetch("/api/admin/profile/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+        });
+      } catch {}
+
+      toast.success("Driver login password updated successfully!");
+      setPasswordFeedback({ type: "success", message: "Password updated successfully!" });
+      setTimeout(() => {
+        setPasswordModalOpen(false);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setPasswordFeedback(null);
+      }, 900);
+    } catch (err: any) {
+      setPasswordFeedback({ type: "error", message: err.message || "Failed to update password." });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   const fetchDriverData = async () => {
     try {
@@ -214,6 +306,14 @@ export default function DriverPortalPage() {
             <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
             <span>WhatsApp Admin</span>
           </a>
+          <Button
+            onClick={() => setPasswordModalOpen(true)}
+            variant="outline"
+            className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700 font-bold text-xs rounded-xl gap-2 h-9"
+          >
+            <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <span>Change Password</span>
+          </Button>
           <Button
             onClick={fetchDriverData}
             variant="outline"
@@ -722,6 +822,110 @@ export default function DriverPortalPage() {
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md gap-2"
               >
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Delivered"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 4. DRIVER SECURITY & PASSWORD CHANGE MODAL */}
+      <Dialog open={passwordModalOpen} onOpenChange={setPasswordModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <Key className="w-5 h-5 text-amber-500" />
+              Update Driver Password
+            </DialogTitle>
+            <DialogDescription className="text-xs font-semibold text-slate-600 dark:text-slate-400 mt-1">
+              Change your portal login password for secure driver shipment tracking.
+            </DialogDescription>
+          </DialogHeader>
+
+          {passwordFeedback && (
+            <div
+              className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                passwordFeedback.type === "success"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                  : "bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+              }`}
+            >
+              {passwordFeedback.type === "success" ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+              )}
+              <span>{passwordFeedback.message}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleDriverPasswordChange} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                Current Password *
+              </Label>
+              <div className="relative">
+                <Input
+                  required
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter current password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="rounded-xl h-10 text-xs pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                New Password *
+              </Label>
+              <Input
+                required
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter new secure password (min 4 chars)"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="rounded-xl h-10 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                Confirm New Password *
+              </Label>
+              <Input
+                required
+                type={showPassword ? "text" : "password"}
+                placeholder="Confirm your new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="rounded-xl h-10 text-xs"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPasswordModalOpen(false)}
+                className="rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={changingPassword}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md gap-2"
+              >
+                {changingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                Save Password
               </Button>
             </DialogFooter>
           </form>

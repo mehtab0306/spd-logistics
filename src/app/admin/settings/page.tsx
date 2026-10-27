@@ -102,6 +102,26 @@ export default function SettingsPage() {
 
       if (typeof window !== "undefined") {
         localStorage.setItem("spd_admin_password", newPassword);
+        try {
+          const rawUsers = localStorage.getItem("spd_users");
+          let usersList = rawUsers ? JSON.parse(rawUsers) : [];
+          const idx = usersList.findIndex(
+            (u: any) => u.role === "SUPER_ADMIN" || u.role === "ADMIN" || u.id === "admin_root"
+          );
+          if (idx !== -1) {
+            usersList[idx].password = newPassword;
+          } else {
+            usersList.push({ id: "admin_root", email: "admin@gmail.com", password: newPassword, role: "SUPER_ADMIN" });
+          }
+          localStorage.setItem("spd_users", JSON.stringify(usersList));
+          const activeUserRaw = localStorage.getItem("spd_active_user") || localStorage.getItem("spd_user");
+          if (activeUserRaw) {
+            const activeUser = JSON.parse(activeUserRaw);
+            activeUser.password = newPassword;
+            localStorage.setItem("spd_active_user", JSON.stringify(activeUser));
+            localStorage.setItem("spd_user", JSON.stringify(activeUser));
+          }
+        } catch {}
       }
 
       setPasswordFeedback({

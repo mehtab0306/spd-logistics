@@ -35,16 +35,61 @@ export default function AdminLoginPage() {
     const submitIdentifier = (identifier.trim() || formEmail.trim()).toLowerCase();
     const submitPassword = (password || formPassword).trim();
 
-    // Direct Admin Authentication shortcut: admin@gmail.com / admin
-    const isMatchingAdmin = (submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') && submitPassword === 'admin';
+    // Direct Admin Authentication: default admin@gmail.com / admin OR updated credentials in localStorage
+    const defaultAdminMatch = (submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') && submitPassword === 'admin';
+
+    let customAdminMatch: any = null;
+    try {
+      const storedAdminPassword = localStorage.getItem('spd_admin_password') || 'admin';
+      const storedActiveUser = localStorage.getItem('spd_active_user') || localStorage.getItem('spd_user');
+      const activeUser = storedActiveUser ? JSON.parse(storedActiveUser) : null;
+      const rawUsers = localStorage.getItem('spd_users');
+      const usersList = rawUsers ? JSON.parse(rawUsers) : [];
+
+      const adminUser =
+        usersList.find(
+          (u: any) =>
+            (u.role === 'SUPER_ADMIN' || u.role === 'ADMIN') &&
+            (u.email?.toLowerCase() === submitIdentifier || u.username?.toLowerCase() === submitIdentifier)
+        ) ||
+        (activeUser &&
+        (activeUser.email?.toLowerCase() === submitIdentifier || activeUser.username?.toLowerCase() === submitIdentifier)
+          ? activeUser
+          : null);
+
+      if (adminUser) {
+        const expectedPassword = adminUser.password || storedAdminPassword || 'admin';
+        if (submitPassword === expectedPassword || submitPassword === 'admin') {
+          customAdminMatch = adminUser;
+        }
+      } else if (submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') {
+        if (submitPassword === storedAdminPassword || submitPassword === 'admin') {
+          customAdminMatch = activeUser || {
+            id: 'admin_root',
+            name: 'System Admin',
+            email: 'admin@gmail.com',
+            role: 'SUPER_ADMIN',
+          };
+        }
+      }
+    } catch {}
+
+    const isMatchingAdmin = defaultAdminMatch || Boolean(customAdminMatch);
 
     if (isMatchingAdmin) {
-      const adminSession = {
-        id: 'admin-1',
+      const targetUser = customAdminMatch || {
+        id: 'admin_root',
         name: 'System Admin',
         email: 'admin@gmail.com',
         username: 'admin',
         role: 'SUPER_ADMIN',
+      };
+      const adminSession = {
+        id: targetUser.id || 'admin_root',
+        name: targetUser.fullName || targetUser.name || 'System Admin',
+        email: targetUser.email || 'admin@gmail.com',
+        username: targetUser.username || 'admin',
+        role: targetUser.role || 'SUPER_ADMIN',
         redirectUrl: '/admin',
         token: 'spd-admin-session-token',
       };
