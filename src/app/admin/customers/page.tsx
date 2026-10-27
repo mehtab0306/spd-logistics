@@ -56,9 +56,9 @@ import {
   getStoredBilties,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
-import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
 import { MonthlyBillStatementModal } from "@/components/customers/monthly-bill-statement-modal";
-import { supabase } from "@/lib/supabase";
+import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -580,10 +580,12 @@ export default function CustomersPage() {
       }
 
       // Supabase cloud deletion
-      try {
-        await supabase.from("customers").delete().eq("id", deleteCustomer.id);
-      } catch (sbErr) {
-        console.warn("Supabase delete customer warning:", sbErr);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("customers").delete().eq("id", deleteCustomer.id);
+        } catch (sbErr) {
+          console.warn("Supabase delete customer warning:", sbErr);
+        }
       }
 
       // Background API delete

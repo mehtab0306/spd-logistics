@@ -70,7 +70,7 @@ import {
 } from "@/lib/whatsapp";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function BiltyPage() {
   const router = useRouter();
@@ -258,41 +258,50 @@ export default function BiltyPage() {
       if (statusFilter) params.append("status", statusFilter);
 
       let supabaseBilties: any[] = [];
-      try {
-        const { data, error } = await supabase
-          .from("bilties")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (!error && Array.isArray(data) && data.length > 0) {
-          supabaseBilties = data.map((r: any) => ({
-            id: r.id,
-            biltyNumber: r.bilty_number || r.id,
-            trackingId: r.bilty_number || r.id,
-            bookingDate: r.booking_date || r.created_at,
-            senderName: r.sender_name,
-            senderPhone: r.sender_phone,
-            receiverName: r.receiver_name,
-            receiverPhone: r.receiver_phone,
-            origin: r.origin,
-            destination: r.destination,
-            itemDescription: r.item_description,
-            packagesCount: r.packages_count,
-            weight: r.weight,
-            totalFreight: r.total_freight,
-            totalAmount: r.total_freight,
-            paymentMode: r.payment_mode,
-            shipmentStatus: (r.status || "BOOKED").toUpperCase(),
-            createdAt: r.created_at,
-            ...r,
-          }));
+      if (isSupabaseConfigured) {
+        try {
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Supabase timeout")), 2500)
+          );
+          const fetchPromise = supabase
+            .from("bilties")
+            .select("*")
+            .order("created_at", { ascending: false });
+          const { data, error }: any = await Promise.race([fetchPromise, timeoutPromise]);
+          if (!error && Array.isArray(data) && data.length > 0) {
+            supabaseBilties = data.map((r: any) => ({
+              id: r.id,
+              biltyNumber: r.bilty_number || r.id,
+              trackingId: r.bilty_number || r.id,
+              bookingDate: r.booking_date || r.created_at,
+              senderName: r.sender_name,
+              senderPhone: r.sender_phone,
+              receiverName: r.receiver_name,
+              receiverPhone: r.receiver_phone,
+              origin: r.origin,
+              destination: r.destination,
+              itemDescription: r.item_description,
+              packagesCount: r.packages_count,
+              weight: r.weight,
+              totalFreight: r.total_freight,
+              totalAmount: r.total_freight,
+              paymentMode: r.payment_mode,
+              shipmentStatus: (r.status || "BOOKED").toUpperCase(),
+              createdAt: r.created_at,
+              ...r,
+            }));
+          }
+        } catch (sbErr) {
+          console.warn("Supabase fetch bilties warning:", sbErr);
         }
-      } catch (sbErr) {
-        console.warn("Supabase fetch bilties warning:", sbErr);
       }
 
       let apiItems: any[] = [];
       try {
-        const res = await fetch(`/api/admin/bilty?${params.toString()}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(`/api/admin/bilty?${params.toString()}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
         const data = await res.json();
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
           apiItems = data.data;
@@ -358,6 +367,7 @@ export default function BiltyPage() {
       setConsignments(cleanFallback);
     } finally {
       setLoading(false);
+      setIsLoaded(true);
     }
   };
 
@@ -397,10 +407,12 @@ export default function BiltyPage() {
       setConsignments((prev) => prev.filter((b) => b.id !== deletingBilty.id));
 
       // Supabase cloud deletion
-      try {
-        await supabase.from("bilties").delete().eq("id", deletingBilty.id);
-      } catch (sbErr) {
-        console.warn("Supabase bilty delete warning:", sbErr);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("bilties").delete().eq("id", deletingBilty.id);
+        } catch (sbErr) {
+          console.warn("Supabase bilty delete warning:", sbErr);
+        }
       }
 
       // Background API call
@@ -929,28 +941,30 @@ export default function BiltyPage() {
       setConsignments(updated);
 
       // Supabase cloud database insertion
-      try {
-        await supabase.from("bilties").upsert([
-          {
-            id: String(createdBilty.id),
-            bilty_number: finalBiltyNumber,
-            booking_date: createdBilty.bookingDate,
-            sender_name: createdBilty.senderName,
-            sender_phone: createdBilty.senderPhone,
-            receiver_name: createdBilty.receiverName,
-            receiver_phone: createdBilty.receiverPhone,
-            origin: createdBilty.origin,
-            destination: createdBilty.destination,
-            item_description: createdBilty.itemDescription,
-            packages_count: Number(createdBilty.packagesCount) || 1,
-            weight: Number(createdBilty.weight) || 0,
-            total_freight: Number(createdBilty.totalFreight) || 0,
-            payment_mode: createdBilty.paymentMode || "TO-PAY",
-            status: createdBilty.shipmentStatus || "Booked",
-          },
-        ]);
-      } catch (sbErr) {
-        console.warn("Supabase bilty upsert warning:", sbErr);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("bilties").upsert([
+            {
+              id: String(createdBilty.id),
+              bilty_number: finalBiltyNumber,
+              booking_date: createdBilty.bookingDate,
+              sender_name: createdBilty.senderName,
+              sender_phone: createdBilty.senderPhone,
+              receiver_name: createdBilty.receiverName,
+              receiver_phone: createdBilty.receiverPhone,
+              origin: createdBilty.origin,
+              destination: createdBilty.destination,
+              item_description: createdBilty.itemDescription,
+              packages_count: Number(createdBilty.packagesCount) || 1,
+              weight: Number(createdBilty.weight) || 0,
+              total_freight: Number(createdBilty.totalFreight) || 0,
+              payment_mode: createdBilty.paymentMode || "TO-PAY",
+              status: createdBilty.shipmentStatus || "Booked",
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase bilty upsert warning:", sbErr);
+        }
       }
 
       // Background API attempt
@@ -1130,7 +1144,6 @@ export default function BiltyPage() {
           <Button
             variant="outline"
             onClick={handleExportExcel}
-            disabled={!consignments.length}
             className="rounded-xl text-xs sm:text-sm font-bold gap-2 h-10 border-slate-300 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 text-slate-700 dark:text-slate-200"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
@@ -1216,7 +1229,7 @@ export default function BiltyPage() {
       </div>
 
       {/* Bilties Content */}
-      {!isLoaded || loading ? (
+      {loading && !isLoaded ? (
         <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
           <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
           <p className="text-xs text-slate-400 font-semibold">Loading consignments...</p>
@@ -1224,8 +1237,10 @@ export default function BiltyPage() {
       ) : consignments.length === 0 ? (
         <EmptyState
           icon={Package}
-          title="No bilties booked yet"
-          description="Click + New Consignment Bilty to create your first record."
+          title="No Consignments Found"
+          description="Click 'New Consignment Bilty' to add one."
+          actionLabel="New Consignment Bilty"
+          actionHref="/admin/bilty/new"
         />
       ) : (
         <>

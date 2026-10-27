@@ -53,7 +53,7 @@ import { exportToExcel } from "@/lib/export-excel";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
 import { VoucherImageAttachment } from "@/components/shared/voucher-image-attachment";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 interface CashBookItem {
   id: string;
@@ -323,28 +323,34 @@ function CashBooksContent() {
 
       // 1. Check Supabase cloud database
       let supabaseTxs: any[] = [];
-      try {
-        const { data: sbData, error: sbErr } = await supabase
-          .from("cash_books")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (!sbErr && Array.isArray(sbData) && sbData.length > 0) {
-          supabaseTxs = sbData.map((t: any) => ({
-            id: t.id,
-            date: t.date || t.created_at,
-            voucherNumber: t.id.slice(0, 8),
-            description: t.description || "",
-            type: t.type === "IN" ? "IN" : "OUT",
-            amount: Number(t.amount) || 0,
-            credit: t.type === "IN" ? Number(t.amount) || 0 : 0,
-            debit: t.type === "OUT" ? Number(t.amount) || 0 : 0,
-            category: t.description || (t.type === "IN" ? "Cash In" : "Cash Out"),
-            paymentMethod: "CASH",
-            createdAt: t.created_at,
-          }));
+      if (isSupabaseConfigured) {
+        try {
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Supabase timeout")), 2500)
+          );
+          const fetchPromise = supabase
+            .from("cash_books")
+            .select("*")
+            .order("created_at", { ascending: false });
+          const { data: sbData, error: sbErr }: any = await Promise.race([fetchPromise, timeoutPromise]);
+          if (!sbErr && Array.isArray(sbData) && sbData.length > 0) {
+            supabaseTxs = sbData.map((t: any) => ({
+              id: t.id,
+              date: t.date || t.created_at,
+              voucherNumber: t.id.slice(0, 8),
+              description: t.description || "",
+              type: t.type === "IN" ? "IN" : "OUT",
+              amount: Number(t.amount) || 0,
+              credit: t.type === "IN" ? Number(t.amount) || 0 : 0,
+              debit: t.type === "OUT" ? Number(t.amount) || 0 : 0,
+              category: t.description || (t.type === "IN" ? "Cash In" : "Cash Out"),
+              paymentMethod: "CASH",
+              createdAt: t.created_at,
+            }));
+          }
+        } catch (e) {
+          console.warn("Supabase transactions fetch warning:", e);
         }
-      } catch (e) {
-        console.warn("Supabase transactions fetch warning:", e);
       }
 
       const res = await fetch(`/api/admin/cash-books?${params.toString()}`);
@@ -509,18 +515,20 @@ function CashBooksContent() {
       });
 
       // Supabase cloud insertion
-      try {
-        await supabase.from("cash_books").upsert([
-          {
-            id: `cb-in-${Date.now()}`,
-            date: txFormData.date,
-            description: payload.description || payload.category,
-            type: "IN",
-            amount: amountVal,
-          },
-        ]);
-      } catch (sbErr) {
-        console.warn("Supabase record Cash IN warning:", sbErr);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("cash_books").upsert([
+            {
+              id: `cb-in-${Date.now()}`,
+              date: txFormData.date,
+              description: payload.description || payload.category,
+              type: "IN",
+              amount: amountVal,
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase record Cash IN warning:", sbErr);
+        }
       }
 
       const data = await res.json();
@@ -584,18 +592,20 @@ function CashBooksContent() {
       });
 
       // Supabase cloud insertion
-      try {
-        await supabase.from("cash_books").upsert([
-          {
-            id: `cb-out-${Date.now()}`,
-            date: txFormData.date,
-            description: payload.description || payload.category,
-            type: "OUT",
-            amount: amountVal,
-          },
-        ]);
-      } catch (sbErr) {
-        console.warn("Supabase record Cash OUT warning:", sbErr);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("cash_books").upsert([
+            {
+              id: `cb-out-${Date.now()}`,
+              date: txFormData.date,
+              description: payload.description || payload.category,
+              type: "OUT",
+              amount: amountVal,
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase record Cash OUT warning:", sbErr);
+        }
       }
 
       const data = await res.json();
@@ -657,10 +667,12 @@ function CashBooksContent() {
       });
 
       // 3. Supabase cloud deletion
-      try {
-        await supabase.from("cash_books").delete().eq("id", targetTxId);
-      } catch (sbErr) {
-        console.warn("Supabase delete transaction warning:", sbErr);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("cash_books").delete().eq("id", targetTxId);
+        } catch (sbErr) {
+          console.warn("Supabase delete transaction warning:", sbErr);
+        }
       }
 
       // 4. Delete from backend API

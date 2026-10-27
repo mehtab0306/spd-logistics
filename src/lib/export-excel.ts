@@ -41,11 +41,21 @@ export function exportToExcel<T = any>(
     }
   }
 
-  if (!data || data.length === 0) {
-    if (typeof window !== "undefined") {
-      alert("No records available to export.");
+  if (!data) data = [];
+
+  // If no columns are provided and data is empty, set a default header so a valid CSV is exported
+  if (columns.length === 0) {
+    if (data.length > 0 && typeof data[0] === "object" && data[0] !== null) {
+      columns = Object.keys(data[0]).map((key) => ({
+        header: key,
+        accessor: (item: any) => item[key],
+      }));
+    } else {
+      columns = [
+        { header: "Record ID", accessor: () => "" },
+        { header: "Status", accessor: () => "No records to export" },
+      ];
     }
-    return false;
   }
 
   const todayStr = new Date().toISOString().slice(0, 10);

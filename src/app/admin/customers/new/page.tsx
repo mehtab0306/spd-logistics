@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { saveStoredCustomer, getStoredCustomers } from "@/lib/local-persistence";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function NewCustomerPage() {
   const router = useRouter();
@@ -181,17 +181,19 @@ export default function NewCustomerPage() {
       saveStoredCustomer(newCustomerRecord);
 
       // 1b. Upsert into Supabase cloud database
-      try {
-        await supabase.from("customers").upsert([
-          {
-            id: newCustomerRecord.id,
-            name: newCustomerRecord.name || newCustomerRecord.companyName,
-            phone: newCustomerRecord.phone,
-            city: newCustomerRecord.city,
-          },
-        ]);
-      } catch (sbErr) {
-        console.warn("Supabase customer upsert warning:", sbErr);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("customers").upsert([
+            {
+              id: newCustomerRecord.id,
+              name: newCustomerRecord.name || newCustomerRecord.companyName,
+              phone: newCustomerRecord.phone,
+              city: newCustomerRecord.city,
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase customer upsert warning:", sbErr);
+        }
       }
 
       // 2. Also save portal login credentials in localStorage so /customer-login works immediately

@@ -45,7 +45,7 @@ import {
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { exportToExcel } from "@/lib/export-excel";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function ChallanPage() {
   const router = useRouter();
@@ -133,12 +133,15 @@ export default function ChallanPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
       const [biltyRes, vehRes, drvRes, brkRes] = await Promise.all([
-        fetch("/api/admin/bilty").catch(() => null),
-        fetch("/api/admin/vehicles").catch(() => null),
-        fetch("/api/admin/drivers").catch(() => null),
-        fetch("/api/admin/brokers").catch(() => null),
+        fetch("/api/admin/bilty", { signal: controller.signal }).catch(() => null),
+        fetch("/api/admin/vehicles", { signal: controller.signal }).catch(() => null),
+        fetch("/api/admin/drivers", { signal: controller.signal }).catch(() => null),
+        fetch("/api/admin/brokers", { signal: controller.signal }).catch(() => null),
       ]);
+      clearTimeout(timeoutId);
 
       const biltyData = biltyRes ? await biltyRes.json().catch(() => ({})) : {};
       const vehData = vehRes ? await vehRes.json().catch(() => ({})) : {};
@@ -193,6 +196,7 @@ export default function ChallanPage() {
       setBrokers(getStoredBrokers());
     } finally {
       setLoading(false);
+      setIsLoaded(true);
     }
   };
 
@@ -416,20 +420,22 @@ export default function ChallanPage() {
       }
 
       // 1b. Upsert into Supabase cloud database
-      try {
-        await supabase.from("challans").upsert([
-          {
-            id: String(newChallanRecord.id),
-            challan_number: finalChallanNo,
-            vehicle_number: newChallanRecord.truckNumber || null,
-            driver_name: newChallanRecord.driverName || null,
-            origin: newChallanRecord.origin || null,
-            destination: newChallanRecord.destination || null,
-            status: "In Transit",
-          },
-        ]);
-      } catch (sbErr) {
-        console.warn("Supabase challan upsert warning:", sbErr);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("challans").upsert([
+            {
+              id: String(newChallanRecord.id),
+              challan_number: finalChallanNo,
+              vehicle_number: newChallanRecord.truckNumber || null,
+              driver_name: newChallanRecord.driverName || null,
+              origin: newChallanRecord.origin || null,
+              destination: newChallanRecord.destination || null,
+              status: "In Transit",
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase challan upsert warning:", sbErr);
+        }
       }
 
       // 2. Update selected bilties in localStorage so they show as IN_TRANSIT and linked to this Challan
@@ -529,7 +535,6 @@ export default function ChallanPage() {
           <Button
             variant="outline"
             onClick={handleExportWarehouseBilties}
-            disabled={!filteredBilties.length}
             className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold gap-2 h-10 px-3.5 shadow-xs"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
@@ -640,7 +645,7 @@ export default function ChallanPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {!isLoaded || loading ? (
+                  {loading && !isLoaded ? (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-slate-400">
                         <div className="flex items-center justify-center gap-2">
@@ -652,7 +657,7 @@ export default function ChallanPage() {
                   ) : filteredBilties.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-slate-400">
-                        No consignments waiting in warehouse.
+                        No consignments waiting in warehouse. Click &apos;New Consignment Bilty&apos; to add one.
                       </td>
                     </tr>
                   ) : (

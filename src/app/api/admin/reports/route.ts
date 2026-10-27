@@ -5,14 +5,14 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    let totalCustomers = 45;
-    let totalDrivers = 18;
-    let totalVehicles = 24;
-    let totalConsignments = 120;
-    let lahoreConsignments = 75;
-    let karachiConsignments = 45;
-    let deliveredConsignments = 92;
-    let inTransitConsignments = 28;
+    let totalCustomers = 0;
+    let totalDrivers = 0;
+    let totalVehicles = 0;
+    let totalConsignments = 0;
+    let lahoreConsignments = 0;
+    let karachiConsignments = 0;
+    let deliveredConsignments = 0;
+    let inTransitConsignments = 0;
     let allConsignments: any[] = [];
     let cashBooks: any[] = [];
     let recentPayments: any[] = [];
@@ -70,18 +70,18 @@ export async function GET(request: Request) {
         }),
       ]);
     } catch (dbErr) {
-      console.warn('DB error generating reports (serving fallback metrics):', dbErr);
+      console.warn('DB error generating reports (serving 0-state metrics):', dbErr);
     }
 
     const totalFreightRevenue = allConsignments && allConsignments.length > 0
       ? allConsignments.reduce((acc, c) => acc + (c.totalAmount || 0), 0)
-      : 4850000;
+      : 0;
     const totalCollected = allConsignments && allConsignments.length > 0
       ? allConsignments.reduce((acc, c) => acc + (c.paidAmount || 0), 0)
-      : 3950000;
+      : 0;
     const totalOutstanding = allConsignments && allConsignments.length > 0
       ? allConsignments.reduce((acc, c) => acc + (c.remainingBalance || 0), 0)
-      : 900000;
+      : 0;
 
     const cashBookBalances = cashBooks && cashBooks.length > 0
       ? cashBooks.map((cb) => {
@@ -94,10 +94,7 @@ export async function GET(request: Request) {
             balance: (cb.openingBalance || 0) + cr - dr,
           };
         })
-      : [
-          { id: 'cb-lhr-main', name: 'Lahore Head Office Cash Book', city: 'Lahore', balance: 525000 },
-          { id: 'cb-khi-hub', name: 'Karachi Port Terminal Cash Book', city: 'Karachi', balance: 375000 },
-        ];
+      : [];
 
     return NextResponse.json({
       success: true,
@@ -116,11 +113,11 @@ export async function GET(request: Request) {
         warehouseComparison: {
           lahore: {
             count: lahoreConsignments,
-            percentage: totalConsignments > 0 ? Math.round((lahoreConsignments / totalConsignments) * 100) : 60,
+            percentage: totalConsignments > 0 ? Math.round((lahoreConsignments / totalConsignments) * 100) : 0,
           },
           karachi: {
             count: karachiConsignments,
-            percentage: totalConsignments > 0 ? Math.round((karachiConsignments / totalConsignments) * 100) : 40,
+            percentage: totalConsignments > 0 ? Math.round((karachiConsignments / totalConsignments) * 100) : 0,
           },
         },
         cashBooks: cashBookBalances,
@@ -133,24 +130,21 @@ export async function GET(request: Request) {
       success: true,
       data: {
         summary: {
-          totalCustomers: 45,
-          totalDrivers: 18,
-          totalVehicles: 24,
-          totalConsignments: 120,
-          deliveredConsignments: 92,
-          inTransitConsignments: 28,
-          totalFreightRevenue: 4850000,
-          totalCollected: 3950000,
-          totalOutstanding: 900000,
+          totalCustomers: 0,
+          totalDrivers: 0,
+          totalVehicles: 0,
+          totalConsignments: 0,
+          deliveredConsignments: 0,
+          inTransitConsignments: 0,
+          totalFreightRevenue: 0,
+          totalCollected: 0,
+          totalOutstanding: 0,
         },
         warehouseComparison: {
-          lahore: { count: 75, percentage: 63 },
-          karachi: { count: 45, percentage: 37 },
+          lahore: { count: 0, percentage: 0 },
+          karachi: { count: 0, percentage: 0 },
         },
-        cashBooks: [
-          { id: 'cb-lhr-main', name: 'Lahore Head Office Cash Book', city: 'Lahore', balance: 525000 },
-          { id: 'cb-khi-hub', name: 'Karachi Port Terminal Cash Book', city: 'Karachi', balance: 375000 },
-        ],
+        cashBooks: [],
         recentPayments: [],
       },
     });

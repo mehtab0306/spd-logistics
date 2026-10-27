@@ -37,7 +37,7 @@ import {
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
 import { Trash2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function ChallanInTransitPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -103,32 +103,41 @@ export default function ChallanInTransitPage() {
       setLoading(true);
 
       let supabaseChallans: any[] = [];
-      try {
-        const { data, error } = await supabase
-          .from("challans")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (!error && Array.isArray(data) && data.length > 0) {
-          supabaseChallans = data.map((r: any) => ({
-            id: r.id,
-            challanNumber: r.challan_number || r.id,
-            truckNumber: r.vehicle_number,
-            driverName: r.driver_name,
-            origin: r.origin,
-            destination: r.destination,
-            status: "IN_TRANSIT",
-            dispatchDate: r.created_at,
-            createdAt: r.created_at,
-            ...r,
-          }));
+      if (isSupabaseConfigured) {
+        try {
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Supabase timeout")), 2500)
+          );
+          const fetchPromise = supabase
+            .from("challans")
+            .select("*")
+            .order("created_at", { ascending: false });
+          const { data, error }: any = await Promise.race([fetchPromise, timeoutPromise]);
+          if (!error && Array.isArray(data) && data.length > 0) {
+            supabaseChallans = data.map((r: any) => ({
+              id: r.id,
+              challanNumber: r.challan_number || r.id,
+              truckNumber: r.vehicle_number,
+              driverName: r.driver_name,
+              origin: r.origin,
+              destination: r.destination,
+              status: "IN_TRANSIT",
+              dispatchDate: r.created_at,
+              createdAt: r.created_at,
+              ...r,
+            }));
+          }
+        } catch (sbErr) {
+          console.warn("Supabase fetch challans warning:", sbErr);
         }
-      } catch (sbErr) {
-        console.warn("Supabase fetch challans warning:", sbErr);
       }
 
       let apiChallans: any[] = [];
       try {
-        const res = await fetch("/api/admin/challan");
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch("/api/admin/challan", { signal: controller.signal });
+        clearTimeout(timeoutId);
         const data = await res.json();
         apiChallans = Array.isArray(data.data)
           ? data.data
@@ -160,6 +169,7 @@ export default function ChallanInTransitPage() {
       setChallans(active);
     } finally {
       setLoading(false);
+      setIsLoaded(true);
     }
   };
 
@@ -217,10 +227,12 @@ export default function ChallanInTransitPage() {
     setChallans((prev) => prev.filter((item) => item.id !== c.id));
 
     // Supabase cloud deletion
-    try {
-      await supabase.from("challans").delete().eq("id", c.id);
-    } catch (sbErr) {
-      console.warn("Supabase challan delete warning:", sbErr);
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from("challans").delete().eq("id", c.id);
+      } catch (sbErr) {
+        console.warn("Supabase challan delete warning:", sbErr);
+      }
     }
 
     setFeedback({
@@ -303,7 +315,6 @@ export default function ChallanInTransitPage() {
           <Button
             variant="outline"
             onClick={handleExportExcel}
-            disabled={!filteredChallans.length}
             className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-xl shadow-xs gap-2 h-10 px-4"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
@@ -313,7 +324,6 @@ export default function ChallanInTransitPage() {
           <Button
             variant="outline"
             onClick={() => setPrintBatchManifests(true)}
-            disabled={!filteredChallans.length}
             className="bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300 font-bold text-xs rounded-xl shadow-xs gap-2 h-10 px-4"
           >
             <Printer className="w-4 h-4 text-blue-600" />
@@ -378,7 +388,7 @@ export default function ChallanInTransitPage() {
       </div>
 
       {/* Trips Grid - Hidden in Print when Printing Single or Batch Manifest */}
-      {!isLoaded || loading ? (
+      {loading && !isLoaded ? (
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 print:hidden">
           <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
           <p className="text-xs font-semibold text-slate-500">Loading trips in transit...</p>

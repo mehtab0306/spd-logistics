@@ -37,6 +37,7 @@ import { exportToExcel } from "@/lib/export-excel";
 export default function ArrivalsPage() {
   const [challans, setChallans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -51,7 +52,10 @@ export default function ArrivalsPage() {
       setLoading(true);
       let apiChallans: any[] = [];
       try {
-        const res = await fetch("/api/admin/challan");
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch("/api/admin/challan", { signal: controller.signal });
+        clearTimeout(timeoutId);
         const data = await res.json();
         apiChallans = Array.isArray(data.data)
           ? data.data
@@ -80,6 +84,7 @@ export default function ArrivalsPage() {
       setChallans(arrived);
     } finally {
       setLoading(false);
+      setIsLoaded(true);
     }
   };
 
@@ -256,7 +261,6 @@ export default function ArrivalsPage() {
           <Button
             variant="outline"
             onClick={handleExportExcel}
-            disabled={!filtered.length}
             className="bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-xl shadow-xs gap-2 h-10 px-4"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
@@ -331,7 +335,7 @@ export default function ArrivalsPage() {
       </div>
 
       {/* Arrived Trips Table / Cards */}
-      {loading ? (
+      {loading && !isLoaded ? (
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
           <p className="text-xs font-semibold text-slate-500">Loading arrivals...</p>
