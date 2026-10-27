@@ -35,55 +35,62 @@ export default function AdminLoginPage() {
     const submitIdentifier = (identifier.trim() || formEmail.trim()).toLowerCase();
     const submitPassword = (password || formPassword).trim();
 
-    // Direct Admin Authentication: default admin@gmail.com / admin OR updated credentials in localStorage
-    const defaultAdminMatch = (submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') && submitPassword === 'admin';
+    // Strict User & Password Verification
+    let matchedUser: any = null;
+    let expectedPassword = 'admin';
 
-    let customAdminMatch: any = null;
     try {
-      const storedAdminPassword = localStorage.getItem('spd_admin_password') || 'admin';
-      const storedActiveUser = localStorage.getItem('spd_active_user') || localStorage.getItem('spd_user');
-      const activeUser = storedActiveUser ? JSON.parse(storedActiveUser) : null;
       const rawUsers = localStorage.getItem('spd_users');
-      const usersList = rawUsers ? JSON.parse(rawUsers) : [];
+      const usersList: any[] = rawUsers ? JSON.parse(rawUsers) : [];
+      const storedAdminPass = localStorage.getItem('spd_admin_password');
+      const storedActiveUserRaw = localStorage.getItem('spd_active_user') || localStorage.getItem('spd_user');
+      const storedActiveUser = storedActiveUserRaw ? JSON.parse(storedActiveUserRaw) : null;
 
-      const adminUser =
-        usersList.find(
-          (u: any) =>
-            (u.role === 'SUPER_ADMIN' || u.role === 'ADMIN') &&
-            (u.email?.toLowerCase() === submitIdentifier || u.username?.toLowerCase() === submitIdentifier)
-        ) ||
-        (activeUser &&
-        (activeUser.email?.toLowerCase() === submitIdentifier || activeUser.username?.toLowerCase() === submitIdentifier)
-          ? activeUser
-          : null);
+      // Look up strictly by email or username
+      matchedUser = usersList.find(
+        (u: any) =>
+          u.email?.toLowerCase() === submitIdentifier ||
+          u.username?.toLowerCase() === submitIdentifier
+      ) || (
+        storedActiveUser &&
+        (storedActiveUser.email?.toLowerCase() === submitIdentifier || storedActiveUser.username?.toLowerCase() === submitIdentifier)
+          ? storedActiveUser
+          : null
+      );
 
-      if (adminUser) {
-        const expectedPassword = adminUser.password || storedAdminPassword || 'admin';
-        if (submitPassword === expectedPassword || submitPassword === 'admin') {
-          customAdminMatch = adminUser;
-        }
-      } else if (submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') {
-        if (submitPassword === storedAdminPassword || submitPassword === 'admin') {
-          customAdminMatch = activeUser || {
+      if (!matchedUser) {
+        // Initial fresh install fallback before any custom password is saved
+        if ((submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') && !storedAdminPass) {
+          expectedPassword = 'admin';
+          matchedUser = {
             id: 'admin_root',
             name: 'System Admin',
             email: 'admin@gmail.com',
+            username: 'admin',
             role: 'SUPER_ADMIN',
+            password: 'admin',
           };
+        } else {
+          setError('User not found!');
+          setStatus('ERROR');
+          return;
         }
+      } else {
+        expectedPassword = matchedUser.password || storedAdminPass || 'admin';
       }
-    } catch {}
 
-    const isMatchingAdmin = defaultAdminMatch || Boolean(customAdminMatch);
+      // Strictly invalidate old password — only allow if input matches active password
+      if (expectedPassword !== submitPassword) {
+        setError('Incorrect password! Old password is no longer valid.');
+        setStatus('ERROR');
+        return;
+      }
+    } catch (authVerifyErr) {
+      console.warn('Auth verification error:', authVerifyErr);
+    }
 
-    if (isMatchingAdmin) {
-      const targetUser = customAdminMatch || {
-        id: 'admin_root',
-        name: 'System Admin',
-        email: 'admin@gmail.com',
-        username: 'admin',
-        role: 'SUPER_ADMIN',
-      };
+    if (matchedUser) {
+      const targetUser = matchedUser;
       const adminSession = {
         id: targetUser.id || 'admin_root',
         name: targetUser.fullName || targetUser.name || 'System Admin',
@@ -121,15 +128,15 @@ export default function AdminLoginPage() {
         console.warn('Cookie set error:', cookieErr);
       }
 
-      // 3. Sync to API route
+      // 3. Sync to API route with real active credentials
       try {
         fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            identifier: 'admin@gmail.com',
-            email: 'admin@gmail.com',
-            password: 'admin',
+            identifier: targetUser.email || submitIdentifier,
+            email: targetUser.email || submitIdentifier,
+            password: submitPassword,
             role: 'ADMIN',
           }),
         }).catch(() => {});

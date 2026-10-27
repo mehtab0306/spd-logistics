@@ -39,64 +39,79 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
 
   const wrapperClass = isFullPage
     ? "challan-print-single max-w-4xl mx-auto p-4 sm:p-6 print:p-0 print:max-w-none print:w-full"
-    : "challan-print-single fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static print:overflow-visible print:block print:inset-auto print:z-auto";
+    : "challan-print-single fixed inset-0 z-[9999] bg-black/80 flex flex-col items-center justify-start p-4 md:p-6 overflow-y-auto print:p-0 print:bg-white print:static print:overflow-visible print:block print:inset-auto print:z-auto";
 
   const cardClass = isFullPage
     ? "relative w-full bg-white rounded-2xl shadow-sm p-6 sm:p-8 text-slate-900 border border-slate-200 print:border-none print:shadow-none print:p-0 print:my-0"
-    : "relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl p-6 sm:p-8 my-6 text-slate-900 border border-slate-200 print:border-none print:shadow-none print:p-0 print:my-0 print:w-full print:max-w-none";
+    : "overflow-y-auto max-h-[85vh] w-full max-w-4xl bg-white p-6 sm:p-8 rounded-b-xl shadow-2xl text-slate-900 border border-t-0 border-slate-200 print:border-none print:shadow-none print:p-0 print:my-0 print:w-full print:max-w-none print:max-h-none print:overflow-visible";
 
   return (
     <div className={wrapperClass} data-active="true">
+      {/* Sticky, highly visible top-right Close Bar for modal mode */}
+      {!isFullPage && (
+        <div className="sticky top-0 z-[10000] w-full max-w-4xl bg-slate-900/90 backdrop-blur px-4 py-3 flex items-center justify-between rounded-t-xl border-b border-slate-700 shadow-xl print:hidden">
+          <div className="text-white font-bold text-sm flex items-center gap-2">
+            <span>📄 Dispatch Manifest Preview (Challan #{challanNo})</span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              href={`/admin/challan/${challan.id || challanNo}/print`}
+              target="_blank"
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow cursor-pointer border border-slate-700"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Full Page</span>
+            </Link>
+            <button 
+              type="button"
+              onClick={() => window.print()} 
+              className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+            >
+              🖨️ Print
+            </button>
+            {onClose && (
+              <button 
+                type="button"
+                onClick={onClose} 
+                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow cursor-pointer"
+              >
+                ✖ Close (Back)
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className={cardClass}>
-        {/* Modal / Page Controls - Strictly Hidden when printing */}
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4 print:hidden">
-          <div className="flex items-center gap-3">
-            {isFullPage && (
+        {/* Full Page Controls - Strictly Hidden when printing */}
+        {isFullPage && (
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4 print:hidden">
+            <div className="flex items-center gap-3">
               <Link href="/admin/challan-in-transit">
                 <Button variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5 h-9">
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to Fleet</span>
                 </Button>
               </Link>
-            )}
-            <div>
-              <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
-                Trip Dispatch Manifest & Fleet Challan
-              </h3>
-              <p className="text-xs text-slate-500 font-mono">Challan #{challanNo}</p>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                  Trip Dispatch Manifest & Fleet Challan
+                </h3>
+                <p className="text-xs text-slate-500 font-mono">Challan #{challanNo}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => window.print()}
+                className="bg-spd-blue hover:bg-blue-800 text-white font-bold text-xs rounded-xl gap-2 h-9 px-4 shadow-sm"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print A4 Manifest</span>
+              </Button>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {!isFullPage && (
-              <Link
-                href={`/admin/challan/${challan.id || challanNo}/print`}
-                target="_blank"
-                className="text-xs font-bold text-slate-700 hover:text-black border border-slate-300 hover:bg-slate-50 rounded-xl px-3 py-2 flex items-center gap-1.5 transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Full Page View</span>
-              </Link>
-            )}
-            <Button
-              onClick={() => window.print()}
-              className="bg-spd-blue hover:bg-blue-800 text-white font-bold text-xs rounded-xl gap-2 h-9 px-4 shadow-sm"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print A4 Manifest</span>
-            </Button>
-            {onClose && (
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={onClose}
-                className="h-9 w-9 rounded-xl border-slate-200 hover:bg-slate-100"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* PRINTABLE DOCUMENT BODY (Exact A4 Corporate Spec) */}
         <div

@@ -22,43 +22,74 @@ export async function POST(request: Request) {
     const lowerIdentifier = identifier.toLowerCase();
     const cleanPassword = (password || '').trim();
 
-    // Direct hardcoded admin credentials check to completely bypass database dependency
-    if ((lowerIdentifier === 'admin@gmail.com' || lowerIdentifier === 'admin') && cleanPassword === 'admin') {
-      const token = 'spd-admin-session-token';
-      const adminData = {
-        token,
-        id: 'admin-1',
-        email: 'admin@gmail.com',
-        username: 'admin',
-        name: 'System Admin',
-        role: 'SUPER_ADMIN',
-        redirectUrl: '/admin',
-      };
+    // Move user database lookup first to strictly enforce updated passwords and invalidate old credentials
+    let user: any = null;
+    try {
+      user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: identifier },
+            { email: lowerIdentifier },
+            { username: identifier },
+            { username: lowerIdentifier },
+            { phone: identifier },
+          ],
+        },
+        include: {
+          customer: true,
+          driver: true,
+        },
+      });
+    } catch (dbFindErr) {
+      console.warn('Database user search failed (falling back):', dbFindErr);
+    }
 
-      const response = NextResponse.json({
-        success: true,
-        redirectUrl: '/admin',
-        user: {
+    // Only allow initial fresh-install admin if 0 admins exist in database
+    if (!user && (lowerIdentifier === 'admin@gmail.com' || lowerIdentifier === 'admin')) {
+      let existingAdminCount = 0;
+      try {
+        existingAdminCount = await prisma.user.count({
+          where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
+        });
+      } catch {}
+
+      if (existingAdminCount === 0 && cleanPassword === 'admin') {
+        const token = 'spd-admin-session-token';
+        const adminData = {
+          token,
           id: 'admin-1',
           email: 'admin@gmail.com',
+          username: 'admin',
           name: 'System Admin',
           role: 'SUPER_ADMIN',
-        },
-        data: adminData,
-      });
+          redirectUrl: '/admin',
+        };
 
-      const isLocalhost = request.url.includes('localhost') || request.url.includes('127.0.0.1');
-      const isHttps = !isLocalhost && (request.headers.get('x-forwarded-proto') === 'https' || request.url.startsWith('https:'));
+        const response = NextResponse.json({
+          success: true,
+          redirectUrl: '/admin',
+          user: {
+            id: 'admin-1',
+            email: 'admin@gmail.com',
+            name: 'System Admin',
+            role: 'SUPER_ADMIN',
+          },
+          data: adminData,
+        });
 
-      response.cookies.set('spd-auth-token', token, {
-        httpOnly: false,
-        secure: isHttps,
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7,
-        path: '/',
-      });
+        const isLocalhost = request.url.includes('localhost') || request.url.includes('127.0.0.1');
+        const isHttps = !isLocalhost && (request.headers.get('x-forwarded-proto') === 'https' || request.url.startsWith('https:'));
 
-      return response;
+        response.cookies.set('spd-auth-token', token, {
+          httpOnly: false,
+          secure: isHttps,
+          sameSite: 'lax',
+          maxAge: 60 * 60 * 24 * 7,
+          path: '/',
+        });
+
+        return response;
+      }
     }
 
     // Direct hardcoded customer credentials check strictly configured to customer@gmail.com / admin
@@ -155,26 +186,27 @@ export async function POST(request: Request) {
       return response;
     }
 
-    // Find user by email, username, or phone
-    let user: any = null;
-    try {
-      user = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: identifier },
-            { email: lowerIdentifier },
-            { username: identifier },
-            { username: lowerIdentifier },
-            { phone: identifier },
-          ],
-        },
-        include: {
-          customer: true,
-          driver: true,
-        },
-      });
-    } catch (dbFindErr) {
-      console.warn('Database user search failed (falling back):', dbFindErr);
+    // Database search already executed above; re-check if user was not found
+    if (!user) {
+      try {
+        user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { email: identifier },
+              { email: lowerIdentifier },
+              { username: identifier },
+              { username: lowerIdentifier },
+              { phone: identifier },
+            ],
+          },
+          include: {
+            customer: true,
+            driver: true,
+          },
+        });
+      } catch (dbFindErr) {
+        console.warn('Database user search fallback error:', dbFindErr);
+      }
     }
 
     // Production bootstrap: If database has 0 admin accounts and official credentials are used, initialize SUPER_ADMIN
@@ -389,7 +421,7 @@ export async function POST(request: Request) {
     }
     if (!isPasswordValid) {
       return NextResponse.json(
-        { success: false, error: 'Invalid credentials. Please check your username and password.' },
+        { success: false, error: 'Incorrect password! Old password is no longer valid.' },
         { status: 401 }
       );
     }

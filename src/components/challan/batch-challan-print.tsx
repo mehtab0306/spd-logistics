@@ -15,38 +15,34 @@ export function BatchChallanPrint({ challans, onClose }: BatchChallanPrintProps)
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static print:overflow-visible print:block print:inset-auto print:z-auto"
+      className="fixed inset-0 z-[9999] bg-black/80 flex flex-col items-center justify-start p-4 md:p-6 overflow-y-auto print:p-0 print:bg-white print:static print:overflow-visible print:block print:inset-auto print:z-auto"
       data-active="true"
     >
-      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl p-6 sm:p-8 my-6 text-slate-900 border border-slate-200 print:border-none print:shadow-none print:p-0 print:my-0 print:w-full print:max-w-none">
-        {/* Modal Controls - Hidden when printing */}
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6 print:hidden">
-          <div>
-            <h3 className="text-base sm:text-lg font-black text-slate-900">
-              Batch Transit Dispatch Manifests ({challans.length} Trips)
-            </h3>
-            <p className="text-xs text-slate-500">
-              Each manifest will print on a separate A4 Portrait page.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => window.print()}
-              className="bg-spd-blue hover:bg-blue-800 text-white font-bold text-xs rounded-xl gap-2 h-9 px-4 shadow-sm"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print All ({challans.length}) Manifests</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={onClose}
-              className="h-9 w-9 rounded-xl border-slate-200 hover:bg-slate-100"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+      {/* Sticky, highly visible top-right Close Bar */}
+      <div className="sticky top-0 z-[10000] w-full max-w-4xl bg-slate-900/90 backdrop-blur px-4 py-3 flex items-center justify-between rounded-t-xl border-b border-slate-700 shadow-xl print:hidden">
+        <div className="text-white font-bold text-sm flex items-center gap-2">
+          <span>📄 Dispatch Manifests Preview ({challans.length} Trips)</span>
         </div>
+        <div className="flex items-center gap-3">
+          <button 
+            type="button"
+            onClick={() => window.print()} 
+            className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+          >
+            🖨️ Print All
+          </button>
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow cursor-pointer"
+          >
+            ✖ Close (Back)
+          </button>
+        </div>
+      </div>
+
+      {/* Inner manifest documents scrollable container */}
+      <div className="overflow-y-auto max-h-[85vh] w-full max-w-4xl bg-white p-6 sm:p-8 rounded-b-xl shadow-2xl text-slate-900 border border-t-0 border-slate-200 print:border-none print:shadow-none print:p-0 print:my-0 print:w-full print:max-w-none print:max-h-none print:overflow-visible">
 
         {/* PRINTABLE BATCH CONTAINER */}
         <div

@@ -59,9 +59,9 @@ export async function POST(request: Request) {
     }
 
     if (user && user.password) {
-      // Verify current password against stored hash
+      // Verify current password against stored hash strictly (zero old fallbacks)
       const isCurrentValid = await comparePassword(currentPassword, user.password);
-      if (!isCurrentValid && currentPassword !== 'admin' && currentPassword !== 'admin123') {
+      if (!isCurrentValid) {
         return NextResponse.json(
           { success: false, error: 'Current password is incorrect.' },
           { status: 400 }
@@ -78,7 +78,33 @@ export async function POST(request: Request) {
           data: { password: hashedPassword },
         });
       } catch (updateErr) {
-        console.warn('Could not update user password in DB (read-only filesystem):', updateErr);
+        console.warn('Could not update user password in DB:', updateErr);
+      }
+    } else {
+      // If user record is not yet in Prisma DB, bootstrap with new hashed password
+      try {
+        const hashedPassword = await hashPassword(newPassword);
+        const adminEmail = effectiveSession.email || 'admin@gmail.com';
+        const existing = await prisma.user.findFirst({ where: { email: adminEmail } });
+        if (existing) {
+          await prisma.user.update({
+            where: { id: existing.id },
+            data: { password: hashedPassword },
+          });
+        } else {
+          await prisma.user.create({
+            data: {
+              email: adminEmail,
+              username: 'admin',
+              name: effectiveSession.name || 'System Admin',
+              role: 'SUPER_ADMIN',
+              status: 'ACTIVE',
+              password: hashedPassword,
+            },
+          });
+        }
+      } catch (bootstrapErr) {
+        console.warn('Could not bootstrap user password in DB:', bootstrapErr);
       }
     }
 

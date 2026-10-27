@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { AdminNavbar } from "@/components/layout/admin-navbar";
 import { AiCopilotWidget } from "@/components/ai/ai-copilot-widget";
+import { TruckLoader } from "@/components/ui/truck-loader";
 import { Loader2, ShieldCheck } from "lucide-react";
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF"];
@@ -12,6 +13,8 @@ const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF"];
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const transitionStartRef = React.useRef<number>(0);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -95,6 +98,58 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     };
   }, [pathname]);
 
+  // Handle route transition loader for tab/navigation changes
+  useEffect(() => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement)?.closest("a");
+      if (!target) return;
+      const href = target.getAttribute("href");
+      if (
+        href &&
+        href.startsWith("/admin") &&
+        !href.startsWith("/admin#") &&
+        !target.hasAttribute("download") &&
+        target.getAttribute("target") !== "_blank"
+      ) {
+        const cleanHref = href.split("?")[0].split("#")[0];
+        const cleanCurrent = pathname.split("?")[0].split("#")[0];
+        if (cleanHref !== cleanCurrent) {
+          transitionStartRef.current = Date.now();
+          setIsNavigating(true);
+        }
+      }
+    };
+
+    const handleCustomLoading = (e: any) => {
+      if (e.detail?.active) {
+        transitionStartRef.current = Date.now();
+        setIsNavigating(true);
+      } else {
+        setIsNavigating(false);
+      }
+    };
+
+    document.addEventListener("click", handleDocumentClick, { capture: true });
+    window.addEventListener("spd-route-loading", handleCustomLoading);
+
+    return () => {
+      document.removeEventListener("click", handleDocumentClick, { capture: true });
+      window.removeEventListener("spd-route-loading", handleCustomLoading);
+    };
+  }, [pathname]);
+
+  // Auto-dismiss smoothly when target route finishes loading with min ~600ms duration for satisfying feel
+  useEffect(() => {
+    if (isNavigating) {
+      const elapsed = Date.now() - transitionStartRef.current;
+      const remaining = Math.max(0, 600 - elapsed);
+      const timer = setTimeout(() => {
+        setIsNavigating(false);
+      }, remaining);
+      return () => clearTimeout(timer);
+    }
+  }, [pathname, isNavigating]);
+
   // While verifying or if unauthorized, do not render any admin UI, tables, or confidential logistics data
   if (!isAuthorized) {
     return (
@@ -119,6 +174,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <TruckLoader isVisible={isNavigating} subtitle="SPD Logistics • Loading Operations..." />
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <div className="flex flex-col flex-1 overflow-hidden lg:ml-0 min-w-0">
         <AdminNavbar onMenuClick={() => setMobileOpen(true)} />

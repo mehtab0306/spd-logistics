@@ -484,39 +484,49 @@ function AdminProfileContent() {
       const rawUsers = localStorage.getItem("spd_users");
       let usersList = rawUsers ? JSON.parse(rawUsers) : [];
 
+      // Determine current expected password (strictly what is currently active)
+      const currentStoredPass = localStorage.getItem("spd_admin_password");
       let targetIndex = usersList.findIndex(
-        (u: any) => u.id === currentUser.id || u.email === currentUser.email
+        (u: any) => u.id === currentUser.id || u.email?.toLowerCase() === currentUser.email?.toLowerCase()
       );
 
+      const activeExpectedPass = currentStoredPass || (targetIndex !== -1 ? usersList[targetIndex].password : "admin");
+
+      // Verify current password strictly (zero fallback to old passwords)
+      if (activeExpectedPass && activeExpectedPass !== currentPassword) {
+        const msg = "Current password is incorrect.";
+        setPasswordFeedback({ type: "error", message: msg });
+        toast.error(msg);
+        setChangingPassword(false);
+        return;
+      }
+
+      // Strictly overwrite or append user with new password
       if (targetIndex !== -1) {
-        // Verify current password if set
-        if (
-          usersList[targetIndex].password &&
-          usersList[targetIndex].password !== currentPassword &&
-          currentPassword !== "admin" &&
-          currentPassword !== "admin123"
-        ) {
-          const msg = "Current password is incorrect.";
-          setPasswordFeedback({ type: "error", message: msg });
-          toast.error(msg);
-          setChangingPassword(false);
-          return;
-        }
         usersList[targetIndex].password = newPassword;
       } else {
-        // Add root admin entry if missing
         usersList.push({
           id: currentUser.id || "admin_root",
           email: currentUser.email || "admin@gmail.com",
+          username: "admin",
           password: newPassword,
           role: currentUser.role || "SUPER_ADMIN",
         });
       }
 
+      // Also wipe any duplicate/stale legacy entries with old passwords
+      usersList = usersList.map((u: any) => {
+        if (u.id === currentUser.id || u.email?.toLowerCase() === currentUser.email?.toLowerCase() || u.email?.toLowerCase() === "admin@gmail.com") {
+          return { ...u, password: newPassword };
+        }
+        return u;
+      });
+
+      // Strictly write new password across all storage layers
       localStorage.setItem("spd_users", JSON.stringify(usersList));
       localStorage.setItem("spd_admin_password", newPassword);
 
-      // Update active session
+      // Update active session with new password
       const updatedSession = { ...currentUser, password: newPassword };
       localStorage.setItem("spd_active_user", JSON.stringify(updatedSession));
       localStorage.setItem("spd_user", JSON.stringify(updatedSession));
