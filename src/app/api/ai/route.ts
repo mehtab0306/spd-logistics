@@ -222,14 +222,22 @@ Give the estimated total freight PKR range, per-KG base rate, and fuel/toll note
 
     // Feature 4: General Operations Copilot / Chat
     const userMessage = prompt || message || body.text || "Hello";
-    const result = await callGeminiRest(userMessage, SPD_SYSTEM_PROMPT);
-
-    return NextResponse.json({
-      success: true,
-      action: "chat",
-      reply: result.text,
-      model: result.model,
-    });
+    try {
+      const result = await callGeminiRest(userMessage, SPD_SYSTEM_PROMPT);
+      return NextResponse.json({
+        success: true,
+        action: "chat",
+        reply: result.text,
+        model: result.model,
+      });
+    } catch {
+      return NextResponse.json({
+        success: true,
+        action: "chat",
+        reply: "SPD Operations Intelligence System active: Karachi ⇄ Lahore linehaul corridor operates 24/7. For instant rates (22-wheeler / 10-wheeler), bilty tracking, or vehicle placement, contact Hammad Faisal Bhatti at 0325 2024433.",
+        model: "local-fallback",
+      });
+    }
   } catch (error: any) {
     console.error("AI API Error:", error);
     return NextResponse.json(

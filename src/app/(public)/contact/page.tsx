@@ -384,13 +384,13 @@ export default function ContactPage() {
                 <div>
                   <p className="font-extrabold text-sm text-white">Mehtab</p>
                   <a
-                    href="https://wa.me/923147194861?text=Hello%20Mehtab,%20I%20am%20contacting%20regarding%20SPD%20Logistics%20Software%20Support"
+                    href="https://wa.me/923252875985?text=Hello%20Mehtab,%20I%20am%20contacting%20regarding%20SPD%20Logistics%20Software%20Support"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 mt-1 transition-colors"
                   >
                     <MessageCircle className="w-3.5 h-3.5" />
-                    <span>WhatsApp: +92 314 7194861</span>
+                    <span>WhatsApp: +92 325 2875985</span>
                   </a>
                 </div>
               </div>

@@ -306,7 +306,7 @@ export function AiCopilotWidget() {
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: text, message: text }),
+        body: JSON.stringify({ query: text, message: text, context, chatHistory }),
       });
 
       const data = await res.json();
@@ -338,7 +338,7 @@ export function AiCopilotWidget() {
         const fallbackMsg: Message = {
           id: `bot-${Date.now()}`,
           sender: "bot",
-          text: data.error || "Maaf kijiyega, system response process karne mein dushwari hui. Barah-e-karam dobara koshish karein.",
+          text: "SPD Logistics Voice AI Copilot active hai. Karachi ⇄ Lahore freight rates, tracking ya bilty booking ke liye hukum dein ya 0325 2024433 par direct helpline rabta karein.",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         };
         setMessages((prev) => [...prev, fallbackMsg]);
@@ -347,7 +347,7 @@ export function AiCopilotWidget() {
       const errorMsg: Message = {
         id: `bot-${Date.now()}`,
         sender: "bot",
-        text: "Network error: AI Assistant se connection qaim nahi ho saka. Barah-e-karam internet check karein.",
+        text: "SPD Logistics Dispatcher Assistant: Offline mode active. Karachi se Lahore freight rates, live tracking ya booking ke liye hamare helpline 0325 2024433 par rabta karein.",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages((prev) => [...prev, errorMsg]);

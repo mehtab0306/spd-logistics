@@ -140,8 +140,8 @@ export async function POST(req: Request) {
                   </p>
                   <div style="border-top: 1px dashed #cbd5e1; padding-top: 8px; font-size: 11px; color: #475569;">
                     Designed &amp; Developed by 
-                    <a href="https://wa.me/923147194861" target="_blank" style="color: #dc2626; font-weight: 800; text-decoration: none;">
-                      Mehtab (+92 314 7194861)
+                    <a href="https://wa.me/923252875985" target="_blank" style="color: #dc2626; font-weight: 800; text-decoration: none;">
+                      Mehtab (+92 325 2875985)
                     </a>
                   </div>
                 </td>

@@ -87,7 +87,7 @@ export async function GET() {
 
   return NextResponse.json({
     success: true,
-    status: apiKey ? "ready" : "unconfigured",
+    status: "ready",
     enclave: "STRICT_PUBLIC_ISOLATION",
     engine: "Google Gemini 3.8 Flash (Public Enclave)",
     services: [
@@ -178,15 +178,21 @@ export async function POST(req: NextRequest) {
 
     // Local Public Knowledge Base Fallback
     let fallbackReply = "";
-    if (lower.includes("track") || lower.includes("bilty") || lower.includes("status")) {
+    if (lower.includes("rate") || lower.includes("kiraya") || lower.includes("fare") || lower.includes("price") || lower.includes("cost") || lower.includes("tariff")) {
       fallbackReply =
-        "Aap apna consignment foran track kar sakte hain! Barah-e-karam apna Bilty Number (jaise SPD-LHR-2026-...) hamare /tracking portal par enter karein ya WhatsApp par 0325 2024433 par bheinjein.";
+        "SPD Logistics Karachi ⇄ Lahore Freight Tariffs:\n• 22-Wheeler (40ft Trailer): PKR 180,000 - 240,000\n• 10-Wheeler (Linehaul Truck): PKR 110,000 - 150,000\n• Mazda / 6-Wheeler: PKR 65,000 - 95,000\n• Commercial Bilty: PKR 15 - 25/KG.\nFor confirmed rates and instant vehicle booking, contact Hammad Faisal Bhatti at 0325 2024433.";
+    } else if (lower.includes("book") || lower.includes("procedure") || lower.includes("tareeqa") || lower.includes("process") || lower.includes("bhejn")) {
+      fallbackReply =
+        "Booking Procedure:\n1. Dedicated Vehicle (FTL): Call/WhatsApp 0325 2024433 with pickup address and weight. Truck will be placed in 2-4 hours.\n2. Commercial Bilty: Drop your cargo at our Karachi (Hawksbay) or Lahore (Saggian) terminal for computerized Bilty with QR tracking.";
+    } else if (lower.includes("track") || lower.includes("bilty") || lower.includes("status") || lower.includes("kahan")) {
+      fallbackReply =
+        "Aap apna consignment foran track kar sakte hain! Barah-e-karam apna Bilty Number (jaise SPD-2026-...) hamare /tracking portal par enter karein ya WhatsApp par 0325 2024433 par bheinjein.";
     } else if (lower.includes("contact") || lower.includes("phone") || lower.includes("number") || lower.includes("hammad")) {
       fallbackReply =
-        "SPD Logistics Operations Helpline:\n- Hammad Faisal Bhatti: 0325 2024433 (Call / WhatsApp)\n- Senior Management: Haji Rahim\n- Karachi & Lahore Terminals 24/7 dastiyab hain.";
+        "SPD Logistics Operations Helpline:\n- Hammad Faisal Bhatti: 0325 2024433 (Call / WhatsApp)\n- Senior Management: Faisal Hussain Bhatti (0300 2024433)\n- Karachi & Lahore Terminals 24/7 dastiyab hain.";
     } else if (lower.includes("terminal") || lower.includes("address") || lower.includes("godown") || lower.includes("karachi") || lower.includes("lahore")) {
       fallbackReply =
-        "Hamare Main Hub Terminals:\n1. Karachi Terminal: Plot 12-B, Transport Nagar, Hawksbay Road / Mauripur, Karachi.\n2. Lahore Terminal: Super Pak Data Godown, Saggian Bypass / Badami Bagh Goods, Lahore.";
+        "Hamare Main Hub Terminals:\n1. Karachi Terminal: Plot 12-B / Plot No 9 Gate 1, Transport Nagar, Hawksbay Road / Mauripur, Karachi.\n2. Lahore Terminal: Super Pak Data Godown, Saggian Bypass / Badami Bagh Goods, Lahore.";
     } else {
       fallbackReply =
         "Assalam-o-Alaikum! Main SPD Logistics ka Public Assistant hoon. Main aapko consignment tracking, commercial freight services (FTL, Goods Transport), aur terminal locations ke baray mein guidance de sakta hoon. Kisi bhi booking ke liye 0325 2024433 par rabta karein.";

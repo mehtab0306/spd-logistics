@@ -48,6 +48,7 @@ export default function NewBrokerPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setFormError("");
     setFormSuccess("");
 

@@ -117,6 +117,7 @@ export default function NewDriverPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setSubmitting(true);
     setFormError("");
     setSuccessMessage("");

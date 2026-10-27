@@ -122,12 +122,12 @@ export function Footer() {
             <p>
               Designed &amp; Developed by
               <a 
-                href="https://wa.me/923147194861?text=Hello%20Mehtab,%20I%20am%20contacting%20you%20regarding%20SPD%20Logistics%20Software" 
+                href="https://wa.me/923252875985?text=Hello%20Mehtab,%20I%20am%20contacting%20you%20regarding%20SPD%20Logistics%20Software" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="text-red-600 font-semibold hover:underline transition-colors ml-1"
               >
-                Mehtab
+                Mehtab (+92 325 2875985)
               </a>
             </p>
           </div>
