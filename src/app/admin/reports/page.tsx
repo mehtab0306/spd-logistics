@@ -25,6 +25,7 @@ import {
   getStoredDrivers,
   getStoredVehicles,
 } from "@/lib/local-persistence";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function ReportsPage() {
   const [reportData, setReportData] = useState<any>(null);
@@ -36,7 +37,7 @@ export default function ReportsPage() {
       let apiData: any = null;
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
         const res = await fetch("/api/admin/reports", { signal: controller.signal });
         clearTimeout(timeoutId);
         const data = await res.json();
@@ -47,34 +48,58 @@ export default function ReportsPage() {
         console.warn("API reports fetch notice:", e);
       }
 
+      // Check if real entries exist in Supabase
+      let supabaseBilties: any[] = [];
+      if (isSupabaseConfigured && (!apiData || !apiData.summary || apiData.summary.totalConsignments === 0)) {
+        try {
+          const { data: sbB } = await supabase.from("bilties").select("*");
+          if (Array.isArray(sbB)) {
+            supabaseBilties = sbB.map((r: any) => ({
+              id: r.id || r.bilty_number,
+              biltyNumber: r.bilty_number || r.id,
+              origin: r.origin_station || r.origin || "Lahore",
+              destination: r.destination_station || r.destination || "Karachi",
+              totalFreight: Number(r.freight_amount ?? r.total_freight ?? 0),
+              paidAmount: Number(r.advance_paid ?? 0),
+              remainingBalance: Number(r.remaining_balance ?? 0),
+              status: r.status || "Booked",
+              shipmentStatus: (r.status || "BOOKED").toUpperCase(),
+            }));
+          }
+        } catch (e) {
+          console.warn("Supabase reports bilties fetch notice:", e);
+        }
+      }
+
       // Check if real local entries exist
       const localBilties = getStoredBilties().filter(
         (b) => b && b.shipmentStatus !== "DELETED" && !String(b.id || "").startsWith("bilty-demo-")
       );
+      const activeBilties = supabaseBilties.length > 0 ? supabaseBilties : localBilties;
       const localCustomers = getStoredCustomers();
       const localDrivers = getStoredDrivers();
       const localVehicles = getStoredVehicles();
 
-      // If API summary is 0 or missing, but user has booked bilties in browser:
-      if ((!apiData || !apiData.summary || apiData.summary.totalConsignments === 0) && localBilties.length > 0) {
-        const totalConsignments = localBilties.length;
-        const lahoreCount = localBilties.filter(
+      // If API summary is 0 or missing, but user has booked bilties:
+      if ((!apiData || !apiData.summary || apiData.summary.totalConsignments === 0) && activeBilties.length > 0) {
+        const totalConsignments = activeBilties.length;
+        const lahoreCount = activeBilties.filter(
           (b) => (b.warehouse || "").toUpperCase().includes("LAHORE") || (b.origin || "").toLowerCase().includes("lahore")
         ).length;
-        const karachiCount = localBilties.filter(
+        const karachiCount = activeBilties.filter(
           (b) => (b.warehouse || "").toUpperCase().includes("KARACHI") || (b.origin || "").toLowerCase().includes("karachi")
         ).length;
-        const deliveredCount = localBilties.filter((b) => b.shipmentStatus === "DELIVERED").length;
-        const inTransitCount = localBilties.filter(
+        const deliveredCount = activeBilties.filter((b) => b.shipmentStatus === "DELIVERED").length;
+        const inTransitCount = activeBilties.filter(
           (b) => b.shipmentStatus === "IN_TRANSIT" || b.shipmentStatus === "DISPATCHED"
         ).length;
 
-        const totalFreight = localBilties.reduce(
+        const totalFreight = activeBilties.reduce(
           (acc, b) => acc + (parseFloat(b.freight || b.totalAmount || b.totalFreight) || 0),
           0
         );
-        const totalPaid = localBilties.reduce((acc, b) => acc + (parseFloat(b.paidAmount) || 0), 0);
-        const totalRemaining = localBilties.reduce((acc, b) => {
+        const totalPaid = activeBilties.reduce((acc, b) => acc + (parseFloat(b.paidAmount) || 0), 0);
+        const totalRemaining = activeBilties.reduce((acc, b) => {
           const tot = parseFloat(b.freight || b.totalAmount || b.totalFreight) || 0;
           const pd = parseFloat(b.paidAmount) || 0;
           const rem = b.remainingBalance !== undefined ? parseFloat(b.remainingBalance) : Math.max(0, tot - pd);

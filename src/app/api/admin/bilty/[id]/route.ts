@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, getAuthCookie } from '@/lib/auth';
 import { getCentralCollection, saveCentralRecord, deleteCentralRecord } from '@/lib/server-store';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,6 +97,50 @@ export async function GET(
       );
     }
 
+    // 3. Supabase cloud database lookup
+    if (!single && isSupabaseConfigured) {
+      try {
+        const { data: sbRow } = await supabase
+          .from('bilties')
+          .select('*')
+          .or(`bilty_number.eq.${id},id.eq.${id}`)
+          .maybeSingle();
+
+        if (sbRow) {
+          single = {
+            id: sbRow.id || sbRow.bilty_number,
+            biltyNumber: sbRow.bilty_number || sbRow.id,
+            trackingId: sbRow.bilty_number || sbRow.id,
+            bookingDate: sbRow.booking_date || sbRow.created_at || new Date().toISOString(),
+            date: sbRow.booking_date || sbRow.created_at || new Date().toISOString(),
+            senderName: sbRow.sender_name || 'Walk-in Shipper',
+            senderPhone: sbRow.sender_phone || '',
+            receiverName: sbRow.receiver_name || 'Consignee',
+            receiverPhone: sbRow.receiver_phone || '',
+            origin: sbRow.origin_station || sbRow.origin || 'Lahore',
+            destination: sbRow.destination_station || sbRow.destination || 'Karachi',
+            freightAmount: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
+            freight: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
+            totalFreight: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
+            totalAmount: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
+            paidAmount: Number(sbRow.advance_paid ?? 0),
+            remainingBalance: Number(sbRow.remaining_balance ?? 0),
+            paymentMode: sbRow.payment_mode || 'TO-PAY',
+            status: sbRow.status || 'Booked',
+            shipmentStatus: (sbRow.status || 'BOOKED').toUpperCase(),
+            itemDescription: sbRow.item_description || 'General Cargo',
+            packageDetails: sbRow.item_description || 'General Cargo',
+            packagesCount: Number(sbRow.packages_count) || 1,
+            quantity: Number(sbRow.packages_count) || 1,
+            weight: Number(sbRow.weight) || 0,
+            ...sbRow,
+          };
+        }
+      } catch (sbErr) {
+        console.warn('Supabase lookup in /api/admin/bilty/[id] notice:', sbErr);
+      }
+    }
+
     if (single) {
       return NextResponse.json({ success: true, data: single });
     }
@@ -130,6 +175,29 @@ export async function PUT(
       // Fallback update in central store
     }
 
+    if (isSupabaseConfigured) {
+      try {
+        const updatePayload: Record<string, any> = {};
+        if (body.senderName) updatePayload.sender_name = body.senderName;
+        if (body.receiverName) updatePayload.receiver_name = body.receiverName;
+        if (body.origin) updatePayload.origin_station = body.origin;
+        if (body.destination) updatePayload.destination_station = body.destination;
+        if (body.totalAmount !== undefined || body.totalFreight !== undefined) {
+          updatePayload.freight_amount = Number(body.totalAmount || body.totalFreight) || 0;
+        }
+        if (body.paidAmount !== undefined) updatePayload.advance_paid = Number(body.paidAmount) || 0;
+        if (body.remainingBalance !== undefined) updatePayload.remaining_balance = Number(body.remainingBalance) || 0;
+        if (body.shipmentStatus || body.status) updatePayload.status = body.shipmentStatus || body.status;
+        if (body.paymentMode) updatePayload.payment_mode = body.paymentMode;
+
+        if (Object.keys(updatePayload).length > 0) {
+          await supabase.from('bilties').update(updatePayload).or(`bilty_number.eq.${id},id.eq.${id}`);
+        }
+      } catch (sbErr) {
+        console.warn('Supabase update in /api/admin/bilty/[id] notice:', sbErr);
+      }
+    }
+
     const merged = { ...body, id, updatedAt: new Date().toISOString() };
     saveCentralRecord('bilties', merged);
 
@@ -153,6 +221,14 @@ export async function DELETE(
         data: { shipmentStatus: 'DELETED' },
       });
     } catch {}
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('bilties').delete().or(`bilty_number.eq.${id},id.eq.${id}`);
+      } catch (sbErr) {
+        console.warn('Supabase delete in /api/admin/bilty/[id] notice:', sbErr);
+      }
+    }
 
     deleteCentralRecord('bilties', id);
 

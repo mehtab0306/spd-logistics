@@ -109,25 +109,25 @@ export default function ChallanInTransitPage() {
       setLoading(true);
 
       let supabaseChallans: any[] = [];
+      let supabaseFetchedSuccessfully = false;
       if (isSupabaseConfigured) {
         try {
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Supabase timeout")), 2500)
-          );
-          const fetchPromise = supabase
+          const { data, error } = await supabase
             .from("challans")
             .select("*")
             .order("created_at", { ascending: false });
-          const { data, error }: any = await Promise.race([fetchPromise, timeoutPromise]);
-          if (!error && Array.isArray(data) && data.length > 0) {
+
+          if (!error && Array.isArray(data)) {
+            supabaseFetchedSuccessfully = true;
             supabaseChallans = data.map((r: any) => ({
-              id: r.id,
+              id: r.id || r.challan_number,
               challanNumber: r.challan_number || r.id,
-              truckNumber: r.vehicle_number,
+              truckNumber: r.vehicle_number || r.truck_number,
               driverName: r.driver_name,
-              origin: r.origin,
-              destination: r.destination,
-              status: "IN_TRANSIT",
+              driverPhone: r.driver_phone,
+              origin: r.origin_station || r.origin || "Lahore",
+              destination: r.destination_station || r.destination || "Karachi",
+              status: r.status || "IN_TRANSIT",
               dispatchDate: r.created_at,
               createdAt: r.created_at,
               ...r,
@@ -139,23 +139,25 @@ export default function ChallanInTransitPage() {
       }
 
       let apiChallans: any[] = [];
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        const res = await fetch("/api/admin/challan", { signal: controller.signal });
-        clearTimeout(timeoutId);
-        const data = await res.json();
-        apiChallans = Array.isArray(data.data)
-          ? data.data
-          : Array.isArray(data.challans)
-          ? data.challans
-          : [];
-      } catch {}
+      if (!supabaseFetchedSuccessfully) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2500);
+          const res = await fetch("/api/admin/challan", { signal: controller.signal });
+          clearTimeout(timeoutId);
+          const data = await res.json();
+          apiChallans = Array.isArray(data.data)
+            ? data.data
+            : Array.isArray(data.challans)
+            ? data.challans
+            : [];
+        } catch {}
+      }
 
       const localChallans = getStoredChallans();
       const combinedActive = supabaseChallans.length > 0
         ? mergeLocalWithApi(supabaseChallans, localChallans, getDeletedChallanIds(), "challanNumber")
-        : localChallans;
+        : (supabaseFetchedSuccessfully ? [] : localChallans);
 
       const merged = mergeLocalWithApi(
         combinedActive,
@@ -423,7 +425,7 @@ export default function ChallanInTransitPage() {
       </div>
 
       {/* Trips Grid - Hidden in Print when Printing Single or Batch Manifest */}
-      {loading && !isLoaded ? (
+      {loading ? (
         <div className="print:hidden">
           <LogisticsTableSkeleton rows={5} subtitle="Tracking Active Fleet in Transit..." />
         </div>

@@ -262,30 +262,36 @@ export async function GET(request: Request) {
             const bNo = String(r.bilty_number || '');
             if (bId && !existingIds.has(bId) && !existingIds.has(bNo)) {
               consignments.unshift({
-                id: r.id,
+                id: r.id || r.bilty_number,
                 biltyNumber: r.bilty_number || r.id,
                 trackingId: r.bilty_number || r.id,
-                date: r.booking_date || r.created_at,
-                bookingDate: r.booking_date || r.created_at,
-                senderName: r.sender_name,
-                senderPhone: r.sender_phone,
-                receiverName: r.receiver_name,
-                receiverPhone: r.receiver_phone,
-                origin: r.origin,
-                destination: r.destination,
-                packageDetails: r.item_description,
-                itemDescription: r.item_description,
-                quantity: r.packages_count,
-                packagesCount: r.packages_count,
-                weight: r.weight,
-                freight: r.total_freight,
-                totalAmount: r.total_freight,
-                paymentMode: r.payment_mode,
-                paymentStatus: r.payment_status || 'PENDING',
+                date: r.booking_date || r.created_at || new Date().toISOString(),
+                bookingDate: r.booking_date || r.created_at || new Date().toISOString(),
+                senderName: r.sender_name || 'Walk-in Shipper',
+                senderPhone: r.sender_phone || '',
+                receiverName: r.receiver_name || 'Consignee',
+                receiverPhone: r.receiver_phone || '',
+                origin: r.origin_station || r.origin || 'Lahore',
+                destination: r.destination_station || r.destination || 'Karachi',
+                packageDetails: r.item_description || 'General Cargo',
+                itemDescription: r.item_description || 'General Cargo',
+                quantity: r.packages_count || 1,
+                packagesCount: r.packages_count || 1,
+                weight: r.weight || 0,
+                freight: Number(r.freight_amount ?? r.total_freight ?? 0),
+                freightAmount: Number(r.freight_amount ?? r.total_freight ?? 0),
+                totalFreight: Number(r.freight_amount ?? r.total_freight ?? 0),
+                totalAmount: Number(r.freight_amount ?? r.total_freight ?? 0),
+                advancePaid: Number(r.advance_paid ?? 0),
+                paidAmount: Number(r.advance_paid ?? 0),
+                remainingBalance: Number(r.remaining_balance ?? 0),
+                paymentMode: r.payment_mode || 'TO-PAY',
+                paymentStatus: (r.remaining_balance === 0 && (r.freight_amount || r.total_freight)) ? 'PAID' : (r.payment_status || r.payment_mode || 'PENDING'),
+                status: r.status || 'Booked',
                 shipmentStatus: (r.status || 'BOOKED').toUpperCase(),
                 vehicleNumber: r.vehicle_number || 'Pending',
                 driverName: r.driver_name || 'Pending',
-                createdAt: r.created_at,
+                createdAt: r.created_at || new Date().toISOString(),
               });
               existingIds.add(bId);
               if (bNo) existingIds.add(bNo);
@@ -808,28 +814,30 @@ export async function POST(request: Request) {
 
     if (isSupabaseConfigured) {
       try {
-        await supabase.from('bilties').upsert([
-          {
-            id: String(consignment.id || biltyNumber),
-            bilty_number: consignment.biltyNumber || biltyNumber,
-            booking_date: consignment.bookingDate,
-            sender_name: consignment.senderName,
-            sender_phone: consignment.senderPhone,
-            receiver_name: consignment.receiverName,
-            receiver_phone: consignment.receiverPhone,
-            origin: consignment.origin,
-            destination: consignment.destination,
-            item_description: consignment.packageDetails || consignment.itemDescription,
-            packages_count: Number(consignment.quantity || consignment.packagesCount) || 1,
-            weight: Number(consignment.weight) || 0,
-            total_freight: Number(consignment.totalAmount || consignment.freight) || 0,
-            payment_mode: consignment.paymentMode || 'TO-PAY',
-            payment_status: consignment.paymentStatus || 'PENDING',
-            status: consignment.shipmentStatus || 'Booked',
-            vehicle_number: consignment.vehicleNumber || null,
-            driver_name: consignment.driverName || null,
-          },
-        ]);
+        const biltyPayload: Record<string, any> = {
+          bilty_number: consignment.biltyNumber || biltyNumber,
+          sender_name: (consignment.senderName || 'Walk-in Shipper').trim(),
+          receiver_name: (consignment.receiverName || 'Consignee').trim(),
+          origin_station: (consignment.origin || 'Lahore').trim(),
+          destination_station: (consignment.destination || 'Karachi').trim(),
+          freight_amount: Number(consignment.totalAmount || consignment.freightAmount || consignment.freight) || 0,
+          advance_paid: Number(consignment.paidAmount) || 0,
+          remaining_balance: Math.max(0, (Number(consignment.totalAmount || consignment.freightAmount || consignment.freight) || 0) - (Number(consignment.paidAmount) || 0)),
+          status: consignment.shipmentStatus || 'Booked',
+          payment_mode: consignment.paymentMode || 'TO-PAY',
+        };
+
+        let { error: sbErr } = await supabase.from('bilties').insert([biltyPayload]);
+
+        if (sbErr && sbErr.message?.toLowerCase().includes('id')) {
+          const withId = { ...biltyPayload, id: String(consignment.id || biltyNumber) };
+          const res = await supabase.from('bilties').insert([withId]);
+          sbErr = res.error;
+        }
+
+        if (sbErr && (sbErr.code === '23505' || sbErr.message?.toLowerCase().includes('duplicate key'))) {
+          await supabase.from('bilties').update(biltyPayload).eq('bilty_number', consignment.biltyNumber || biltyNumber);
+        }
       } catch (sbErr) {
         console.warn('Supabase bilty upsert in route notice:', sbErr);
       }

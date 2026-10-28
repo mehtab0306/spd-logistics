@@ -156,18 +156,22 @@ export default function ChallanPage() {
           const { data: sbBilties } = await supabase.from("bilties").select("*").order("created_at", { ascending: false });
           if (Array.isArray(sbBilties)) {
             supabaseBilties = sbBilties.map((r: any) => ({
-              id: r.id,
+              id: r.id || r.bilty_number,
               biltyNumber: r.bilty_number || r.id,
               trackingId: r.bilty_number || r.id,
-              senderName: r.sender_name,
-              receiverName: r.receiver_name,
-              origin: r.origin,
-              destination: r.destination,
-              packagesCount: r.packages_count,
-              weight: r.weight,
-              totalFreight: r.total_freight,
-              totalAmount: r.total_freight,
+              senderName: r.sender_name || "Walk-in Shipper",
+              receiverName: r.receiver_name || "Consignee",
+              origin: r.origin_station || r.origin || "Lahore",
+              destination: r.destination_station || r.destination || "Karachi",
+              packagesCount: Number(r.packages_count) || 1,
+              weight: Number(r.weight) || 0,
+              totalFreight: Number(r.freight_amount ?? r.total_freight ?? 0),
+              totalAmount: Number(r.freight_amount ?? r.total_freight ?? 0),
+              advancePaid: Number(r.advance_paid ?? 0),
+              remainingBalance: Number(r.remaining_balance ?? 0),
+              paymentMode: r.payment_mode || "TO-PAY",
               shipmentStatus: (r.status || "BOOKED").toUpperCase(),
+              status: r.status || "Booked",
               challanId: r.challan_id,
               ...r,
             }));
@@ -821,7 +825,7 @@ export default function ChallanPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {loading && !isLoaded ? (
+                  {loading ? (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-slate-400">
                         <LogisticsLoader size="sm" subtitle="Loading Warehouse Consignments..." />

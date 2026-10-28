@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,6 +72,41 @@ export async function GET(request: Request) {
       ]);
     } catch (dbErr) {
       console.warn('DB error generating reports (serving 0-state metrics):', dbErr);
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data: sbBilties } = await supabase.from('bilties').select('*');
+        if (Array.isArray(sbBilties) && sbBilties.length > 0) {
+          totalConsignments = sbBilties.length;
+          lahoreConsignments = sbBilties.filter((b: any) =>
+            (b.origin_station || b.origin || '').toLowerCase().includes('lahore')
+          ).length;
+          karachiConsignments = sbBilties.filter((b: any) =>
+            (b.origin_station || b.origin || '').toLowerCase().includes('karachi')
+          ).length;
+          deliveredConsignments = sbBilties.filter((b: any) =>
+            (b.status || '').toUpperCase() === 'DELIVERED'
+          ).length;
+          inTransitConsignments = sbBilties.filter((b: any) =>
+            ['IN_TRANSIT', 'DISPATCHED'].includes((b.status || '').toUpperCase())
+          ).length;
+
+          allConsignments = sbBilties.map((b: any) => ({
+            totalAmount: Number(b.freight_amount ?? b.total_freight ?? 0),
+            paidAmount: Number(b.advance_paid ?? 0),
+            remainingBalance: Number(b.remaining_balance ?? Math.max(0, (Number(b.freight_amount ?? b.total_freight ?? 0)) - (Number(b.advance_paid ?? 0)))),
+          }));
+        }
+
+        const { count: custCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
+        if (typeof custCount === 'number' && custCount > 0) totalCustomers = custCount;
+
+        const { count: drvCount } = await supabase.from('drivers').select('*', { count: 'exact', head: true });
+        if (typeof drvCount === 'number' && drvCount > 0) totalDrivers = drvCount;
+      } catch (sbErr) {
+        console.warn('Supabase reports query notice:', sbErr);
+      }
     }
 
     const totalFreightRevenue = allConsignments && allConsignments.length > 0

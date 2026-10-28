@@ -259,36 +259,44 @@ export default function BiltyPage() {
       if (statusFilter) params.append("status", statusFilter);
 
       let supabaseBilties: any[] = [];
+      let supabaseFetchedSuccessfully = false;
       if (isSupabaseConfigured) {
         try {
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Supabase timeout")), 2500)
-          );
-          const fetchPromise = supabase
+          const { data, error } = await supabase
             .from("bilties")
             .select("*")
             .order("created_at", { ascending: false });
-          const { data, error }: any = await Promise.race([fetchPromise, timeoutPromise]);
-          if (!error && Array.isArray(data) && data.length > 0) {
+
+          if (!error && Array.isArray(data)) {
+            supabaseFetchedSuccessfully = true;
             supabaseBilties = data.map((r: any) => ({
-              id: r.id,
+              id: r.id || r.bilty_number,
               biltyNumber: r.bilty_number || r.id,
               trackingId: r.bilty_number || r.id,
-              bookingDate: r.booking_date || r.created_at,
-              senderName: r.sender_name,
-              senderPhone: r.sender_phone,
-              receiverName: r.receiver_name,
-              receiverPhone: r.receiver_phone,
-              origin: r.origin,
-              destination: r.destination,
-              itemDescription: r.item_description,
-              packagesCount: r.packages_count,
-              weight: r.weight,
-              totalFreight: r.total_freight,
-              totalAmount: r.total_freight,
-              paymentMode: r.payment_mode,
+              bookingDate: r.booking_date || r.created_at || new Date().toISOString(),
+              senderName: r.sender_name || "Walk-in Shipper",
+              senderPhone: r.sender_phone || "",
+              receiverName: r.receiver_name || "Consignee",
+              receiverPhone: r.receiver_phone || "",
+              origin: r.origin_station || r.origin || "Lahore",
+              destination: r.destination_station || r.destination || "Karachi",
+              warehouse: r.warehouse || (String(r.origin_station || r.origin || "").toUpperCase().includes("KARACHI") ? "KARACHI" : "LAHORE"),
+              itemDescription: r.item_description || r.package_details || "General Cargo",
+              packageDetails: r.item_description || r.package_details || "General Cargo",
+              packagesCount: Number(r.packages_count) || 1,
+              quantity: Number(r.packages_count) || 1,
+              weight: Number(r.weight) || 0,
+              totalFreight: Number(r.freight_amount ?? r.total_freight ?? 0),
+              freightAmount: Number(r.freight_amount ?? r.total_freight ?? 0),
+              freight: Number(r.freight_amount ?? r.total_freight ?? 0),
+              advancePaid: Number(r.advance_paid ?? 0),
+              paidAmount: Number(r.advance_paid ?? 0),
+              remainingBalance: Number(r.remaining_balance ?? 0),
+              paymentMode: r.payment_mode || "TO-PAY",
+              paymentStatus: (r.remaining_balance === 0 && (r.freight_amount || r.total_freight)) ? "PAID" : r.payment_mode || "TO-PAY",
               shipmentStatus: (r.status || "BOOKED").toUpperCase(),
-              createdAt: r.created_at,
+              status: r.status || "Booked",
+              createdAt: r.created_at || new Date().toISOString(),
               ...r,
             }));
           }
@@ -298,26 +306,28 @@ export default function BiltyPage() {
       }
 
       let apiItems: any[] = [];
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        const res = await fetch(`/api/admin/bilty?${params.toString()}`, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        const data = await res.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          apiItems = data.data;
-        } else {
+      if (!supabaseFetchedSuccessfully) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2500);
+          const res = await fetch(`/api/admin/bilty?${params.toString()}`, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          const data = await res.json();
+          if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+            apiItems = data.data;
+          } else {
+            apiItems = [...DEFAULT_CLIENT_CONSIGNMENTS];
+          }
+        } catch (err) {
           apiItems = [...DEFAULT_CLIENT_CONSIGNMENTS];
         }
-      } catch (err) {
-        apiItems = [...DEFAULT_CLIENT_CONSIGNMENTS];
       }
 
       // Merge Supabase bilties + locally stored bilties (kept at top) with API seed bilties
       const localBilties = getLocalBilties();
       const combinedActive = supabaseBilties.length > 0
         ? mergeLocalWithApi(supabaseBilties, localBilties, getDeletedBiltyIds(), "biltyNumber")
-        : localBilties;
+        : (supabaseFetchedSuccessfully ? [] : localBilties);
       const deletedIds = getDeletedBiltyIds();
       let items = mergeLocalWithApi(combinedActive, apiItems, deletedIds, "biltyNumber").filter(
         (b) =>
@@ -1057,25 +1067,38 @@ export default function BiltyPage() {
       // Supabase cloud database insertion
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("bilties").upsert([
-            {
-              id: String(createdBilty.id),
-              bilty_number: finalBiltyNumber,
-              booking_date: createdBilty.bookingDate,
-              sender_name: createdBilty.senderName,
-              sender_phone: createdBilty.senderPhone,
-              receiver_name: createdBilty.receiverName,
-              receiver_phone: createdBilty.receiverPhone,
-              origin: createdBilty.origin,
-              destination: createdBilty.destination,
-              item_description: createdBilty.itemDescription,
-              packages_count: Number(createdBilty.packagesCount) || 1,
-              weight: Number(createdBilty.weight) || 0,
-              total_freight: Number(createdBilty.totalFreight) || 0,
-              payment_mode: createdBilty.paymentMode || "TO-PAY",
-              status: createdBilty.shipmentStatus || "Booked",
-            },
-          ]);
+          const biltyPayload: Record<string, any> = {
+            bilty_number: finalBiltyNumber || `SPD-${Date.now()}`,
+            sender_name: (createdBilty.senderName || "Walk-in Shipper").trim(),
+            receiver_name: (createdBilty.receiverName || "Consignee").trim(),
+            origin_station: (createdBilty.origin || "Lahore").trim(),
+            destination_station: (createdBilty.destination || "Karachi").trim(),
+            freight_amount: Number(createdBilty.totalFreight) || 0,
+            advance_paid: Number(createdBilty.paidAmount) || 0,
+            remaining_balance: Math.max(0, (Number(createdBilty.totalFreight) || 0) - (Number(createdBilty.paidAmount) || 0)),
+            status: createdBilty.shipmentStatus || "Booked",
+            payment_mode: createdBilty.paymentMode || "TO-PAY",
+          };
+
+          let { error: sbErr } = await supabase.from("bilties").insert([biltyPayload]);
+
+          if (sbErr && sbErr.message?.toLowerCase().includes("id")) {
+            const withId = { ...biltyPayload, id: String(createdBilty.id || finalBiltyNumber) };
+            const res = await supabase.from("bilties").insert([withId]);
+            sbErr = res.error;
+          }
+
+          if (sbErr && (sbErr.code === "23505" || sbErr.message?.toLowerCase().includes("duplicate key"))) {
+            const updateRes = await supabase
+              .from("bilties")
+              .update(biltyPayload)
+              .eq("bilty_number", finalBiltyNumber);
+            sbErr = updateRes.error;
+          }
+
+          if (sbErr) {
+            console.warn("Supabase bilty insert notice:", sbErr);
+          }
         } catch (sbErr) {
           console.warn("Supabase bilty upsert warning:", sbErr);
         }
@@ -1340,7 +1363,7 @@ export default function BiltyPage() {
       </div>
 
       {/* Bilties Content */}
-      {loading && !isLoaded ? (
+      {loading ? (
         <LogisticsTableSkeleton rows={6} subtitle="Loading Consignments & Bilties..." />
       ) : consignments.length === 0 ? (
         <EmptyState

@@ -200,6 +200,36 @@ export default function EditBiltyPage() {
             String(b.biltyNumber || "").toUpperCase() === target ||
             String(b.trackingId || "").toUpperCase() === target)
       );
+      if (!found && isSupabaseConfigured) {
+        try {
+          const { data: sbRow } = await supabase
+            .from("bilties")
+            .select("*")
+            .or(`bilty_number.eq.${biltyId},id.eq.${biltyId}`)
+            .maybeSingle();
+
+          if (sbRow) {
+            found = {
+              id: sbRow.id || sbRow.bilty_number,
+              biltyNumber: sbRow.bilty_number || sbRow.id,
+              trackingId: sbRow.bilty_number || sbRow.id,
+              senderName: sbRow.sender_name || "Walk-in Shipper",
+              receiverName: sbRow.receiver_name || "Consignee",
+              origin: sbRow.origin_station || sbRow.origin || "Lahore",
+              destination: sbRow.destination_station || sbRow.destination || "Karachi",
+              freightAmount: sbRow.freight_amount ?? sbRow.total_freight ?? 0,
+              paidAmount: sbRow.advance_paid ?? 0,
+              remainingBalance: sbRow.remaining_balance ?? 0,
+              paymentMode: sbRow.payment_mode || "TO-PAY",
+              shipmentStatus: (sbRow.status || "BOOKED").toUpperCase(),
+              ...sbRow,
+            };
+          }
+        } catch (e) {
+          console.warn("Supabase fetch bilty in edit warning:", e);
+        }
+      }
+
       if (!found) {
         const res = await fetch(`/api/admin/bilty/${encodeURIComponent(biltyId)}`);
         if (res.ok) {
@@ -635,27 +665,31 @@ export default function EditBiltyPage() {
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { error: sbErr } = await supabase.from("bilties").upsert([
-          {
-            id: String(updatedRecord.id || biltyId),
-            bilty_number: updatedRecord.biltyNumber || biltyId,
-            booking_date: updatedRecord.bookingDate,
-            sender_name: updatedRecord.senderName,
-            sender_phone: updatedRecord.senderPhone,
-            receiver_name: updatedRecord.receiverName,
-            receiver_phone: updatedRecord.receiverPhone,
-            origin: updatedRecord.origin,
-            destination: updatedRecord.destination,
-            item_description: updatedRecord.itemDescription,
-            packages_count: Number(updatedRecord.packagesCount) || 1,
-            weight: Number(updatedRecord.weight) || 0,
-            total_freight: Number(updatedRecord.totalFreight) || 0,
-            payment_mode: updatedRecord.paymentMode || "TO-PAY",
-            status: updatedRecord.shipmentStatus || "Booked",
-            vehicle_number: updatedRecord.vehicleNumber || null,
-            driver_name: updatedRecord.driverName || null,
-          },
-        ]);
+        const biltyPayload: Record<string, any> = {
+          bilty_number: (updatedRecord.biltyNumber || biltyId).trim(),
+          sender_name: (updatedRecord.senderName || "Walk-in Shipper").trim(),
+          receiver_name: (updatedRecord.receiverName || "Consignee").trim(),
+          origin_station: (updatedRecord.origin || "Lahore").trim(),
+          destination_station: (updatedRecord.destination || "Karachi").trim(),
+          freight_amount: Number(updatedRecord.totalFreight) || 0,
+          advance_paid: Number(updatedRecord.paidAmount) || 0,
+          remaining_balance: Math.max(0, (Number(updatedRecord.totalFreight) || 0) - (Number(updatedRecord.paidAmount) || 0)),
+          status: updatedRecord.shipmentStatus || "Booked",
+          payment_mode: updatedRecord.paymentMode || "TO-PAY",
+        };
+
+        // Try update first by bilty_number
+        let { error: sbErr } = await supabase
+          .from("bilties")
+          .update(biltyPayload)
+          .eq("bilty_number", updatedRecord.biltyNumber || biltyId);
+
+        // If not found or error, try upsert
+        if (sbErr) {
+          const withId = { ...biltyPayload, id: String(updatedRecord.id || biltyId) };
+          const upsertRes = await supabase.from("bilties").upsert([withId]);
+          sbErr = upsertRes.error;
+        }
 
         if (sbErr) {
           lastErrorMessage = `Supabase update failed: ${sbErr.message}`;

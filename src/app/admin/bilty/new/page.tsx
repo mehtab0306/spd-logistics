@@ -887,37 +887,63 @@ export default function NewBiltyPage() {
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { error: sbErr } = await supabase.from("bilties").upsert([
-          {
-            id: String(newBiltyRecord.id),
-            bilty_number: finalBiltyNumber,
-            booking_date: newBiltyRecord.bookingDate,
-            sender_name: newBiltyRecord.senderName,
-            sender_phone: newBiltyRecord.senderPhone,
-            receiver_name: newBiltyRecord.receiverName,
-            receiver_phone: newBiltyRecord.receiverPhone,
-            origin: newBiltyRecord.origin,
-            destination: newBiltyRecord.destination,
-            item_description: newBiltyRecord.itemDescription,
-            packages_count: Number(newBiltyRecord.packagesCount) || 1,
-            weight: Number(newBiltyRecord.weight) || 0,
-            total_freight: Number(newBiltyRecord.totalFreight) || 0,
-            payment_mode: newBiltyRecord.paymentMode || "TO-PAY",
-            status: newBiltyRecord.shipmentStatus || "Booked",
-            vehicle_number: newBiltyRecord.vehicleNumber || null,
-            driver_name: newBiltyRecord.driverName || null,
-          },
-        ]);
+        const biltyPayload: Record<string, any> = {
+          bilty_number: finalBiltyNumber || `SPD-${Date.now()}`,
+          sender_name: (newBiltyRecord.senderName || "Walk-in Shipper").trim(),
+          receiver_name: (newBiltyRecord.receiverName || "Consignee").trim(),
+          origin_station: (newBiltyRecord.origin || "Lahore").trim(),
+          destination_station: (newBiltyRecord.destination || "Karachi").trim(),
+          freight_amount: Number(newBiltyRecord.totalFreight) || 0,
+          advance_paid: Number(newBiltyRecord.paidAmount) || 0,
+          remaining_balance: Math.max(0, (Number(newBiltyRecord.totalFreight) || 0) - (Number(newBiltyRecord.paidAmount) || 0)),
+          status: newBiltyRecord.shipmentStatus || "Booked",
+          payment_mode: newBiltyRecord.paymentMode || "TO-PAY",
+        };
+
+        // Try clean insert matching target columns
+        let { error: sbErr } = await supabase.from("bilties").insert([biltyPayload]);
+
+        // If table requires id column without default, retry providing id
+        if (sbErr && sbErr.message?.toLowerCase().includes("id")) {
+          const withId = { ...biltyPayload, id: String(newBiltyRecord.id || finalBiltyNumber) };
+          const res = await supabase.from("bilties").insert([withId]);
+          sbErr = res.error;
+        }
+
+        // If duplicate key exists, update instead
+        if (sbErr && (sbErr.code === "23505" || sbErr.message?.toLowerCase().includes("duplicate key"))) {
+          const updateRes = await supabase
+            .from("bilties")
+            .update(biltyPayload)
+            .eq("bilty_number", finalBiltyNumber);
+          sbErr = updateRes.error;
+        }
+
+        // Safe fallback for legacy column names if present
+        if (sbErr && sbErr.message?.toLowerCase().includes("origin_station")) {
+          const legacyPayload = {
+            id: String(newBiltyRecord.id || finalBiltyNumber),
+            bilty_number: biltyPayload.bilty_number,
+            sender_name: biltyPayload.sender_name,
+            receiver_name: biltyPayload.receiver_name,
+            origin: biltyPayload.origin_station,
+            destination: biltyPayload.destination_station,
+            total_freight: biltyPayload.freight_amount,
+            payment_mode: biltyPayload.payment_mode,
+            status: biltyPayload.status,
+          };
+          const legacyRes = await supabase.from("bilties").upsert([legacyPayload]);
+          sbErr = legacyRes.error;
+        }
 
         if (sbErr) {
           lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
         } else {
           savedSuccessfully = true;
-          // Synchronize locally only after affirmative database write
           saveStoredBilty(newBiltyRecord);
         }
 
-        // Notify API in background for email/notifications
+        // Notify API in background for system notifications / audit logs
         fetch("/api/admin/bilty", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -958,18 +984,23 @@ export default function NewBiltyPage() {
         } catch {}
       }
 
+      // 3. Clear the form completely after affirmative save
+      handleResetFormForNewBilty();
+
+      // 4. Clean success notification & redirect
+      const successMsg = `Consignment Bilty [${finalBiltyNumber}] saved successfully!`;
       setSavedBilty(newBiltyRecord);
-      setSuccessMessage(`Bilty [${finalBiltyNumber}] saved successfully with all cargo particulars.`);
-      toast.success(`Bilty [${finalBiltyNumber}] saved successfully with all cargo particulars.`);
+      setSuccessMessage(successMsg);
+      toast.success(successMsg);
 
       if (mode === "save_and_print") {
-        // Immediate redirect to 4-sheet dossier viewer
         setTimeout(() => {
           router.push(`/admin/bilty/${encodeURIComponent(finalBiltyNumber)}`);
         }, 300);
       } else {
-        // Show the comprehensive saved record modal with full print & export options
-        setSaveSuccessModalOpen(true);
+        setTimeout(() => {
+          router.push("/admin/bilty");
+        }, 600);
       }
     } catch (err: any) {
       console.error("[NewBilty] Error:", err);

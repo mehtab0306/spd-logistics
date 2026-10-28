@@ -8,12 +8,20 @@ create extension if not exists "uuid-ossp";
 
 -- 1. BILTIES TABLE
 create table if not exists bilties (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   bilty_number text not null,
+  sender_name text not null default 'Walk-in Shipper',
+  receiver_name text not null default 'Consignee',
+  origin_station text not null default 'Lahore',
+  destination_station text not null default 'Karachi',
+  freight_amount numeric not null default 0,
+  advance_paid numeric not null default 0,
+  remaining_balance numeric not null default 0,
+  status text not null default 'Booked',
+  payment_mode text not null default 'TO-PAY',
+  -- Backward-compatibility & extended fields
   booking_date text,
-  sender_name text,
   sender_phone text,
-  receiver_name text,
   receiver_phone text,
   origin text,
   destination text,
@@ -21,9 +29,7 @@ create table if not exists bilties (
   packages_count integer default 1,
   weight numeric default 0,
   total_freight numeric default 0,
-  payment_mode text default 'TO-PAY',
   payment_status text default 'PENDING',
-  status text default 'Booked',
   vehicle_number text,
   driver_name text,
   created_at timestamptz default now()

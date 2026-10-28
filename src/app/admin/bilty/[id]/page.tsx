@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { getStoredBilties } from "@/lib/local-persistence";
 import { BiltySheetViewer } from "@/components/bilty/bilty-sheet-viewer";
 import { LogisticsLoader } from "@/components/shared/logistics-loader";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function BiltyDetailPage() {
   const params = useParams();
@@ -86,6 +87,43 @@ export default function BiltyDetailPage() {
             const raw2 = JSON.parse(localStorage.getItem("spd_local_bilties") || "[]");
             matchedRecord = findMatchInList([...(Array.isArray(raw1) ? raw1 : []), ...(Array.isArray(raw2) ? raw2 : [])]);
           } catch {}
+        }
+
+        // 4. Check Supabase database directly for cross-device retrieval
+        if (!matchedRecord && isSupabaseConfigured) {
+          try {
+            const { data: sbRow } = await supabase
+              .from("bilties")
+              .select("*")
+              .or(`bilty_number.eq.${biltyId},id.eq.${biltyId}`)
+              .maybeSingle();
+
+            if (sbRow) {
+              matchedRecord = {
+                id: sbRow.id || sbRow.bilty_number,
+                biltyNumber: sbRow.bilty_number || sbRow.id,
+                trackingId: sbRow.bilty_number || sbRow.id,
+                bookingDate: sbRow.booking_date || sbRow.created_at || new Date().toISOString(),
+                senderName: sbRow.sender_name || "Walk-in Shipper",
+                senderPhone: sbRow.sender_phone || "",
+                receiverName: sbRow.receiver_name || "Consignee",
+                receiverPhone: sbRow.receiver_phone || "",
+                origin: sbRow.origin_station || sbRow.origin || "Lahore",
+                destination: sbRow.destination_station || sbRow.destination || "Karachi",
+                totalFreight: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
+                totalAmount: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
+                freightAmount: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
+                paidAmount: Number(sbRow.advance_paid ?? 0),
+                remainingBalance: Number(sbRow.remaining_balance ?? 0),
+                paymentMode: sbRow.payment_mode || "TO-PAY",
+                status: sbRow.status || "Booked",
+                shipmentStatus: (sbRow.status || "BOOKED").toUpperCase(),
+                ...sbRow,
+              };
+            }
+          } catch (e) {
+            console.warn("Supabase load bilty detail notice:", e);
+          }
         }
 
         if (matchedRecord && isMounted) {
