@@ -28,6 +28,7 @@ import {
   getDeletedVehicleIds,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function EditDriverPage() {
   const router = useRouter();
@@ -134,12 +135,30 @@ export default function EditDriverPage() {
   };
 
   const handleUploadPhoto = async (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve("");
-      reader.readAsDataURL(file);
-    });
+    if (isSupabaseConfigured) {
+      try {
+        const fileExt = file.name.split(".").pop() || "jpg";
+        const fileName = `driver-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        const filePath = `drivers/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from("avatars")
+            .getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            return publicUrlData.publicUrl;
+          }
+        } else {
+          console.warn("Supabase driver avatar upload error:", uploadError);
+        }
+      } catch (err) {
+        console.warn("Supabase driver avatar upload fallback:", err);
+      }
+    }
+    return "";
   };
 
   const vehicleOptions: SearchableOption[] = vehicles.map((v) => ({
@@ -184,6 +203,23 @@ export default function EditDriverPage() {
 
       // Immediately update localStorage
       saveStoredDriver(payload);
+
+      // Supabase cloud direct update
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("drivers").update({
+            name: payload.name,
+            phone: payload.phone,
+            cnic: payload.cnic,
+            license_number: payload.licenseNumber,
+            vehicle_number: payload.vehicleNumber,
+            status: payload.status,
+            avatar_url: finalPhotoUrl || null,
+          }).eq("id", driverId);
+        } catch (sbErr) {
+          console.warn("Supabase driver update warning:", sbErr);
+        }
+      }
 
       try {
         await fetch("/api/admin/drivers", {

@@ -175,7 +175,8 @@ export default function DriversPage() {
               emergencyContact: d.emergency_contact,
               vehicleNumber: d.vehicle_number,
               status: d.status || "AVAILABLE",
-              photo: d.photo || null,
+              photo: d.avatar_url || d.photo || null,
+              user: { avatar: d.avatar_url || d.photo || null },
               notes: d.notes,
               createdAt: d.created_at,
               ...d,
@@ -200,7 +201,7 @@ export default function DriversPage() {
       // Merge local drivers + Supabase drivers (kept at top) with API seed drivers
       const localList = getStoredDrivers();
       const combinedActive = supabaseDrivers.length > 0
-        ? mergeLocalWithApi(supabaseDrivers, localList, getDeletedDriverIds())
+        ? mergeLocalWithApi(supabaseDrivers, localList, [])
         : localList;
       const deletedIds = getDeletedDriverIds();
       let list = mergeLocalWithApi(combinedActive, apiList, deletedIds);
@@ -315,14 +316,28 @@ export default function DriversPage() {
   }, [search, statusFilter]);
 
   const handleUploadPhoto = async (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        resolve(reader.result as string);
-      };
-      reader.onerror = () => resolve("");
-      reader.readAsDataURL(file);
-    });
+    if (isSupabaseConfigured) {
+      try {
+        const fileExt = file.name.split(".").pop() || "jpg";
+        const fileName = `driver-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        const filePath = `drivers/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from("avatars")
+            .getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            return publicUrlData.publicUrl;
+          }
+        }
+      } catch (err) {
+        console.warn("Supabase driver avatar upload fallback:", err);
+      }
+    }
+    return "";
   };
 
   const handleCreateDriver = async (e: React.FormEvent) => {
@@ -493,6 +508,7 @@ export default function DriversPage() {
               vehicle_number: updated.vehicleNumber,
               status: updated.status,
               notes: updated.notes,
+              avatar_url: finalPhotoUrl || null,
             },
           ]);
         } catch (sbErr) {

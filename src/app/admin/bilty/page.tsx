@@ -272,6 +272,7 @@ export default function BiltyPage() {
             supabaseBilties = data.map((r: any) => ({
               id: r.id || r.bilty_number,
               biltyNumber: r.bilty_number || r.id,
+              manualBiltyNumber: r.manual_bilty_number || r.bilty_number || r.id,
               trackingId: r.bilty_number || r.id,
               bookingDate: r.booking_date || r.created_at || new Date().toISOString(),
               senderName: r.sender_name || "Walk-in Shipper",
@@ -323,23 +324,32 @@ export default function BiltyPage() {
         }
       }
 
-      // Merge Supabase bilties + locally stored bilties (kept at top) with API seed bilties
-      const localBilties = getLocalBilties();
-      const combinedActive = supabaseBilties.length > 0
-        ? mergeLocalWithApi(supabaseBilties, localBilties, getDeletedBiltyIds(), "biltyNumber")
-        : (supabaseFetchedSuccessfully ? [] : localBilties);
-      const deletedIds = getDeletedBiltyIds();
-      let items = mergeLocalWithApi(combinedActive, apiItems, deletedIds, "biltyNumber").filter(
-        (b) =>
-          b &&
-          b.shipmentStatus !== "DELETED" &&
-          !String(b.id || "").startsWith("bilty-demo-") &&
-          !String(b.id || "").startsWith("cust-") &&
-          !String(b.biltyNumber || "").startsWith("cust-") &&
-          !String(b.id || "").startsWith("c-") &&
-          !String(b.biltyNumber || "").startsWith("c-") &&
-          (b.senderName || b.receiverName || b.biltyNumber)
-      );
+      // Supabase PostgreSQL is the centralized production database
+      let items: any[] = [];
+      if (supabaseFetchedSuccessfully) {
+        const map = new Map<string, any>();
+        for (const b of supabaseBilties) {
+          const key = b.biltyNumber || b.id;
+          if (key && !map.has(key)) {
+            map.set(key, b);
+          }
+        }
+        items = Array.from(map.values()).filter(
+          (b) => b && b.shipmentStatus !== "DELETED" && (b.senderName || b.receiverName || b.biltyNumber)
+        );
+      } else {
+        const localBilties = getLocalBilties();
+        const deletedIds = getDeletedBiltyIds();
+        items = mergeLocalWithApi(localBilties, apiItems, deletedIds, "biltyNumber").filter(
+          (b) =>
+            b &&
+            b.shipmentStatus !== "DELETED" &&
+            !String(b.id || "").startsWith("bilty-demo-") &&
+            !String(b.id || "").startsWith("cust-") &&
+            !String(b.biltyNumber || "").startsWith("cust-") &&
+            (b.senderName || b.receiverName || b.biltyNumber)
+        );
+      }
 
       // Apply search and filter to merged list
       if (search.trim()) {
@@ -522,12 +532,18 @@ export default function BiltyPage() {
     try {
       // Remove locally immediately & move to Recycle Bin
       removeLocalBilty(deletingBilty.id, deletingBilty);
-      setConsignments((prev) => prev.filter((b) => b.id !== deletingBilty.id));
+      setConsignments((prev) =>
+        prev.filter((b) => b.id !== deletingBilty.id && b.biltyNumber !== deletingBilty.biltyNumber)
+      );
 
       // Supabase cloud deletion
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("bilties").delete().eq("id", deletingBilty.id);
+          const bNum = deletingBilty.biltyNumber || deletingBilty.id;
+          await supabase
+            .from("bilties")
+            .delete()
+            .or(`id.eq.${deletingBilty.id},bilty_number.eq.${bNum}`);
         } catch (sbErr) {
           console.warn("Supabase bilty delete warning:", sbErr);
         }

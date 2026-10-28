@@ -101,12 +101,30 @@ export default function NewDriverPage() {
   };
 
   const handleUploadPhoto = async (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve("");
-      reader.readAsDataURL(file);
-    });
+    if (isSupabaseConfigured) {
+      try {
+        const fileExt = file.name.split(".").pop() || "jpg";
+        const fileName = `driver-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        const filePath = `drivers/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from("avatars")
+            .getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            return publicUrlData.publicUrl;
+          }
+        } else {
+          console.warn("Supabase driver avatar upload error:", uploadError);
+        }
+      } catch (err) {
+        console.warn("Supabase driver avatar upload fallback:", err);
+      }
+    }
+    return "";
   };
 
   const vehicleOptions: SearchableOption[] = vehicles.map((v) => ({

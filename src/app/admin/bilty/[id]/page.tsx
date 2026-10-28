@@ -31,6 +31,7 @@ export default function BiltyDetailPage() {
           b &&
           (String(b.id || "").toUpperCase() === target ||
             String(b.biltyNumber || "").toUpperCase() === target ||
+            String(b.manualBiltyNumber || "").toUpperCase() === target ||
             String(b.trackingId || "").toUpperCase() === target)
       );
     };
@@ -39,58 +40,8 @@ export default function BiltyDetailPage() {
       try {
         let matchedRecord: any = null;
 
-        // 1. Check spd_selected_bilty & sessionStorage for instant load
-        if (typeof window !== "undefined") {
-          try {
-            const selected = localStorage.getItem("spd_selected_bilty");
-            if (selected) {
-              const parsed = JSON.parse(selected);
-              if (
-                parsed &&
-                (String(parsed.id || "").toUpperCase() === biltyId.toUpperCase() ||
-                  String(parsed.biltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
-                  String(parsed.trackingId || "").toUpperCase() === biltyId.toUpperCase())
-              ) {
-                matchedRecord = parsed;
-              }
-            }
-          } catch {}
-
-          if (!matchedRecord) {
-            try {
-              const lastCreated = sessionStorage.getItem("last_created_bilty");
-              if (lastCreated) {
-                const parsed = JSON.parse(lastCreated);
-                if (
-                  parsed &&
-                  (String(parsed.id || "").toUpperCase() === biltyId.toUpperCase() ||
-                    String(parsed.biltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
-                    String(parsed.trackingId || "").toUpperCase() === biltyId.toUpperCase())
-                ) {
-                  matchedRecord = parsed;
-                }
-              }
-            } catch {}
-          }
-        }
-
-        // 2. Check local storage
-        if (!matchedRecord) {
-          const stored = getStoredBilties();
-          matchedRecord = findMatchInList(stored);
-        }
-
-        // 3. Fallback check raw localStorage keys directly
-        if (!matchedRecord && typeof window !== "undefined") {
-          try {
-            const raw1 = JSON.parse(localStorage.getItem("spd_bilties") || "[]");
-            const raw2 = JSON.parse(localStorage.getItem("spd_local_bilties") || "[]");
-            matchedRecord = findMatchInList([...(Array.isArray(raw1) ? raw1 : []), ...(Array.isArray(raw2) ? raw2 : [])]);
-          } catch {}
-        }
-
-        // 4. Check Supabase database directly for cross-device retrieval
-        if (!matchedRecord && isSupabaseConfigured) {
+        // 1. Check Supabase database directly for real-time cross-device accuracy
+        if (isSupabaseConfigured) {
           try {
             const { data: sbRow } = await supabase
               .from("bilties")
@@ -102,6 +53,7 @@ export default function BiltyDetailPage() {
               matchedRecord = {
                 id: sbRow.id || sbRow.bilty_number,
                 biltyNumber: sbRow.bilty_number || sbRow.id,
+                manualBiltyNumber: sbRow.manual_bilty_number || sbRow.bilty_number || sbRow.id,
                 trackingId: sbRow.bilty_number || sbRow.id,
                 bookingDate: sbRow.booking_date || sbRow.created_at || new Date().toISOString(),
                 senderName: sbRow.sender_name || "Walk-in Shipper",
@@ -121,9 +73,61 @@ export default function BiltyDetailPage() {
                 ...sbRow,
               };
             }
-          } catch (e) {
-            console.warn("Supabase load bilty detail notice:", e);
+          } catch (sbErr) {
+            console.warn("Direct Supabase bilty lookup notice:", sbErr);
           }
+        }
+
+        // 2. Check spd_selected_bilty & sessionStorage for instant load
+        if (!matchedRecord && typeof window !== "undefined") {
+          try {
+            const selected = localStorage.getItem("spd_selected_bilty");
+            if (selected) {
+              const parsed = JSON.parse(selected);
+              if (
+                parsed &&
+                (String(parsed.id || "").toUpperCase() === biltyId.toUpperCase() ||
+                  String(parsed.biltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
+                  String(parsed.manualBiltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
+                  String(parsed.trackingId || "").toUpperCase() === biltyId.toUpperCase())
+              ) {
+                matchedRecord = parsed;
+              }
+            }
+          } catch {}
+
+          if (!matchedRecord) {
+            try {
+              const lastCreated = sessionStorage.getItem("last_created_bilty");
+              if (lastCreated) {
+                const parsed = JSON.parse(lastCreated);
+                if (
+                  parsed &&
+                  (String(parsed.id || "").toUpperCase() === biltyId.toUpperCase() ||
+                    String(parsed.biltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
+                    String(parsed.manualBiltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
+                    String(parsed.trackingId || "").toUpperCase() === biltyId.toUpperCase())
+                ) {
+                  matchedRecord = parsed;
+                }
+              }
+            } catch {}
+          }
+        }
+
+        // 3. Check local storage
+        if (!matchedRecord) {
+          const stored = getStoredBilties();
+          matchedRecord = findMatchInList(stored);
+        }
+
+        // 4. Fallback check raw localStorage keys directly
+        if (!matchedRecord && typeof window !== "undefined") {
+          try {
+            const raw1 = JSON.parse(localStorage.getItem("spd_bilties") || "[]");
+            const raw2 = JSON.parse(localStorage.getItem("spd_local_bilties") || "[]");
+            matchedRecord = findMatchInList([...(Array.isArray(raw1) ? raw1 : []), ...(Array.isArray(raw2) ? raw2 : [])]);
+          } catch {}
         }
 
         if (matchedRecord && isMounted) {

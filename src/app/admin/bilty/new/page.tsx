@@ -134,6 +134,7 @@ export default function NewBiltyPage() {
     amountType: "To Pay" as "Paid" | "To Pay" | "To Be Billed",
     dispatchMode: "Normal" as "Normal" | "Urgent",
     biltyNumber: "",
+    manualBiltyNumber: "",
     trackingId: "",
     date: new Date().toISOString().slice(0, 10),
     warehouse: "LAHORE",
@@ -204,7 +205,7 @@ export default function NewBiltyPage() {
 
   const handleRegenerateBiltyNumber = () => {
     const newNo = generateBiltyNumberCandidate(formData.origin);
-    setFormData((prev) => ({ ...prev, biltyNumber: newNo }));
+    setFormData((prev) => ({ ...prev, manualBiltyNumber: "", biltyNumber: newNo }));
   };
 
   const fetchPrerequisites = async () => {
@@ -619,6 +620,7 @@ export default function NewBiltyPage() {
       amountType: "To Pay",
       dispatchMode: "Normal",
       biltyNumber: nextBiltyNo,
+      manualBiltyNumber: "",
       trackingId: `SPD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
       date: new Date().toISOString().slice(0, 10),
       warehouse: formData.origin?.toUpperCase().includes("KARACHI") ? "KARACHI" : "LAHORE",
@@ -719,10 +721,11 @@ export default function NewBiltyPage() {
     setSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
-      const manualBiltyNo = formData.biltyNumber?.trim();
-      const finalBiltyNumber = manualBiltyNo
-        ? manualBiltyNo
-        : `SPD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+      const manualInput = (formData.manualBiltyNumber || "").trim();
+      const standardInput = (formData.biltyNumber || "").trim();
+      // If user entered a manual bilty number (e.g. 5040 or SPD-5040), save that exact string
+      const finalBiltyNumber = manualInput || standardInput || generateBiltyNumberCandidate(formData.origin || "Lahore");
+      const manualBiltyNumberToSave = manualInput || finalBiltyNumber;
 
       const finalTrackingId =
         formData.trackingId.trim() ||
@@ -762,6 +765,7 @@ export default function NewBiltyPage() {
       const newBiltyRecord = {
         id: finalBiltyNumber,
         biltyNumber: finalBiltyNumber,
+        manualBiltyNumber: manualBiltyNumberToSave,
         trackingId: finalTrackingId,
         date: formData.date ? new Date(formData.date).toISOString() : timestamp,
         bookingDate,
@@ -889,6 +893,7 @@ export default function NewBiltyPage() {
       if (isSupabaseConfigured) {
         const biltyPayload: Record<string, any> = {
           bilty_number: finalBiltyNumber || `SPD-${Date.now()}`,
+          manual_bilty_number: manualBiltyNumberToSave,
           sender_name: (newBiltyRecord.senderName || "Walk-in Shipper").trim(),
           receiver_name: (newBiltyRecord.receiverName || "Consignee").trim(),
           origin_station: (newBiltyRecord.origin || "Lahore").trim(),
@@ -902,6 +907,13 @@ export default function NewBiltyPage() {
 
         // Try clean insert matching target columns
         let { error: sbErr } = await supabase.from("bilties").insert([biltyPayload]);
+
+        // If table doesn't have manual_bilty_number column yet, retry without it
+        if (sbErr && sbErr.message?.toLowerCase().includes("manual_bilty_number")) {
+          const { manual_bilty_number: _, ...withoutManual } = biltyPayload;
+          const retryRes = await supabase.from("bilties").insert([withoutManual]);
+          sbErr = retryRes.error;
+        }
 
         // If table requires id column without default, retry providing id
         if (sbErr && sbErr.message?.toLowerCase().includes("id")) {
@@ -1157,11 +1169,34 @@ export default function NewBiltyPage() {
           badge="Sheet 1 Header"
           description="Bilty number, payment terms, dispatch priority, and corridor stations"
         >
-          {/* Bilty No (Auto-generated & Editable) */}
+          {/* Manual / Book Bilty Number */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-200">
+                Manual / Book Bilty Number
+              </Label>
+              <span className="text-[10px] text-slate-500 font-medium">Optional (Paper Book No.)</span>
+            </div>
+            <Input
+              value={formData.manualBiltyNumber}
+              placeholder="e.g. 5040 or SPD-5040 (Leave blank for auto)"
+              onChange={(e) => {
+                const val = e.target.value.trimStart();
+                setFormData({
+                  ...formData,
+                  manualBiltyNumber: val,
+                  biltyNumber: val ? val.toUpperCase() : generateBiltyNumberCandidate(formData.origin || "Lahore"),
+                });
+              }}
+              className="rounded-xl h-10 text-xs font-mono tracking-wider font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:border-red-500"
+            />
+          </div>
+
+          {/* System Bilty No (Auto-generated & Editable) */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Bilty No *
+                System Bilty No *
               </Label>
               <button
                 type="button"

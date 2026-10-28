@@ -205,6 +205,8 @@ export default function CustomersPage() {
             companyName: r.name,
             phone: r.phone,
             city: r.city,
+            photo: r.avatar_url || r.photo || null,
+            user: { avatar: r.avatar_url || r.photo || null },
             createdAt: r.created_at,
             ...r,
           }));
@@ -227,7 +229,7 @@ export default function CustomersPage() {
       // Merge local customers + Supabase customers (kept at top) with API seed customers
       const localList = getStoredCustomers();
       const combinedActive = supabaseCustomers.length > 0
-        ? mergeLocalWithApi(supabaseCustomers, localList, getDeletedCustomerIds())
+        ? mergeLocalWithApi(supabaseCustomers, localList, [])
         : localList;
       const deletedIds = getDeletedCustomerIds();
       let list = mergeLocalWithApi(combinedActive, apiList, deletedIds);
@@ -377,12 +379,28 @@ export default function CustomersPage() {
   }, [search, warehouseFilter, statusFilter]);
 
   const handleUploadPhoto = async (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve("");
-      reader.readAsDataURL(file);
-    });
+    if (isSupabaseConfigured) {
+      try {
+        const fileExt = file.name.split(".").pop() || "jpg";
+        const fileName = `customer-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        const filePath = `customers/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from("avatars")
+            .getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            return publicUrlData.publicUrl;
+          }
+        }
+      } catch (err) {
+        console.warn("Supabase customer avatar upload fallback:", err);
+      }
+    }
+    return "";
   };
 
   const handleSubmitModal = async (e: React.FormEvent) => {
@@ -452,6 +470,7 @@ export default function CustomersPage() {
               email: updated.email,
               address: updated.address,
               city: updated.city,
+              avatar_url: finalPhotoUrl || null,
             },
           ]);
           if (sbErr) {
@@ -531,6 +550,7 @@ export default function CustomersPage() {
               city: newCust.city,
               opening_balance: openBal,
               current_balance: openBal,
+              avatar_url: finalPhotoUrl || null,
             },
           ]);
           if (sbErr) {

@@ -173,6 +173,38 @@ function AdminProfileContent() {
     try {
       const localUser = getCurrentUser();
 
+      // Check Supabase directly first if available
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbUser } = await supabase
+            .from("users")
+            .select("*")
+            .eq("role", "SUPER_ADMIN")
+            .maybeSingle();
+          if (sbUser) {
+            const activePic = sbUser.avatar_url || sbUser.avatar || null;
+            const merged = {
+              ...localUser,
+              fullName: sbUser.name || localUser.fullName || "System Admin",
+              name: sbUser.name || localUser.name || "System Admin",
+              email: sbUser.email || localUser.email || "admin@gmail.com",
+              phone: sbUser.phone || localUser.phone || "0325 2024433",
+              avatar: activePic,
+            };
+            setUser(merged);
+            setName(merged.fullName);
+            setEmail(merged.email);
+            setPhone(merged.phone);
+            setAvatar(activePic);
+            setPreviewAvatar(activePic);
+            setImageLoadFailed(false);
+            return;
+          }
+        } catch (sbErr) {
+          console.warn("Direct Supabase profile check notice:", sbErr);
+        }
+      }
+
       // Query backend database profile
       const res = await fetch("/api/admin/profile");
       const data = await res.json();
@@ -265,7 +297,7 @@ function AdminProfileContent() {
       try {
         await supabase
           .from("users")
-          .update({ avatar: finalAvatarUrl })
+          .update({ avatar: finalAvatarUrl, avatar_url: finalAvatarUrl })
           .or(`role.eq.SUPER_ADMIN,role.eq.ADMIN`);
       } catch (sbErr) {
         console.warn("Supabase user avatar update notice:", sbErr);
@@ -349,6 +381,15 @@ function AdminProfileContent() {
             detail: { name, email, phone, avatar: null },
           })
         );
+      }
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from("users")
+            .update({ avatar: null, avatar_url: null })
+            .or(`role.eq.SUPER_ADMIN,role.eq.ADMIN`);
+        } catch {}
       }
 
       try {

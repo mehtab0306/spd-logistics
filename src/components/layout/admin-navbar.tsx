@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { GlobalSearch } from "@/components/layout/global-search";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 interface AdminNavbarProps {
   onMenuClick?: () => void;
@@ -53,6 +54,28 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
 
   React.useEffect(() => {
     const fetchUser = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbUser } = await supabase
+            .from("users")
+            .select("name, email, role, avatar, avatar_url")
+            .eq("role", "SUPER_ADMIN")
+            .maybeSingle();
+          if (sbUser) {
+            const avatarUrl = sbUser.avatar_url || sbUser.avatar || null;
+            if (avatarUrl) {
+              setCurrentUser((prev: any) => ({
+                ...(prev || {}),
+                name: sbUser.name || prev?.name || "System Admin",
+                email: sbUser.email || prev?.email || "admin@gmail.com",
+                role: sbUser.role || "SUPER_ADMIN",
+                avatar: avatarUrl,
+              }));
+            }
+          }
+        } catch {}
+      }
+
       try {
         const storedUser = localStorage.getItem('spd_user');
         const storedAvatar = localStorage.getItem('spd_admin_avatar');

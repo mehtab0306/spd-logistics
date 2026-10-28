@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { getStoredCustomers, saveStoredCustomer } from "@/lib/local-persistence";
 import { LogisticsFormSkeleton } from "@/components/shared/logistics-loader";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function EditCustomerPage() {
   const router = useRouter();
@@ -125,12 +126,30 @@ export default function EditCustomerPage() {
   };
 
   const handleUploadPhoto = async (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve("");
-      reader.readAsDataURL(file);
-    });
+    if (isSupabaseConfigured) {
+      try {
+        const fileExt = file.name.split(".").pop() || "jpg";
+        const fileName = `customer-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        const filePath = `customers/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from("avatars")
+            .getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            return publicUrlData.publicUrl;
+          }
+        } else {
+          console.warn("Supabase customer avatar upload error:", uploadError);
+        }
+      } catch (err) {
+        console.warn("Supabase customer avatar upload fallback:", err);
+      }
+    }
+    return "";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -172,6 +191,22 @@ export default function EditCustomerPage() {
 
       // Immediately update local storage
       saveStoredCustomer(payload);
+
+      // Supabase PostgreSQL direct sync
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("customers").update({
+            name: payload.name || payload.companyName,
+            phone: payload.phone,
+            email: payload.email,
+            address: payload.address,
+            city: payload.city,
+            avatar_url: finalPhotoUrl || null,
+          }).eq("id", customerId);
+        } catch (sbErr) {
+          console.warn("Supabase customer update error:", sbErr);
+        }
+      }
 
       // API call wrapped in try/catch
       try {

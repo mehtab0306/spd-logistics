@@ -223,9 +223,11 @@ export default function ChallanPage() {
 
       const localBilties = getStoredBilties();
       const combinedActiveBilties = supabaseBilties.length > 0
-        ? mergeLocalWithApi(supabaseBilties, localBilties, getDeletedBiltyIds(), "biltyNumber")
+        ? mergeLocalWithApi(supabaseBilties, localBilties, [], "biltyNumber")
         : localBilties;
-      const allBilties = mergeLocalWithApi(combinedActiveBilties, apiBilties, getDeletedBiltyIds(), "biltyNumber");
+      const allBilties = supabaseBilties.length > 0
+        ? combinedActiveBilties
+        : mergeLocalWithApi(combinedActiveBilties, apiBilties, getDeletedBiltyIds(), "biltyNumber");
 
       const dedupedBilties: any[] = [];
       const seenBiltyIds = new Set<string>();
@@ -251,9 +253,11 @@ export default function ChallanPage() {
 
       const localDrivers = getStoredDrivers();
       const combinedActiveDrivers = supabaseDrivers.length > 0
-        ? mergeLocalWithApi(supabaseDrivers, localDrivers, getDeletedDriverIds())
+        ? mergeLocalWithApi(supabaseDrivers, localDrivers, [])
         : localDrivers;
-      const allDrivers = mergeLocalWithApi(combinedActiveDrivers, apiDrivers, getDeletedDriverIds());
+      const allDrivers = supabaseDrivers.length > 0
+        ? combinedActiveDrivers
+        : mergeLocalWithApi(combinedActiveDrivers, apiDrivers, getDeletedDriverIds());
 
       const dedupedDrivers: any[] = [];
       const seenDrvIds = new Set<string>();

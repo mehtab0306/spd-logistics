@@ -10,6 +10,7 @@ create extension if not exists "uuid-ossp";
 create table if not exists bilties (
   id text primary key default gen_random_uuid()::text,
   bilty_number text not null,
+  manual_bilty_number text,
   sender_name text not null default 'Walk-in Shipper',
   receiver_name text not null default 'Consignee',
   origin_station text not null default 'Lahore',
@@ -45,6 +46,7 @@ create table if not exists customers (
   city text,
   opening_balance numeric default 0,
   current_balance numeric default 0,
+  avatar_url text,
   created_at timestamptz default now()
 );
 
@@ -166,6 +168,7 @@ create table if not exists users (
   phone text,
   role text default 'SUPER_ADMIN',
   avatar text,
+  avatar_url text,
   status text default 'ACTIVE',
   created_at timestamptz default now()
 );

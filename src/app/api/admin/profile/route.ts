@@ -32,7 +32,7 @@ export async function GET() {
             phone: sbUser.phone || '0325 2024433',
             role: sbUser.role || 'SUPER_ADMIN',
             status: sbUser.status || 'ACTIVE',
-            avatar: sbUser.avatar || null,
+            avatar: sbUser.avatar_url || sbUser.avatar || null,
             lastLoginAt: sbUser.created_at || new Date().toISOString(),
             createdAt: sbUser.created_at || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -188,6 +188,7 @@ export async function PUT(request: Request) {
           email: finalUser.email,
           phone: finalUser.phone,
           avatar: finalUser.avatar,
+          avatar_url: finalUser.avatar,
           role: finalUser.role,
           status: finalUser.status,
         });
