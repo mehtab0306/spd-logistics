@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ADMIN_NAV_SECTIONS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
   LayoutDashboard,
   Users,
@@ -82,6 +83,28 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     setMounted(true);
 
     const fetchUser = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbUser } = await supabase
+            .from("users")
+            .select("name, email, role, avatar, avatar_url")
+            .or("role.eq.SUPER_ADMIN,role.eq.ADMIN")
+            .maybeSingle();
+          if (sbUser) {
+            const avatarUrl = sbUser.avatar_url || sbUser.avatar || null;
+            if (avatarUrl || sbUser.name) {
+              setCurrentUser((prev: any) => ({
+                ...(prev || {}),
+                name: sbUser.name || prev?.name || "System Admin",
+                email: sbUser.email || prev?.email || "admin@spd.com",
+                role: sbUser.role || "SUPER_ADMIN",
+                avatar: avatarUrl || prev?.avatar,
+              }));
+            }
+          }
+        } catch {}
+      }
+
       try {
         const storedUser = localStorage.getItem("spd_user");
         const storedAvatar = localStorage.getItem("spd_admin_avatar");
@@ -93,6 +116,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           setCurrentUser({ avatar: storedAvatar, name: "System Admin" });
         }
       } catch {}
+
       try {
         const res = await fetch("/api/admin/profile");
         const data = await res.json();
@@ -116,7 +140,11 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     };
 
     window.addEventListener("spd-profile-updated", handleProfileUpdated);
-    return () => window.removeEventListener("spd-profile-updated", handleProfileUpdated);
+    window.addEventListener("focus", fetchUser);
+    return () => {
+      window.removeEventListener("spd-profile-updated", handleProfileUpdated);
+      window.removeEventListener("focus", fetchUser);
+    };
   }, []);
 
   // Automatically close mobile sidebar on navigation
@@ -256,7 +284,9 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                     }}
                   />
                 ) : (
-                  <UserCog className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                    {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : "AD"}
+                  </span>
                 )}
               </div>
               {!collapsed && (

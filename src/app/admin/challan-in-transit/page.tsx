@@ -266,7 +266,10 @@ export default function ChallanInTransitPage() {
     // Supabase cloud deletion
     if (isSupabaseConfigured) {
       try {
-        await supabase.from("challans").delete().eq("id", c.id);
+        await supabase
+          .from("challans")
+          .delete()
+          .or(`id.eq.${c.id},challan_number.eq.${c.challanNumber || c.id}`);
       } catch (sbErr) {
         console.warn("Supabase challan delete warning:", sbErr);
       }

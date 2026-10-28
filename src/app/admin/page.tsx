@@ -1,5 +1,6 @@
-import React from "react";
-import prisma from "@/lib/prisma";
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
 import { StatsCard } from "@/components/shared/stats-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -16,99 +17,212 @@ import {
   Clock,
   ShieldCheck,
   CheckCircle2,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import {
+  getStoredBilties,
+  getStoredCustomers,
+  getStoredDrivers,
+  getStoredChallans,
+} from "@/lib/local-persistence";
 
-export const dynamic = "force-dynamic";
+export default function AdminDashboard() {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [consignments, setConsignments] = useState(0);
+  const [pendingDeliveries, setPendingDeliveries] = useState(0);
+  const [deliveredCount, setDeliveredCount] = useState(0);
+  const [customerCount, setCustomerCount] = useState(0);
+  const [totalFreight, setTotalFreight] = useState(0);
+  const [totalPaid, setTotalPaid] = useState(0);
+  const [totalRemaining, setTotalRemaining] = useState(0);
+  const [trucksCount, setTrucksCount] = useState(0);
+  const [driversCount, setDriversCount] = useState(0);
+  const [cashBooksCount, setCashBooksCount] = useState(2);
+  const [lahoreCount, setLahoreCount] = useState(0);
+  const [karachiCount, setKarachiCount] = useState(0);
+  const [recentBilties, setRecentBilties] = useState<any[]>([]);
+  const [recentLogs, setRecentLogs] = useState<any[]>([]);
 
-export default async function AdminDashboard() {
-  let customers = 0;
-  let consignments = 0;
-  let vehicles = 0;
-  let drivers = 0;
-  let payments = 0;
-  let cashBooks = 0;
-  let pendingDeliveries = 0;
-  let deliveredCount = 0;
-  let lahoreBiltyCount = 0;
-  let karachiBiltyCount = 0;
-  let allConsignments: any[] = [];
-  let recentConsignments: any[] = [];
-  let recentActivity: any[] = [];
+  const fetchDashboardMetrics = useCallback(async () => {
+    try {
+      let biltiesList: any[] = [];
+      let custCount = 0;
+      let drvList: any[] = [];
+      let chList: any[] = [];
+      let cbCount = 2;
+      let logsList: any[] = [];
 
-  try {
-    const results = await Promise.all([
-      prisma.customer.count(),
-      prisma.consignment.count({ where: { shipmentStatus: { not: "DELETED" } } }),
-      prisma.vehicle.count(),
-      prisma.driver.count(),
-      prisma.payment.count(),
-      prisma.cashBook.count(),
-      prisma.consignment.count({
-        where: {
-          NOT: [{ shipmentStatus: "DELIVERED" }, { shipmentStatus: "CANCELLED" }, { shipmentStatus: "DELETED" }],
-        },
-      }),
-      prisma.consignment.count({
-        where: { shipmentStatus: "DELIVERED" },
-      }),
-      prisma.consignment.count({
-        where: { warehouse: { contains: "LAHORE" }, shipmentStatus: { not: "DELETED" } },
-      }),
-      prisma.consignment.count({
-        where: { warehouse: { contains: "KARACHI" }, shipmentStatus: { not: "DELETED" } },
-      }),
-      prisma.consignment.findMany({
-        where: { shipmentStatus: { not: "DELETED" } },
-        select: {
-          totalAmount: true,
-          paidAmount: true,
-          remainingBalance: true,
-        },
-      }),
-      prisma.consignment.findMany({
-        where: { shipmentStatus: { not: "DELETED" } },
-        take: 6,
-        orderBy: { date: "desc" },
-        include: {
-          customer: { select: { name: true, companyName: true } },
-        },
-      }),
-      prisma.auditLog.findMany({
-        take: 6,
-        orderBy: { createdAt: "desc" },
-        include: { user: true },
-      }),
-    ]);
-    [
-      customers,
-      consignments,
-      vehicles,
-      drivers,
-      payments,
-      cashBooks,
-      pendingDeliveries,
-      deliveredCount,
-      lahoreBiltyCount,
-      karachiBiltyCount,
-      allConsignments,
-      recentConsignments,
-      recentActivity,
-    ] = results;
-  } catch (err) {
-    console.error("Non-fatal: could not query all dashboard metrics:", err);
-  }
+      // 1. Direct Supabase Cloud Database Query
+      if (isSupabaseConfigured) {
+        try {
+          const [bRes, cRes, dRes, chRes, cbRes, nRes] = await Promise.allSettled([
+            supabase.from("bilties").select("*").order("created_at", { ascending: false }),
+            supabase.from("customers").select("*", { count: "exact" }),
+            supabase.from("drivers").select("*"),
+            supabase.from("challans").select("*"),
+            supabase.from("cash_books").select("id", { count: "exact" }),
+            supabase.from("notifications").select("*").order("created_at", { ascending: false }).limit(6),
+          ]);
 
-  const totalRevenue = (allConsignments || []).reduce((sum, c) => sum + (c?.totalAmount || 0), 0);
-  const totalCollected = (allConsignments || []).reduce((sum, c) => sum + (c?.paidAmount || 0), 0);
-  const totalReceivable = (allConsignments || []).reduce((sum, c) => sum + (c?.remainingBalance || 0), 0);
+          if (bRes.status === "fulfilled" && Array.isArray(bRes.value.data)) {
+            biltiesList = bRes.value.data;
+          }
+          if (cRes.status === "fulfilled") {
+            custCount = cRes.value.count ?? (Array.isArray(cRes.value.data) ? cRes.value.data.length : 0);
+          }
+          if (dRes.status === "fulfilled" && Array.isArray(dRes.value.data)) {
+            drvList = dRes.value.data;
+          }
+          if (chRes.status === "fulfilled" && Array.isArray(chRes.value.data)) {
+            chList = chRes.value.data;
+          }
+          if (cbRes.status === "fulfilled" && typeof cbRes.value.count === "number") {
+            cbCount = Math.max(2, cbRes.value.count);
+          }
+          if (nRes.status === "fulfilled" && Array.isArray(nRes.value.data)) {
+            logsList = nRes.value.data.map((n: any) => ({
+              id: n.id,
+              action: n.type || "INFO",
+              module: n.title || "SYSTEM",
+              details: n.message || "Notification logged",
+              createdAt: n.created_at || new Date().toISOString(),
+            }));
+          }
+        } catch (sbErr) {
+          console.warn("Supabase dashboard metrics load notice:", sbErr);
+        }
+      }
 
-  const lahorePct = consignments > 0 ? Math.round((lahoreBiltyCount / consignments) * 100) : 50;
-  const karachiPct = consignments > 0 ? Math.round((karachiBiltyCount / consignments) * 100) : 50;
+      // 2. Resilient Fallback to local storage or API if database returns empty
+      if (biltiesList.length === 0) {
+        const local = getStoredBilties();
+        if (local && local.length > 0) {
+          biltiesList = local;
+        } else {
+          try {
+            const res = await fetch("/api/admin/bilty");
+            const data = await res.json();
+            if (data.success && Array.isArray(data.data)) {
+              biltiesList = data.data;
+            }
+          } catch {}
+        }
+      }
+
+      if (custCount === 0) {
+        const localCust = getStoredCustomers();
+        custCount = localCust.length;
+      }
+
+      if (drvList.length === 0) {
+        drvList = getStoredDrivers();
+      }
+
+      if (chList.length === 0) {
+        chList = getStoredChallans();
+      }
+
+      // Calculate Real-Time KPIs
+      const totalConsignments = biltiesList.length;
+      const activeInTransit = biltiesList.filter((b) => {
+        const st = String(b.status || b.shipmentStatus || "").toLowerCase();
+        return st.includes("transit") || st.includes("dispatch");
+      }).length;
+
+      const delivered = biltiesList.filter((b) => {
+        const st = String(b.status || b.shipmentStatus || "").toLowerCase();
+        return st.includes("deliver");
+      }).length;
+
+      const totalBiltyFreight = biltiesList.reduce((acc, b) => {
+        return acc + (Number(b.freight_amount ?? b.totalFreight ?? b.totalAmount ?? b.total_freight) || 0);
+      }, 0);
+
+      const totalPaidAmount = biltiesList.reduce((acc, b) => {
+        return acc + (Number(b.advance_paid ?? b.paidAmount) || 0);
+      }, 0);
+
+      const outstandingBalance = biltiesList.reduce((acc, b) => {
+        return acc + (Number(b.remaining_balance ?? b.remainingBalance) || 0);
+      }, 0);
+
+      // Hub Volume Calculations
+      let lhr = 0;
+      let khi = 0;
+      for (const b of biltiesList) {
+        const orig = String(b.origin_station || b.origin || "").toLowerCase();
+        const dest = String(b.destination_station || b.destination || "").toLowerCase();
+        const wh = String(b.warehouse || "").toLowerCase();
+        if (orig.includes("lahore") || dest.includes("lahore") || wh.includes("lahore")) lhr++;
+        if (orig.includes("karachi") || dest.includes("karachi") || wh.includes("karachi")) khi++;
+      }
+
+      setConsignments(totalConsignments);
+      setPendingDeliveries(activeInTransit);
+      setDeliveredCount(delivered);
+      setCustomerCount(custCount);
+      setTotalFreight(totalBiltyFreight);
+      setTotalPaid(totalPaidAmount);
+      setTotalRemaining(outstandingBalance);
+      setTrucksCount(chList.length);
+      setDriversCount(drvList.length);
+      setCashBooksCount(cbCount);
+      setLahoreCount(lhr);
+      setKarachiCount(khi);
+
+      // Format recent bilties
+      const formattedRecent = biltiesList.slice(0, 6).map((c: any) => ({
+        id: c.id || c.bilty_number || c.biltyNumber,
+        biltyNumber: c.bilty_number || c.biltyNumber || c.id,
+        origin: c.origin_station || c.origin || "Lahore",
+        destination: c.destination_station || c.destination || "Karachi",
+        senderName: c.sender_name || c.senderName || "Walk-in Customer",
+        customerName: c.customer?.companyName || c.sender_name || c.senderName || "Walk-in Customer",
+        totalAmount: Number(c.freight_amount ?? c.totalFreight ?? c.totalAmount ?? c.total_freight ?? 0),
+        shipmentStatus: String(c.status || c.shipmentStatus || "BOOKED").toUpperCase(),
+      }));
+      setRecentBilties(formattedRecent);
+
+      if (logsList.length > 0) {
+        setRecentLogs(logsList);
+      }
+    } catch (err) {
+      console.error("Dashboard metrics calculation error:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardMetrics();
+
+    const handleFocus = () => {
+      fetchDashboardMetrics();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("spd-bilty-updated", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("spd-bilty-updated", handleFocus);
+    };
+  }, [fetchDashboardMetrics]);
+
+  const handleManualRefresh = () => {
+    setRefreshing(true);
+    fetchDashboardMetrics();
+  };
+
+  const lahorePct = consignments > 0 ? Math.round((lahoreCount / consignments) * 100) : 50;
+  const karachiPct = consignments > 0 ? Math.round((karachiCount / consignments) * 100) : 50;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-16">
       {/* Top Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 p-6 rounded-2xl border border-slate-800 text-white shadow-xl">
         <div>
@@ -125,15 +239,25 @@ export default async function AdminDashboard() {
             Nationwide cargo network &bull; Karachi &bull; Lahore &bull; Islamabad &bull; Motorway & Highway Corridors
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/admin/bilty">
-            <Button className="bg-spd-red hover:bg-spd-redHover text-white font-bold text-xs rounded-xl shadow-md gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={refreshing}
+            onClick={handleManualRefresh}
+            className="bg-slate-800/80 border-slate-700 text-white hover:bg-slate-750 font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-4"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-spd-red" : ""}`} />
+            <span>{refreshing ? "Refreshing..." : "Refresh Live"}</span>
+          </Button>
+          <Link href="/admin/bilty/new">
+            <Button className="bg-spd-red hover:bg-spd-redHover text-white font-bold text-xs rounded-xl shadow-md gap-2 h-10 px-4">
               <Package className="w-4 h-4" />
               <span>Create New Bilty</span>
             </Button>
           </Link>
-          <Link href="/admin/customers">
-            <Button variant="outline" className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700 font-bold text-xs rounded-xl gap-2">
+          <Link href="/admin/customers/new">
+            <Button variant="outline" className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700 font-bold text-xs rounded-xl gap-2 h-10 px-4">
               <Users className="w-4 h-4 text-spd-blue" />
               <span>Add Customer</span>
             </Button>
@@ -163,7 +287,7 @@ export default async function AdminDashboard() {
         />
         <StatsCard
           title="Registered Clients"
-          value={customers.toString()}
+          value={customerCount.toString()}
           icon={Users}
           description="Verified customer accounts"
         />
@@ -179,7 +303,7 @@ export default async function AdminDashboard() {
             </div>
           </div>
           <p className="text-2xl font-black mt-2 text-slate-900 dark:text-white">
-            {formatCurrency(totalRevenue)}
+            {formatCurrency(totalFreight)}
           </p>
           <p className="text-[11px] text-slate-400 mt-1">Total booked cargo billing</p>
         </div>
@@ -192,7 +316,7 @@ export default async function AdminDashboard() {
             </div>
           </div>
           <p className="text-2xl font-black mt-2 text-emerald-600 dark:text-emerald-400">
-            {formatCurrency(totalCollected)}
+            {formatCurrency(totalPaid)}
           </p>
           <p className="text-[11px] text-slate-400 mt-1">Collected freight revenue</p>
         </div>
@@ -205,7 +329,7 @@ export default async function AdminDashboard() {
             </div>
           </div>
           <p className="text-2xl font-black mt-2 text-amber-600 dark:text-amber-400">
-            {formatCurrency(totalReceivable)}
+            {formatCurrency(totalRemaining)}
           </p>
           <p className="text-[11px] text-slate-400 mt-1">Pending customer balance</p>
         </div>
@@ -218,9 +342,9 @@ export default async function AdminDashboard() {
             </div>
           </div>
           <p className="text-2xl font-black mt-2 text-slate-900 dark:text-white">
-            {vehicles} Trucks / {drivers} Drivers
+            {trucksCount} Trucks / {driversCount} Drivers
           </p>
-          <p className="text-[11px] text-slate-400 mt-1">{cashBooks} Separate Cash Books</p>
+          <p className="text-[11px] text-slate-400 mt-1">{cashBooksCount} Separate Cash Books</p>
         </div>
       </div>
 
@@ -246,7 +370,7 @@ export default async function AdminDashboard() {
                   <span className="w-2.5 h-2.5 rounded-full bg-spd-red" />
                   Lahore Central Hub (Bhati Gate & Terminal)
                 </span>
-                <span className="text-slate-900 dark:text-white">{lahoreBiltyCount} ({lahorePct}%)</span>
+                <span className="text-slate-900 dark:text-white">{lahoreCount} ({lahorePct}%)</span>
               </div>
               <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
@@ -264,7 +388,7 @@ export default async function AdminDashboard() {
                   <span className="w-2.5 h-2.5 rounded-full bg-spd-blue" />
                   Karachi South Hub (Port & Transport Nagar)
                 </span>
-                <span className="text-slate-900 dark:text-white">{karachiBiltyCount} ({karachiPct}%)</span>
+                <span className="text-slate-900 dark:text-white">{karachiCount} ({karachiPct}%)</span>
               </div>
               <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
@@ -296,7 +420,7 @@ export default async function AdminDashboard() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <Link href="/admin/bilty">
+            <Link href="/admin/bilty/new">
               <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-spd-red hover:shadow-md transition-all flex flex-col items-center text-center gap-2 group">
                 <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-950/60 text-spd-red flex items-center justify-center group-hover:scale-110 transition-transform">
                   <Package className="w-5 h-5" />
@@ -387,7 +511,7 @@ export default async function AdminDashboard() {
             </Link>
           </div>
 
-          {recentConsignments.length === 0 ? (
+          {recentBilties.length === 0 ? (
             <EmptyState
               icon={Package}
               title="No bilties created yet"
@@ -395,8 +519,12 @@ export default async function AdminDashboard() {
             />
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
-              {recentConsignments.map((c) => (
-                <div key={c.id} className="py-3 flex items-center justify-between gap-3">
+              {recentBilties.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/admin/bilty/${encodeURIComponent(c.biltyNumber || c.id)}`}
+                  className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl px-2 transition-colors block"
+                >
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-xs text-slate-900 dark:text-white">
@@ -407,7 +535,7 @@ export default async function AdminDashboard() {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      {c.customer?.companyName || c.senderName || "Walk-in Customer"}
+                      {c.customerName || c.senderName || "Walk-in Customer"}
                     </p>
                   </div>
                   <div className="text-right">
@@ -418,7 +546,7 @@ export default async function AdminDashboard() {
                       {c.shipmentStatus.replace(/_/g, " ")}
                     </span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -438,7 +566,7 @@ export default async function AdminDashboard() {
             </Link>
           </div>
 
-          {recentActivity.length === 0 ? (
+          {recentLogs.length === 0 ? (
             <EmptyState
               icon={ShieldCheck}
               title="No recent logs"
@@ -446,7 +574,7 @@ export default async function AdminDashboard() {
             />
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
-              {recentActivity.map((log) => (
+              {recentLogs.map((log) => (
                 <div key={log.id} className="py-3 flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">

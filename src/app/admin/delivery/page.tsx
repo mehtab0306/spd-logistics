@@ -42,6 +42,7 @@ import {
 import { exportToExcel } from "@/lib/export-excel";
 import { PrintableGatePass } from "@/components/delivery/printable-gate-pass";
 import { PodModal } from "@/components/delivery/pod-modal";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function DeliveryPage() {
   const [deliveries, setDeliveries] = useState<any[]>([]);
@@ -70,14 +71,55 @@ export default function DeliveryPage() {
 
   useEffect(() => {
     fetchDeliveryQueue();
+
+    const handleFocus = () => {
+      fetchDeliveryQueue();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   const fetchDeliveryQueue = async () => {
     try {
       setLoading(true);
+      const apiBilties: any[] = [];
 
-      // 1. Fetch from Bilties API & Challans API
-      let apiBilties: any[] = [];
+      // 1. Fetch directly from Supabase
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbBilties } = await supabase
+            .from("bilties")
+            .select("*")
+            .order("created_at", { ascending: false });
+          if (Array.isArray(sbBilties)) {
+            for (const b of sbBilties) {
+              const bNum = b.manual_bilty_number || b.bilty_number || b.id;
+              apiBilties.push({
+                id: b.id,
+                biltyNumber: bNum,
+                senderName: b.sender_name,
+                receiverName: b.receiver_name,
+                receiverPhone: b.receiver_phone,
+                receiverCnic: b.receiver_cnic,
+                origin: b.origin_station,
+                destination: b.destination_station,
+                totalFreight: Number(b.freight_amount) || 0,
+                paidAmount: Number(b.advance_paid) || 0,
+                remainingBalance: Number(b.remaining_balance) || 0,
+                status: b.status || "In-Transit",
+                shipmentStatus: b.status || "In-Transit",
+                paymentStatus: (Number(b.remaining_balance) || 0) <= 0 ? "PAID" : "PARTIAL",
+                packageDetails: b.cargo_details || "Commercial Cargo",
+                createdAt: b.created_at,
+              });
+            }
+          }
+        } catch (sbErr) {
+          console.warn("Supabase direct bilties delivery queue warning:", sbErr);
+        }
+      }
+
+      // 2. Fetch from Bilties API & Challans API
       try {
         const [bRes, cRes] = await Promise.all([
           fetch("/api/admin/bilty").catch(() => null),
@@ -86,11 +128,17 @@ export default function DeliveryPage() {
 
         if (bRes && bRes.ok) {
           const bData = await bRes.json().catch(() => ({}));
-          apiBilties = Array.isArray(bData.data)
+          const bDataArr = Array.isArray(bData.data)
             ? bData.data
             : Array.isArray(bData.consignments)
             ? bData.consignments
             : [];
+          for (const b of bDataArr) {
+            const bKey = String(b.biltyNumber || b.id || "").toUpperCase().trim();
+            if (!apiBilties.some((existing: any) => String(existing.biltyNumber || existing.id || "").toUpperCase().trim() === bKey)) {
+              apiBilties.push(b);
+            }
+          }
         }
 
         if (cRes && cRes.ok) {
@@ -247,6 +295,24 @@ export default function DeliveryPage() {
         });
       } catch (err) {
         console.warn("API update fallback active:", err);
+      }
+
+      // 3. Direct Supabase update
+      if (isSupabaseConfigured) {
+        try {
+          const bId = deliveryModalBilty.id;
+          const bNum = deliveryModalBilty.biltyNumber;
+          await supabase
+            .from("bilties")
+            .update({
+              status: "Delivered",
+              remaining_balance: newRemaining,
+              advance_paid: newPaid,
+            })
+            .or(`id.eq.${bId},bilty_number.eq.${bNum},manual_bilty_number.eq.${bNum}`);
+        } catch (sbErr) {
+          console.warn("Supabase confirm delivery update warning:", sbErr);
+        }
       }
 
       setDeliveries((prev) =>

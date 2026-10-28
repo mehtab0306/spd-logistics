@@ -434,6 +434,16 @@ export async function PUT(request: Request) {
 
       updateCentralRecord('challans', id, updateData);
 
+      if (isSupabaseConfigured) {
+        try {
+          const sbUpdate: any = {};
+          if (status) sbUpdate.status = status;
+          await supabase.from('challans').update(sbUpdate).or(`id.eq.${id},challan_number.eq.${id}`);
+        } catch (sbErr) {
+          console.warn('Supabase challan PUT update notice:', sbErr);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         message: `Challan ${updated.challanNumber} updated successfully!`,
@@ -441,6 +451,17 @@ export async function PUT(request: Request) {
       });
     } catch {
       updateCentralRecord('challans', id, updateData);
+
+      if (isSupabaseConfigured) {
+        try {
+          const sbUpdate: any = {};
+          if (status) sbUpdate.status = status;
+          await supabase.from('challans').update(sbUpdate).or(`id.eq.${id},challan_number.eq.${id}`);
+        } catch (sbErr) {
+          console.warn('Supabase challan fallback PUT update notice:', sbErr);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         message: 'Challan updated successfully!',
@@ -467,6 +488,14 @@ export async function DELETE(request: Request) {
     try {
       await prisma.challan.delete({ where: { id } });
     } catch {}
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('challans').delete().or(`id.eq.${id},challan_number.eq.${id}`);
+      } catch (sbErr) {
+        console.warn('Supabase challan DELETE notice:', sbErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,

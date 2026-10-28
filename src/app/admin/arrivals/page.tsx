@@ -34,6 +34,7 @@ import {
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
 import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function ArrivalsPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -46,23 +47,66 @@ export default function ArrivalsPage() {
 
   useEffect(() => {
     fetchArrivedChallans();
+
+    const handleFocus = () => {
+      fetchArrivedChallans();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   const fetchArrivedChallans = async () => {
     try {
       setLoading(true);
       let apiChallans: any[] = [];
+
+      // 1. Fetch directly from Supabase
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbChallans } = await supabase
+            .from("challans")
+            .select("*")
+            .order("created_at", { ascending: false });
+          if (Array.isArray(sbChallans)) {
+            for (const r of sbChallans) {
+              apiChallans.push({
+                id: r.id,
+                challanNumber: r.challan_number || r.id,
+                truckNumber: r.vehicle_number || "Pending",
+                driverName: r.driver_name || "Pending",
+                driverPhone: r.driver_phone || null,
+                origin: r.origin,
+                destination: r.destination,
+                totalAmount: Number(r.total_truck_hire) || 0,
+                truckFreight: Number(r.total_truck_hire) || 0,
+                advancePaidToDriver: Number(r.advance_paid) || 0,
+                status: r.status || "ARRIVED",
+                createdAt: r.created_at,
+              });
+            }
+          }
+        } catch (sbErr) {
+          console.warn("Supabase direct arrivals load warning:", sbErr);
+        }
+      }
+
+      // 2. Fallback to API route
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
         const res = await fetch("/api/admin/challan", { signal: controller.signal });
         clearTimeout(timeoutId);
         const data = await res.json();
-        apiChallans = Array.isArray(data.data)
+        const apiData = Array.isArray(data.data)
           ? data.data
           : Array.isArray(data.challans)
           ? data.challans
           : [];
+        for (const item of apiData) {
+          if (!apiChallans.some((c) => String(c.id) === String(item.id) || String(c.challanNumber) === String(item.challanNumber))) {
+            apiChallans.push(item);
+          }
+        }
       } catch {}
 
       const merged = mergeLocalWithApi(
@@ -73,14 +117,30 @@ export default function ArrivalsPage() {
       );
       const arrived = merged.filter((c: any) => {
         const st = String(c.status || "").toUpperCase();
-        return st === "ARRIVED" || st === "READY_FOR_DELIVERY" || st === "OUT_FOR_DELIVERY" || st === "COMPLETED";
+        return (
+          st === "ARRIVED" ||
+          st === "IN TRANSIT" ||
+          st === "IN-TRANSIT" ||
+          st === "DISPATCHED" ||
+          st === "READY_FOR_DELIVERY" ||
+          st === "OUT_FOR_DELIVERY" ||
+          st === "COMPLETED"
+        );
       });
       setChallans(arrived);
     } catch (err) {
       console.error("Error fetching arrivals:", err);
       const arrived = getStoredChallans().filter((c: any) => {
         const st = String(c.status || "").toUpperCase();
-        return st === "ARRIVED" || st === "READY_FOR_DELIVERY" || st === "OUT_FOR_DELIVERY" || st === "COMPLETED";
+        return (
+          st === "ARRIVED" ||
+          st === "IN TRANSIT" ||
+          st === "IN-TRANSIT" ||
+          st === "DISPATCHED" ||
+          st === "READY_FOR_DELIVERY" ||
+          st === "OUT_FOR_DELIVERY" ||
+          st === "COMPLETED"
+        );
       });
       setChallans(arrived);
     } finally {
@@ -172,6 +232,27 @@ export default function ArrivalsPage() {
           status: "READY_FOR_DELIVERY",
           createdAt: timestamp,
         });
+      }
+
+      // Direct Supabase sync
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from("challans")
+            .update({ status: "READY_FOR_DELIVERY" })
+            .or(`id.eq.${challan.id},challan_number.eq.${challan.challanNumber}`);
+
+          for (const b of linkedBilties) {
+            const bId = b.id;
+            const bNo = b.biltyNumber;
+            await supabase
+              .from("bilties")
+              .update({ status: "READY_FOR_DELIVERY" })
+              .or(`id.eq.${bId},bilty_number.eq.${bNo},manual_bilty_number.eq.${bNo}`);
+          }
+        } catch (sbErr) {
+          console.warn("Supabase mark ready sync notice:", sbErr);
+        }
       }
 
       // Sync challan with API

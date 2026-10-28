@@ -295,10 +295,24 @@ function AdminProfileContent() {
 
       // Update Supabase users table
       try {
-        await supabase
+        const { data: updatedRows } = await supabase
           .from("users")
           .update({ avatar: finalAvatarUrl, avatar_url: finalAvatarUrl })
-          .or(`role.eq.SUPER_ADMIN,role.eq.ADMIN`);
+          .or(`role.eq.SUPER_ADMIN,role.eq.ADMIN`)
+          .select("id");
+
+        if (!updatedRows || updatedRows.length === 0) {
+          await supabase.from("users").upsert({
+            id: user?.id || "admin_root",
+            name: name || "System Admin",
+            email: email || "admin@gmail.com",
+            phone: phone || "0325 2024433",
+            role: "SUPER_ADMIN",
+            avatar: finalAvatarUrl,
+            avatar_url: finalAvatarUrl,
+            status: "ACTIVE",
+          });
+        }
       } catch (sbErr) {
         console.warn("Supabase user avatar update notice:", sbErr);
       }

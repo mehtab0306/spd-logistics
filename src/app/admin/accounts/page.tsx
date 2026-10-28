@@ -55,6 +55,7 @@ import {
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import { exportToExcel } from "@/lib/export-excel";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 // LocalStorage Keys for complete system-wide cross-module sync
 const LOCAL_ACCOUNTS_KEY = "spd_local_accounts";
@@ -172,11 +173,40 @@ export default function AccountsPage() {
 
       // 2. Fetch customers list for quick select
       let custList: any[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbCusts } = await supabase
+            .from("customers")
+            .select("*")
+            .order("created_at", { ascending: false });
+          if (Array.isArray(sbCusts)) {
+            for (const c of sbCusts) {
+              custList.push({
+                id: c.id,
+                name: c.name,
+                companyName: c.company_name || c.name,
+                phone: c.phone,
+                city: c.city,
+                address: c.address,
+              });
+            }
+          }
+        } catch (sbErr) {
+          console.warn("Supabase customers query notice in accounts:", sbErr);
+        }
+      }
+
       try {
         const cRes = await fetch("/api/admin/customers");
         if (cRes.ok) {
           const cJson = await cRes.json();
-          if (cJson.customers) custList = cJson.customers;
+          if (cJson.customers) {
+            for (const c of cJson.customers) {
+              if (!custList.some((existing) => String(existing.id) === String(c.id) || existing.name === c.name)) {
+                custList.push(c);
+              }
+            }
+          }
         }
       } catch {}
 
@@ -208,11 +238,71 @@ export default function AccountsPage() {
 
       let combinedAccounts = Array.from(allAccMap.values());
 
+      // Ensure every customer from Supabase has a live ledger account
+      for (const cust of custList) {
+        const existing = combinedAccounts.find(
+          (a) => (a.customerId && String(a.customerId) === String(cust.id)) ||
+                 (a.accountName && a.accountName.toLowerCase().trim() === (cust.companyName || cust.name || "").toLowerCase().trim())
+        );
+        if (!existing && cust.name) {
+          combinedAccounts.push({
+            id: `acc-cust-${cust.id}`,
+            accountName: cust.companyName || cust.name,
+            accountNumber: `ACT-${String(cust.id).slice(-4).toUpperCase()}`,
+            accountType: "CORPORATE_CLIENT",
+            openingBalance: 0,
+            status: "ACTIVE",
+            customerId: cust.id,
+            customer: cust,
+            transactions: [],
+            totalDebits: 0,
+            totalCredits: 0,
+            currentBalance: 0,
+          });
+        }
+      }
+
       // 4. Load sync sources: Bilties, Cash Transactions, Receivables Payments, Manual Account Txs
       let localBilties: any[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbBilties } = await supabase
+            .from("bilties")
+            .select("*")
+            .order("created_at", { ascending: false });
+          if (Array.isArray(sbBilties)) {
+            for (const b of sbBilties) {
+              const bNum = b.manual_bilty_number || b.bilty_number || b.id;
+              localBilties.push({
+                id: b.id,
+                biltyNumber: bNum,
+                senderName: b.sender_name,
+                receiverName: b.receiver_name,
+                origin: b.origin_station,
+                destination: b.destination_station,
+                totalAmount: Number(b.freight_amount) || 0,
+                paidAmount: Number(b.advance_paid) || 0,
+                remainingBalance: Number(b.remaining_balance) || 0,
+                date: b.created_at,
+              });
+            }
+          }
+        } catch (e) {
+          console.warn("Supabase bilties query notice in accounts:", e);
+        }
+      }
+
       try {
         const rawB = localStorage.getItem(LOCAL_BILTIES_KEY);
-        if (rawB) localBilties = JSON.parse(rawB);
+        if (rawB) {
+          const parsed = JSON.parse(rawB);
+          for (const b of parsed) {
+            const bNum = b.biltyNumber || b.id;
+            if (!localBilties.some((lb) => String(lb.id) === String(b.id) || String(lb.biltyNumber) === String(bNum))) {
+              localBilties.push(b);
+            }
+          }
+        }
       } catch {}
 
       let localCashTxs: any[] = [];
@@ -461,7 +551,11 @@ export default function AccountsPage() {
       loadAccountsData();
     };
     window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+    window.addEventListener("focus", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("focus", handleStorageChange);
+    };
   }, []);
 
   // Filtered Accounts

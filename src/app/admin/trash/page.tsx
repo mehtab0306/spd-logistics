@@ -36,6 +36,7 @@ import {
   Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function RecycleBinPage() {
   const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
@@ -71,10 +72,32 @@ export default function RecycleBinPage() {
     }
   };
 
-  const handleConfirmPurge = () => {
+  const handleConfirmPurge = async () => {
     if (!purgeTarget) return;
     setActionLoading(true);
     permanentlyDeleteFromTrash(purgeTarget.id);
+
+    // Direct Supabase purge
+    if (isSupabaseConfigured) {
+      try {
+        if (purgeTarget.type === "bilty") {
+          await supabase
+            .from("bilties")
+            .delete()
+            .or(`id.eq.${purgeTarget.id},bilty_number.eq.${purgeTarget.title || purgeTarget.id}`);
+        } else if (purgeTarget.type === "challan") {
+          await supabase
+            .from("challans")
+            .delete()
+            .or(`id.eq.${purgeTarget.id},challan_number.eq.${purgeTarget.title || purgeTarget.id}`);
+        } else if (purgeTarget.type === "customer") {
+          await supabase.from("customers").delete().eq("id", purgeTarget.id);
+        }
+      } catch (sbErr) {
+        console.warn("Supabase purge error notice:", sbErr);
+      }
+    }
+
     setFeedback({
       type: "success",
       message: `Permanently removed ${purgeTarget.title} from storage.`,
@@ -84,9 +107,28 @@ export default function RecycleBinPage() {
     loadItems();
   };
 
-  const handleConfirmEmpty = () => {
+  const handleConfirmEmpty = async () => {
     setActionLoading(true);
+    const itemsToPurge = [...trashItems];
     emptyTrash();
+
+    // Direct Supabase empty
+    if (isSupabaseConfigured) {
+      try {
+        for (const item of itemsToPurge) {
+          if (item.type === "bilty") {
+            await supabase.from("bilties").delete().or(`id.eq.${item.id},bilty_number.eq.${item.title || item.id}`);
+          } else if (item.type === "challan") {
+            await supabase.from("challans").delete().or(`id.eq.${item.id},challan_number.eq.${item.title || item.id}`);
+          } else if (item.type === "customer") {
+            await supabase.from("customers").delete().eq("id", item.id);
+          }
+        }
+      } catch (sbErr) {
+        console.warn("Supabase empty trash purge notice:", sbErr);
+      }
+    }
+
     setFeedback({
       type: "success",
       message: "Recycle Bin has been completely emptied.",

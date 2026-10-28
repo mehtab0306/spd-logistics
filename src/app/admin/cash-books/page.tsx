@@ -232,7 +232,16 @@ function CashBooksContent() {
   useEffect(() => {
     fetchCashBooks();
     fetchDropdownData();
-  }, []);
+
+    const handleFocus = () => {
+      fetchCashBooks();
+      if (selectedBook) {
+        fetchTransactions(selectedBook.id);
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [selectedBook?.id]);
 
   // 2. Respond to bookIdParam when books are loaded
   useEffect(() => {
@@ -348,6 +357,37 @@ function CashBooksContent() {
               paymentMethod: "CASH",
               createdAt: t.created_at,
             }));
+          }
+
+          // Also include advance freight inflows from Supabase bilties
+          try {
+            const { data: sbBilties } = await supabase
+              .from("bilties")
+              .select("*")
+              .gt("advance_paid", 0)
+              .order("created_at", { ascending: false });
+            if (Array.isArray(sbBilties)) {
+              for (const b of sbBilties) {
+                const bNum = b.manual_bilty_number || b.bilty_number || b.id;
+                const txId = `bilty-adv-${b.id}`;
+                supabaseTxs.push({
+                  id: txId,
+                  date: b.created_at,
+                  voucherNumber: `ADV-${String(bNum).slice(-6)}`,
+                  description: `Advance Freight Received: Bilty #${bNum} (${b.sender_name || "Party"})`,
+                  type: "IN",
+                  amount: Number(b.advance_paid) || 0,
+                  credit: Number(b.advance_paid) || 0,
+                  debit: 0,
+                  category: "Freight Collection",
+                  party: b.sender_name,
+                  paymentMethod: b.payment_mode || "CASH",
+                  createdAt: b.created_at,
+                });
+              }
+            }
+          } catch (bErr) {
+            console.warn("Supabase bilty cash query notice:", bErr);
           }
         } catch (e) {
           console.warn("Supabase transactions fetch warning:", e);
