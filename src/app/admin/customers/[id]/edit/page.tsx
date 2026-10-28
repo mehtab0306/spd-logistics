@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { getStoredCustomers, saveStoredCustomer } from "@/lib/local-persistence";
+import { LogisticsFormSkeleton } from "@/components/shared/logistics-loader";
 
 export default function EditCustomerPage() {
   const router = useRouter();
@@ -196,9 +197,8 @@ export default function EditCustomerPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-        <p className="text-xs font-semibold text-slate-500">Loading customer account...</p>
+      <div className="py-6 max-w-5xl mx-auto">
+        <LogisticsFormSkeleton subtitle="Loading Customer & Party Account Ledger..." />
       </div>
     );
   }

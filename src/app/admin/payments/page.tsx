@@ -14,6 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 import { CreditCard, Plus, Search, RefreshCw, Loader2, Wallet, Package, CheckCircle2, Download, Printer } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -193,10 +194,7 @@ export default function PaymentsPage() {
       </div>
 
       {loading ? (
-        <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-          <p className="text-xs text-slate-400 font-semibold">Loading payment transactions...</p>
-        </div>
+        <LogisticsTableSkeleton rows={5} subtitle="Loading Payment Vouchers & Receipts..." />
       ) : payments.length === 0 ? (
         <EmptyState
           icon={CreditCard}

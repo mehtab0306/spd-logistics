@@ -17,6 +17,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 import {
   Wallet,
   Plus,
@@ -130,8 +131,8 @@ const CASH_OUT_CATEGORIES = [
 export default function CashBooksPage() {
   return (
     <Suspense fallback={
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-spd-blue" />
+      <div className="p-4">
+        <LogisticsTableSkeleton rows={6} subtitle="Loading Cash Books & Accounts Ledger..." />
       </div>
     }>
       <CashBooksContent />
@@ -1353,8 +1354,8 @@ function CashBooksContent() {
         </div>
 
         {txLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-spd-blue" />
+          <div className="py-4">
+            <LogisticsTableSkeleton rows={4} subtitle="Loading Cash Book Transactions..." />
           </div>
         ) : filteredTransactions.length === 0 ? (
           <div className="p-12 text-center">

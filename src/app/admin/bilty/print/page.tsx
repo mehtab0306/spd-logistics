@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { getStoredBilties } from "@/lib/local-persistence";
 import { BiltySheetViewer, BiltySheetTab } from "@/components/bilty/bilty-sheet-viewer";
+import { LogisticsLoader } from "@/components/shared/logistics-loader";
 
 function BiltyPrintContent() {
   const searchParams = useSearchParams();
@@ -77,9 +78,8 @@ function BiltyPrintContent() {
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-        <p className="text-xs font-semibold text-slate-500">Preparing A4 Consignment Bilty Voucher...</p>
+      <div className="min-h-[50vh] flex flex-col items-center justify-center">
+        <LogisticsLoader subtitle="Preparing A4 Consignment Bilty Voucher..." />
       </div>
     );
   }
@@ -95,9 +95,8 @@ export default function BiltyPrintPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-          <p className="text-xs font-semibold text-slate-500">Loading Bilty Print View...</p>
+        <div className="min-h-[50vh] flex flex-col items-center justify-center">
+          <LogisticsLoader subtitle="Loading Bilty Print View..." />
         </div>
       }
     >

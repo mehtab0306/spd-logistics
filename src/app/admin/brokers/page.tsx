@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -416,10 +417,7 @@ export default function BrokersPage() {
 
       {/* Main Table */}
       {loading && brokers.length === 0 ? (
-        <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-spd-blue" />
-          <p className="text-xs text-slate-400 font-semibold">Loading broker directory...</p>
-        </div>
+        <LogisticsTableSkeleton rows={5} subtitle="Loading Broker Directory & Ledgers..." />
       ) : filteredBrokers.length === 0 ? (
         <EmptyState
           icon={Handshake}

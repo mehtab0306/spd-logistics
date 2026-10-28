@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 // Safe Fallback Resolution
 const getCurrentUser = () => {
@@ -232,17 +233,48 @@ function AdminProfileContent() {
 
     try {
       const base64Url = await convertFileToBase64(file);
+      let finalAvatarUrl = base64Url;
+
+      // Real Supabase Storage upload to 'avatars' bucket
+      if (isSupabaseConfigured) {
+        try {
+          const fileExt = file.name.split(".").pop() || "jpg";
+          const fileName = `admin-avatar-${Date.now()}.${fileExt}`;
+          const filePath = `${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("avatars")
+            .upload(filePath, file, {
+              cacheControl: "3600",
+              upsert: true,
+            });
+
+          if (uploadError) {
+            console.warn("Supabase Storage upload warning, using local preview:", uploadError.message);
+          } else {
+            const { data: publicUrlData } = supabase.storage
+              .from("avatars")
+              .getPublicUrl(filePath);
+
+            if (publicUrlData?.publicUrl) {
+              finalAvatarUrl = publicUrlData.publicUrl;
+            }
+          }
+        } catch (supabaseErr: any) {
+          console.warn("Supabase Storage exception, using base64 preview:", supabaseErr);
+        }
+      }
 
       // Update UI state immediately
-      setAvatar(base64Url);
-      setPreviewAvatar(base64Url);
+      setAvatar(finalAvatarUrl);
+      setPreviewAvatar(finalAvatarUrl);
       setImageLoadFailed(false);
 
       // Store in localStorage
       try {
-        localStorage.setItem("spd_admin_avatar", base64Url);
+        localStorage.setItem("spd_admin_avatar", finalAvatarUrl);
         const currentUser = user || getCurrentUser();
-        const updated = { ...currentUser, avatar: base64Url };
+        const updated = { ...currentUser, avatar: finalAvatarUrl };
         localStorage.setItem("spd_active_user", JSON.stringify(updated));
         localStorage.setItem("spd_user", JSON.stringify(updated));
         localStorage.setItem("spd_auth_user", JSON.stringify(updated));
@@ -254,7 +286,7 @@ function AdminProfileContent() {
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("spd-profile-updated", {
-            detail: { name, email, phone, avatar: base64Url },
+            detail: { name, email, phone, avatar: finalAvatarUrl },
           })
         );
       }
@@ -268,7 +300,7 @@ function AdminProfileContent() {
             name,
             email,
             phone,
-            avatar: base64Url,
+            avatar: finalAvatarUrl,
           }),
         }).catch(() => {});
       } catch {}

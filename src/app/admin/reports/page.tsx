@@ -17,6 +17,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { LogisticsCardSkeleton } from "@/components/shared/logistics-loader";
 
 import {
   getStoredBilties,
@@ -195,10 +196,28 @@ export default function ReportsPage() {
     ];
 
     const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const exportFilename = `SPD_Executive_Report_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    if (
+      typeof navigator !== "undefined" &&
+      typeof File !== "undefined" &&
+      typeof navigator.canShare === "function"
+    ) {
+      try {
+        const shareFile = new File([blob], exportFilename, { type: "text/csv;charset=utf-8" });
+        if (navigator.canShare({ files: [shareFile] })) {
+          navigator.share({
+            files: [shareFile],
+            title: exportFilename,
+          }).catch(() => {});
+        }
+      } catch {}
+    }
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `SPD_Executive_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", exportFilename);
     link.setAttribute("target", "_self");
     link.style.display = "none";
     document.body.appendChild(link);
@@ -248,10 +267,7 @@ export default function ReportsPage() {
       </div>
 
       {loading ? (
-        <div className="p-16 text-center flex flex-col items-center justify-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-          <p className="text-xs text-slate-400 font-semibold">Compiling real-time report data...</p>
-        </div>
+        <LogisticsCardSkeleton count={6} subtitle="Compiling Real-Time Analytics & Financial KPIs..." />
       ) : (
         <div className="space-y-6">
           {/* Summary KPI Grid */}

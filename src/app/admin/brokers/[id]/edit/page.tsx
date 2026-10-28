@@ -19,6 +19,7 @@ import { FormSectionCard } from "@/components/shared/form-section-card";
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { getStoredBrokers, saveStoredBroker } from "@/lib/local-persistence";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
+import { LogisticsFormSkeleton } from "@/components/shared/logistics-loader";
 
 export default function EditBrokerPage() {
   const router = useRouter();
@@ -185,9 +186,8 @@ export default function EditBrokerPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-spd-blue" />
-        <p className="text-xs font-semibold text-slate-500">Loading broker details...</p>
+      <div className="py-6 max-w-5xl mx-auto">
+        <LogisticsFormSkeleton subtitle="Loading Broker & Fleet Contractor Details..." />
       </div>
     );
   }

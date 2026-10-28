@@ -14,6 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { LogisticsFormSkeleton } from "@/components/shared/logistics-loader";
 import {
   Package,
   ArrowLeft,
@@ -665,9 +666,8 @@ export default function EditBiltyPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-red-700" />
-        <p className="text-xs font-semibold text-slate-500">Loading Bilty Details...</p>
+      <div className="py-6">
+        <LogisticsFormSkeleton subtitle="Loading Consignment Bilty Voucher Details..." />
       </div>
     );
   }

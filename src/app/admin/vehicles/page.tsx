@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 import {
   Truck,
   Plus,
@@ -46,6 +47,7 @@ import {
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function VehiclesPage() {
   const router = useRouter();
@@ -117,6 +119,28 @@ export default function VehiclesPage() {
         }
       } catch (err) {
         console.warn("API vehicle fetch error:", err);
+      }
+
+      // Live Supabase database synchronization
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sbVehicles, error: sbErr } = await supabase.from("vehicles").select("*");
+          if (!sbErr && Array.isArray(sbVehicles) && sbVehicles.length > 0) {
+            const mappedSb = sbVehicles.map((sv: any) => ({
+              id: sv.id,
+              vehicleNumber: sv.vehicle_number || sv.registration_number,
+              registrationNumber: sv.registration_number || sv.vehicle_number,
+              type: sv.vehicle_type || "Mazda / Linehaul Truck",
+              capacity: sv.capacity || "15 Tons",
+              status: sv.status || "AVAILABLE",
+              driver: sv.driver_name ? { name: sv.driver_name } : undefined,
+              createdAt: sv.created_at,
+            }));
+            apiList = [...mappedSb, ...apiList];
+          }
+        } catch (sbErr) {
+          console.warn("Supabase vehicles fetch notice:", sbErr);
+        }
       }
 
       // Merge local vehicles (kept at top) with API seed vehicles
@@ -191,6 +215,10 @@ export default function VehiclesPage() {
         method: "DELETE",
       }).catch(() => {});
 
+      if (isSupabaseConfigured && deleteVehicle) {
+        Promise.resolve(supabase.from("vehicles").delete().eq("id", deleteVehicle.id)).catch(() => {});
+      }
+
       setActionFeedback({
         type: "success",
         text: `Vehicle ${deleteVehicle.vehicleNumber} deleted successfully from fleet.`,
@@ -264,6 +292,21 @@ export default function VehiclesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       }).catch((err) => console.warn("Background vehicle API save:", err));
+
+      if (isSupabaseConfigured) {
+        Promise.resolve(
+          supabase.from("vehicles").upsert({
+            id: newVeh.id,
+            vehicle_number: newVeh.vehicleNumber,
+            registration_number: newVeh.registrationNumber || newVeh.vehicleNumber,
+            vehicle_type: newVeh.vehicleType || "Heavy Truck (22-Wheeler)",
+            capacity: String(newVeh.capacity),
+            driver_name: assignedDriver?.name || null,
+            status: newVeh.status || "AVAILABLE",
+            created_at: new Date().toISOString(),
+          })
+        ).catch((sbErr: any) => console.warn("Supabase vehicle save notice:", sbErr));
+      }
 
       setAddModalOpen(false);
       setFormData({
@@ -400,10 +443,7 @@ export default function VehiclesPage() {
 
       {/* Vehicles Table */}
       {loading ? (
-        <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-spd-blue" />
-          <p className="text-xs text-slate-400 font-semibold">Loading fleet vehicles...</p>
-        </div>
+        <LogisticsTableSkeleton rows={6} subtitle="Loading Fleet Vehicles & Status..." />
       ) : vehicles.length === 0 ? (
         <EmptyState
           icon={Truck}

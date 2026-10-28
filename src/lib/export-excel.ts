@@ -85,6 +85,27 @@ export function exportToExcel<T = any>(
   const csvContent = "\uFEFF" + [headerRow, ...dataRows].join("\r\n");
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
 
+  // Native WebKit / Safari file share support when available on mobile devices
+  if (
+    typeof navigator !== "undefined" &&
+    typeof File !== "undefined" &&
+    typeof navigator.canShare === "function"
+  ) {
+    try {
+      const shareFile = new File([blob], fullFilename, { type: "text/csv;charset=utf-8" });
+      if (navigator.canShare({ files: [shareFile] })) {
+        navigator.share({
+          files: [shareFile],
+          title: fullFilename,
+        }).catch(() => {
+          // User dismissed native share sheet; anchor click handles fallback
+        });
+      }
+    } catch {
+      // Fallback seamlessly to anchor download
+    }
+  }
+
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.setAttribute("href", url);
@@ -630,10 +651,29 @@ export function export4SheetBiltyExcel(bilty: any): boolean {
 </Workbook>`;
 
   const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const exportFilename = `SPD_4Sheet_Bilty_${(biltyNo || "Record").replace(/[^a-zA-Z0-9_-]/g, "_")}.xls`;
+
+  // Native WebKit / Safari file share support when available on mobile devices
+  if (
+    typeof navigator !== "undefined" &&
+    typeof File !== "undefined" &&
+    typeof navigator.canShare === "function"
+  ) {
+    try {
+      const shareFile = new File([blob], exportFilename, { type: "application/vnd.ms-excel;charset=utf-8" });
+      if (navigator.canShare({ files: [shareFile] })) {
+        navigator.share({
+          files: [shareFile],
+          title: exportFilename,
+        }).catch(() => {});
+      }
+    } catch {}
+  }
+
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.setAttribute("href", url);
-  link.setAttribute("download", `SPD_4Sheet_Bilty_${(biltyNo || "Record").replace(/[^a-zA-Z0-9_-]/g, "_")}.xls`);
+  link.setAttribute("download", exportFilename);
   link.setAttribute("target", "_self");
   link.style.display = "none";
   document.body.appendChild(link);

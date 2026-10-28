@@ -6,6 +6,7 @@ import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getStoredBilties } from "@/lib/local-persistence";
 import { BiltySheetViewer } from "@/components/bilty/bilty-sheet-viewer";
+import { LogisticsLoader } from "@/components/shared/logistics-loader";
 
 export default function BiltyDetailPage() {
   const params = useParams();
@@ -143,9 +144,8 @@ export default function BiltyDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-        <p className="text-xs font-semibold text-slate-500">Loading 4-Sheet Transport Dossier...</p>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center">
+        <LogisticsLoader subtitle="Loading 4-Sheet Transport Dossier..." />
       </div>
     );
   }

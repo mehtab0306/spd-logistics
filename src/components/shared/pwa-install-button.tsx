@@ -143,7 +143,7 @@ export function PwaInstallButton({ className = "" }: { className?: string }) {
 
       {/* Clean PWA Install Guidance Modal */}
       {showGuideModal && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] px-[max(1rem,env(safe-area-inset-left))] animate-in fade-in duration-150">
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-800 relative space-y-4">
             <button
               onClick={() => setShowGuideModal(false)}
@@ -175,9 +175,8 @@ export function PwaInstallButton({ className = "" }: { className?: string }) {
                     <span className="font-bold text-xs text-slate-900 dark:text-slate-100">iPhone / iPad (Safari)</span>
                   </div>
                   <ol className="text-xs text-slate-600 dark:text-slate-300 space-y-1.5 list-decimal list-inside font-medium leading-relaxed">
-                    <li>Tap the <strong>Share</strong> button at the bottom of Safari.</li>
-                    <li>Scroll down and tap <strong>&ldquo;Add to Home Screen&rdquo;</strong>.</li>
-                    <li>Tap <strong>&ldquo;Add&rdquo;</strong> in the top-right corner.</li>
+                    <li>Tap the Safari Share button (box with up arrow) at the bottom, then scroll down and tap &lsquo;Add to Home Screen&rsquo; (+).</li>
+                    <li>Tap <strong>&ldquo;Add&rdquo;</strong> in the top-right corner to finish installing.</li>
                   </ol>
                 </div>
               ) : (

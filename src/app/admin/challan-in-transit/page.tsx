@@ -38,6 +38,7 @@ import {
 import { exportToExcel } from "@/lib/export-excel";
 import { Trash2 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 
 export default function ChallanInTransitPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -418,9 +419,8 @@ export default function ChallanInTransitPage() {
 
       {/* Trips Grid - Hidden in Print when Printing Single or Batch Manifest */}
       {loading && !isLoaded ? (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 print:hidden">
-          <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-          <p className="text-xs font-semibold text-slate-500">Loading trips in transit...</p>
+        <div className="print:hidden">
+          <LogisticsTableSkeleton rows={5} subtitle="Tracking Active Fleet in Transit..." />
         </div>
       ) : filteredChallans.length === 0 ? (
         <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 print:hidden">

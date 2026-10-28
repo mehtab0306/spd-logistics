@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
+import { LogisticsLoader } from "@/components/shared/logistics-loader";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { PrintableChallan } from "@/components/challan/printable-challan";
 import {
@@ -763,10 +764,7 @@ export default function ChallanPage() {
                   {loading && !isLoaded ? (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-slate-400">
-                        <div className="flex items-center justify-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin text-spd-red" />
-                          <span>Loading warehouse consignments...</span>
-                        </div>
+                        <LogisticsLoader size="sm" subtitle="Loading Warehouse Consignments..." />
                       </td>
                     </tr>
                   ) : filteredBilties.length === 0 ? (

@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 import {
   UserCog,
   Plus,
@@ -710,10 +711,7 @@ export default function DriversPage() {
 
       {/* Table */}
       {loading ? (
-        <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-          <p className="text-xs text-slate-400 font-semibold">Loading drivers...</p>
-        </div>
+        <LogisticsTableSkeleton rows={6} subtitle="Loading Fleet Drivers & Credentials..." />
       ) : drivers.length === 0 ? (
         <EmptyState
           icon={UserCog}

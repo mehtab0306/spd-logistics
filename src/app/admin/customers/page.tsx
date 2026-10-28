@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -726,10 +727,7 @@ export default function CustomersPage() {
 
       {/* Customers Table */}
       {loading ? (
-        <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-          <p className="text-xs text-slate-400 font-semibold">Loading registered customers...</p>
-        </div>
+        <LogisticsTableSkeleton rows={6} subtitle="Loading Registered Customers & Parties..." />
       ) : customers.length === 0 ? (
         <EmptyState
           icon={Users}

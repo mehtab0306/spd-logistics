@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
+import { LogisticsFormSkeleton } from "@/components/shared/logistics-loader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -324,9 +325,8 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="py-24 text-center flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-10 h-10 animate-spin text-spd-red" />
-        <p className="text-xs font-bold text-slate-400">Loading system settings...</p>
+      <div className="py-6">
+        <LogisticsFormSkeleton subtitle="Loading System Configurations & Preferences..." />
       </div>
     );
   }

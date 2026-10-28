@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -540,10 +541,7 @@ export default function NotificationsPage() {
 
       {/* Notification Stream */}
       {loading && notifications.length === 0 ? (
-        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center space-y-3">
-          <RefreshCw className="h-8 w-8 animate-spin text-spd-red" />
-          <p className="text-xs font-bold text-slate-500">Loading live operational alerts...</p>
-        </div>
+        <LogisticsTableSkeleton rows={5} subtitle="Syncing Operational Alerts & Signals..." />
       ) : filteredNotifications.length === 0 ? (
         <EmptyState
           icon={Bell}

@@ -6,6 +6,7 @@ import { Loader2, ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getStoredBilties } from "@/lib/local-persistence";
 import { BiltyConsignmentNote } from "@/components/bilty/bilty-consignment-note";
+import { LogisticsLoader } from "@/components/shared/logistics-loader";
 
 export default function BiltyConsignmentPrintPage() {
   const params = useParams();
@@ -52,9 +53,8 @@ export default function BiltyConsignmentPrintPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-        <p className="text-xs font-semibold text-slate-500">Preparing Consignment Note Voucher...</p>
+      <div className="min-h-[50vh] flex flex-col items-center justify-center">
+        <LogisticsLoader subtitle="Preparing Consignment Note Voucher..." />
       </div>
     );
   }

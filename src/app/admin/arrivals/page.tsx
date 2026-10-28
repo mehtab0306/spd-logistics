@@ -33,6 +33,7 @@ import {
   saveStoredDelivery,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 
 export default function ArrivalsPage() {
   const [challans, setChallans] = useState<any[]>([]);
@@ -336,10 +337,7 @@ export default function ArrivalsPage() {
 
       {/* Arrived Trips Table / Cards */}
       {loading && !isLoaded ? (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-          <p className="text-xs font-semibold text-slate-500">Loading arrivals...</p>
-        </div>
+        <LogisticsTableSkeleton rows={5} subtitle="Tracking Destination Hub Arrivals..." />
       ) : filtered.length === 0 ? (
         <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
           <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 mx-auto flex items-center justify-center text-slate-400">

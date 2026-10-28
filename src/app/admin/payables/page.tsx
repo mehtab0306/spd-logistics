@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatsCard } from "@/components/shared/stats-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LogisticsTableSkeleton } from "@/components/shared/logistics-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -646,10 +647,7 @@ export default function PayablesPage() {
 
       {/* Payables Data Table */}
       {loading && payables.length === 0 ? (
-        <div className="p-16 text-center text-muted-foreground flex flex-col items-center justify-center space-y-3 bg-card rounded-xl border">
-          <RefreshCw className="h-8 w-8 animate-spin text-spd-red" />
-          <p className="text-sm font-medium">Loading payables records...</p>
-        </div>
+        <LogisticsTableSkeleton rows={5} subtitle="Calculating Vendor Payables & Fuel Ledgers..." />
       ) : payables.length === 0 ? (
         <EmptyState
           icon={ArrowUpRight}
