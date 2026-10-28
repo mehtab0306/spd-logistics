@@ -30,6 +30,7 @@ import {
   saveStoredDriver,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function NewDriverPage() {
   const router = useRouter();
@@ -193,12 +194,33 @@ export default function NewDriverPage() {
         updatedAt: timestamp,
       };
 
-      // 1. Immediately save to localStorage (spd_drivers & spd_local_drivers)
-      saveStoredDriver(newDriverRecord);
+      // 1. Enforce Cloud Database Persistence
+      let savedSuccessfully = false;
+      let lastErrorMessage = "";
 
-      // 2. Try sending to backend API wrapped in try/catch (do NOT rollback or throw on serverless failure)
-      try {
-        await fetch("/api/admin/drivers", {
+      if (isSupabaseConfigured) {
+        const { error: sbErr } = await supabase.from("drivers").upsert([
+          {
+            id: newDriverRecord.id,
+            name: newDriverRecord.name,
+            phone: newDriverRecord.phone,
+            cnic: newDriverRecord.cnic,
+            license_number: newDriverRecord.licenseNumber,
+            vehicle_number: newDriverRecord.vehicleNumber,
+            status: newDriverRecord.status || "Active",
+            avatar_url: photoUrl || null,
+          },
+        ]);
+
+        if (sbErr) {
+          lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
+        } else {
+          savedSuccessfully = true;
+          saveStoredDriver(newDriverRecord);
+        }
+
+        // Notify API in background
+        fetch("/api/admin/drivers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -210,9 +232,39 @@ export default function NewDriverPage() {
             vehicleNumber: finalVehicleNumber,
             photo: photoUrl || null,
           }),
-        });
-      } catch (apiErr) {
-        console.warn("Serverless API fallback active — driver saved in localStorage:", apiErr);
+        }).catch(() => {});
+      } else {
+        try {
+          const apiRes = await fetch("/api/admin/drivers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...formData,
+              email: finalEmail,
+              password: finalPassword,
+              cnic: finalCnic,
+              licenseNumber: finalLicense,
+              vehicleNumber: finalVehicleNumber,
+              photo: photoUrl || null,
+            }),
+          });
+          const apiJson = await apiRes.json().catch(() => null);
+          if (apiRes.ok && apiJson?.success) {
+            savedSuccessfully = true;
+            saveStoredDriver(newDriverRecord);
+          } else {
+            lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+          }
+        } catch (apiErr: any) {
+          lastErrorMessage = apiErr?.message || "Cloud database disconnected.";
+        }
+      }
+
+      if (!savedSuccessfully) {
+        throw new Error(
+          lastErrorMessage ||
+          "Database Save Failed: Cloud database is not connected. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Settings."
+        );
       }
 
       setSuccessMessage(`Record created successfully! Driver ${newDriverRecord.name} registered.`);

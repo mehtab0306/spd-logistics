@@ -369,6 +369,11 @@ export default function CustomersPage() {
 
   useEffect(() => {
     fetchCustomers();
+    const handleFocus = () => {
+      fetchCustomers();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, [search, warehouseFilter, statusFilter]);
 
   const handleUploadPhoto = async (file: File): Promise<string> => {
@@ -435,15 +440,54 @@ export default function CustomersPage() {
           photo: finalPhotoUrl || null,
         };
 
+        let updatedSuccessfully = false;
+        let lastErrorMessage = "";
+
+        if (isSupabaseConfigured) {
+          const { error: sbErr } = await supabase.from("customers").upsert([
+            {
+              id: updated.id,
+              name: updated.name || updated.companyName,
+              phone: updated.phone,
+              email: updated.email,
+              address: updated.address,
+              city: updated.city,
+            },
+          ]);
+          if (sbErr) {
+            lastErrorMessage = `Supabase update failed: ${sbErr.message}`;
+          } else {
+            updatedSuccessfully = true;
+          }
+          fetch("/api/admin/customers", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...customerForm, id: updated.id, photo: finalPhotoUrl || null }),
+          }).catch(() => {});
+        } else {
+          try {
+            const apiRes = await fetch("/api/admin/customers", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...customerForm, id: updated.id, photo: finalPhotoUrl || null }),
+            });
+            const apiJson = await apiRes.json().catch(() => null);
+            if (apiRes.ok && apiJson?.success) {
+              updatedSuccessfully = true;
+            } else {
+              lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+            }
+          } catch (apiErr: any) {
+            lastErrorMessage = apiErr?.message || "Cloud database disconnected.";
+          }
+        }
+
+        if (!updatedSuccessfully) {
+          throw new Error(lastErrorMessage || "Database update failed. Cloud database is not connected.");
+        }
+
         saveLocalCustomer(updated);
         setCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-
-        fetch("/api/admin/customers", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...customerForm, photo: finalPhotoUrl || null }),
-        }).catch(() => {});
-
         setActionFeedback({ type: "success", text: `Customer ${customerForm.name} updated successfully!` });
         setTimeout(() => setActionFeedback(null), 4000);
         closeModal();
@@ -473,15 +517,56 @@ export default function CustomersPage() {
           createdAt: new Date().toISOString(),
         };
 
+        let savedSuccessfully = false;
+        let lastErrorMessage = "";
+
+        if (isSupabaseConfigured) {
+          const { error: sbErr } = await supabase.from("customers").upsert([
+            {
+              id: newCust.id,
+              name: newCust.name || newCust.companyName,
+              phone: newCust.phone,
+              email: newCust.email,
+              address: newCust.address,
+              city: newCust.city,
+              opening_balance: openBal,
+              current_balance: openBal,
+            },
+          ]);
+          if (sbErr) {
+            lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
+          } else {
+            savedSuccessfully = true;
+          }
+          fetch("/api/admin/customers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...customerForm, photo: finalPhotoUrl || null }),
+          }).catch(() => {});
+        } else {
+          try {
+            const apiRes = await fetch("/api/admin/customers", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...customerForm, photo: finalPhotoUrl || null }),
+            });
+            const apiJson = await apiRes.json().catch(() => null);
+            if (apiRes.ok && apiJson?.success) {
+              savedSuccessfully = true;
+            } else {
+              lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+            }
+          } catch (apiErr: any) {
+            lastErrorMessage = apiErr?.message || "Cloud database disconnected.";
+          }
+        }
+
+        if (!savedSuccessfully) {
+          throw new Error(lastErrorMessage || "Database save failed. Cloud database is not connected.");
+        }
+
         saveLocalCustomer(newCust);
         setCustomers((prev) => [newCust, ...prev]);
-
-        fetch("/api/admin/customers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...customerForm, photo: finalPhotoUrl || null }),
-        }).catch((err) => console.warn("Background customer API save:", err));
-
         setActionFeedback({ type: "success", text: `Customer ${newCust.name} added successfully!` });
         setTimeout(() => setActionFeedback(null), 4000);
         closeModal();

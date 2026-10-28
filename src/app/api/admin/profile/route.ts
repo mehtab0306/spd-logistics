@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, createToken } from '@/lib/auth';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,27 +16,56 @@ export async function GET() {
     };
 
     let user: any = null;
-    try {
-      if (effectiveSession.userId) {
-        user = await prisma.user.findUnique({
-          where: { id: effectiveSession.userId },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            username: true,
-            phone: true,
-            role: true,
-            status: true,
-            avatar: true,
-            lastLoginAt: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
+    if (isSupabaseConfigured) {
+      try {
+        const { data: sbUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('role', 'SUPER_ADMIN')
+          .maybeSingle();
+        if (sbUser) {
+          user = {
+            id: sbUser.id || effectiveSession.userId,
+            name: sbUser.name || effectiveSession.name || 'System Admin',
+            email: sbUser.email || effectiveSession.email || 'admin@gmail.com',
+            username: 'admin',
+            phone: sbUser.phone || '0325 2024433',
+            role: sbUser.role || 'SUPER_ADMIN',
+            status: sbUser.status || 'ACTIVE',
+            avatar: sbUser.avatar || null,
+            lastLoginAt: sbUser.created_at || new Date().toISOString(),
+            createdAt: sbUser.created_at || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      } catch (sbErr) {
+        console.warn('Supabase profile fetch notice:', sbErr);
       }
-    } catch (dbErr) {
-      console.warn('Database query failed for admin profile, using session fallback:', dbErr);
+    }
+
+    if (!user) {
+      try {
+        if (effectiveSession.userId) {
+          user = await prisma.user.findUnique({
+            where: { id: effectiveSession.userId },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              username: true,
+              phone: true,
+              role: true,
+              status: true,
+              avatar: true,
+              lastLoginAt: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+        }
+      } catch (dbErr) {
+        console.warn('Database query failed for admin profile, using session fallback:', dbErr);
+      }
     }
 
     if (!user) {
@@ -149,6 +179,22 @@ export async function PUT(request: Request) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('users').upsert({
+          id: finalUser.id || 'admin_root',
+          name: finalUser.name,
+          email: finalUser.email,
+          phone: finalUser.phone,
+          avatar: finalUser.avatar,
+          role: finalUser.role,
+          status: finalUser.status,
+        });
+      } catch (sbErr) {
+        console.warn('Supabase profile upsert error:', sbErr);
+      }
+    }
 
     const response = NextResponse.json({
       success: true,

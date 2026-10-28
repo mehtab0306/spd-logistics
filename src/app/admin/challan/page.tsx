@@ -129,6 +129,11 @@ export default function ChallanPage() {
 
   useEffect(() => {
     loadData();
+    const handleFocus = () => {
+      loadData();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   const loadData = async () => {
@@ -502,44 +507,57 @@ export default function ChallanPage() {
         createdAt: timestamp,
       };
 
-      // 1. Save Challan immediately to localStorage (spd_challans & spd_local_challans)
-      const allSavedChallans = saveStoredChallan(newChallanRecord);
-      if (typeof window !== "undefined") {
-        sessionStorage.setItem("spd_challans", JSON.stringify(allSavedChallans));
-        setCookieCache("spd_challans_cache", JSON.stringify(allSavedChallans));
-      }
+      // 1. Enforce Cloud Database Persistence
+      let savedSuccessfully = false;
+      let lastErrorMessage = "";
 
-      // 1b. Upsert into Supabase cloud database
       if (isSupabaseConfigured) {
-        try {
-          await supabase.from("challans").upsert([
-            {
-              id: String(newChallanRecord.id),
-              challan_number: finalChallanNo,
-              vehicle_number: newChallanRecord.truckNumber || null,
-              driver_name: newChallanRecord.driverName || null,
-              origin: newChallanRecord.origin || null,
-              destination: newChallanRecord.destination || null,
-              status: "In Transit",
-            },
-          ]);
-        } catch (sbErr) {
-          console.warn("Supabase challan upsert warning:", sbErr);
+        const { error: sbErr } = await supabase.from("challans").upsert([
+          {
+            id: String(newChallanRecord.id),
+            challan_number: finalChallanNo,
+            vehicle_number: newChallanRecord.truckNumber || null,
+            driver_name: newChallanRecord.driverName || null,
+            driver_phone: newChallanRecord.driverPhone || null,
+            origin: newChallanRecord.origin || null,
+            destination: newChallanRecord.destination || null,
+            total_truck_hire: Number(truckFreightCost) || 0,
+            advance_paid: Number(driverAdvancePaid) || 0,
+            balance_payable: Number(driverBalanceDue) || 0,
+            status: "In Transit",
+          },
+        ]);
+
+        if (sbErr) {
+          lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
+        } else {
+          savedSuccessfully = true;
+
+          // Update linked bilties status in Supabase
+          if (selectedBiltyIds.length > 0) {
+            await supabase
+              .from("bilties")
+              .update({
+                status: "In Transit",
+                vehicle_number: newChallanRecord.truckNumber || null,
+                driver_name: newChallanRecord.driverName || null,
+              })
+              .in("id", selectedBiltyIds);
+          }
+
+          // Synchronize locally only after affirmative database write
+          const allSavedChallans = saveStoredChallan(newChallanRecord);
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem("spd_challans", JSON.stringify(allSavedChallans));
+            setCookieCache("spd_challans_cache", JSON.stringify(allSavedChallans));
+          }
+          for (const updatedBilty of updatedConsignments) {
+            saveStoredBilty(updatedBilty);
+          }
         }
-      }
 
-      // 2. Update selected bilties in localStorage so they show as IN_TRANSIT and linked to this Challan
-      for (const updatedBilty of updatedConsignments) {
-        saveStoredBilty(updatedBilty);
-      }
-
-      // 3. Update local UI state immediately
-      setAvailableBilties((prev) => prev.filter((b) => !selectedBiltyIds.includes(b.id)));
-      setSelectedBiltyIds([]);
-
-      // 4. Send to backend API
-      try {
-        await fetch("/api/admin/challan", {
+        // Notify API in background for notifications
+        fetch("/api/admin/challan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -551,10 +569,52 @@ export default function ChallanPage() {
             brokerAdvance: isBroker ? driverAdvancePaid : 0,
             selectedBiltyIds,
           }),
-        });
-      } catch (apiErr) {
-        console.warn("Serverless API fallback active — challan saved in localStorage:", apiErr);
+        }).catch(() => {});
+      } else {
+        // Supabase not configured — try server API
+        try {
+          const apiRes = await fetch("/api/admin/challan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...challanData,
+              challanNumber: finalChallanNo,
+              truckFreight: truckFreightCost,
+              advancePaidToDriver: driverAdvancePaid,
+              brokerFreight: isBroker ? truckFreightCost : 0,
+              brokerAdvance: isBroker ? driverAdvancePaid : 0,
+              selectedBiltyIds,
+            }),
+          });
+          const apiJson = await apiRes.json().catch(() => null);
+          if (apiRes.ok && apiJson?.success) {
+            savedSuccessfully = true;
+            const allSavedChallans = saveStoredChallan(newChallanRecord);
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem("spd_challans", JSON.stringify(allSavedChallans));
+              setCookieCache("spd_challans_cache", JSON.stringify(allSavedChallans));
+            }
+            for (const updatedBilty of updatedConsignments) {
+              saveStoredBilty(updatedBilty);
+            }
+          } else {
+            lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+          }
+        } catch (apiErr: any) {
+          lastErrorMessage = apiErr?.message || "Cloud database is disconnected. Please configure Supabase keys in Vercel.";
+        }
       }
+
+      if (!savedSuccessfully) {
+        throw new Error(
+          lastErrorMessage ||
+          "Database Save Failed: Cloud database is not connected. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Settings."
+        );
+      }
+
+      // Update local UI state
+      setAvailableBilties((prev) => prev.filter((b) => !selectedBiltyIds.includes(b.id)));
+      setSelectedBiltyIds([]);
 
       setSuccessMsg(`Record created successfully! Challan ${finalChallanNo} generated and dispatched.`);
       setPrintedChallan(newChallanRecord);

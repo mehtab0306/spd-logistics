@@ -306,6 +306,12 @@ export default function DriversPage() {
   useEffect(() => {
     fetchDrivers();
     fetchVehicles();
+    const handleFocus = () => {
+      fetchDrivers();
+      fetchVehicles();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, [search, statusFilter]);
 
   const handleUploadPhoto = async (file: File): Promise<string> => {
@@ -355,43 +361,61 @@ export default function DriversPage() {
         createdAt: new Date().toISOString(),
       };
 
-      // Save to localStorage immediately
-      saveLocalDriver(newDrv);
+      // 1. Enforce Cloud Database Persistence
+      let savedSuccessfully = false;
+      let lastErrorMessage = "";
 
-      // Prepend to state immediately
-      setDrivers((prev) => [newDrv, ...prev]);
-
-      // Cloud Supabase sync
       if (isSupabaseConfigured) {
+        const { error: sbErr } = await supabase.from("drivers").upsert([
+          {
+            id: newDrv.id,
+            name: newDrv.name,
+            phone: newDrv.phone,
+            cnic: newDrv.cnic,
+            license_number: newDrv.licenseNumber,
+            vehicle_number: newDrv.vehicleNumber,
+            status: newDrv.status || "Active",
+            avatar_url: photoUrl || null,
+          },
+        ]);
+
+        if (sbErr) {
+          lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
+        } else {
+          savedSuccessfully = true;
+          saveLocalDriver(newDrv);
+          setDrivers((prev) => [newDrv, ...prev]);
+        }
+
+        // Fire background API call
+        fetch("/api/admin/drivers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...formData, photo: photoUrl || null }),
+        }).catch(() => {});
+      } else {
         try {
-          await supabase.from("drivers").upsert([
-            {
-              id: newDrv.id,
-              name: newDrv.name,
-              phone: newDrv.phone,
-              email: newDrv.email,
-              cnic: newDrv.cnic,
-              license_number: newDrv.licenseNumber,
-              license_expiry: newDrv.licenseExpiry,
-              address: newDrv.address,
-              emergency_contact: newDrv.emergencyContact,
-              vehicle_number: newDrv.vehicleNumber,
-              status: newDrv.status,
-              notes: newDrv.notes,
-              created_at: newDrv.createdAt,
-            },
-          ]);
-        } catch (sbErr) {
-          console.warn("Supabase driver create warning:", sbErr);
+          const apiRes = await fetch("/api/admin/drivers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...formData, photo: photoUrl || null }),
+          });
+          const apiJson = await apiRes.json().catch(() => null);
+          if (apiRes.ok && apiJson?.success) {
+            savedSuccessfully = true;
+            saveLocalDriver(newDrv);
+            setDrivers((prev) => [newDrv, ...prev]);
+          } else {
+            lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+          }
+        } catch (apiErr: any) {
+          lastErrorMessage = apiErr?.message || "Cloud database disconnected.";
         }
       }
 
-      // Fire background API call
-      fetch("/api/admin/drivers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, photo: photoUrl || null }),
-      }).catch((err) => console.warn("Background driver API save:", err));
+      if (!savedSuccessfully) {
+        throw new Error(lastErrorMessage || "Database save failed. Cloud database is not connected.");
+      }
 
       setAddModalOpen(false);
       setAddPhotoFile(null);

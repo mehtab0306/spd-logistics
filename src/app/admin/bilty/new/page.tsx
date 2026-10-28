@@ -882,60 +882,80 @@ export default function NewBiltyPage() {
         updatedAt: timestamp,
       };
 
-      // 1. Immediately persist to localStorage using Section 2 deduplication logic
-      saveStoredBilty(newBiltyRecord);
+      // 1. Enforce Cloud Database Persistence (Supabase PostgreSQL / Server API)
+      let savedSuccessfully = false;
+      let lastErrorMessage = "";
 
-      // 1b. Upsert into Supabase cloud database
       if (isSupabaseConfigured) {
+        const { error: sbErr } = await supabase.from("bilties").upsert([
+          {
+            id: String(newBiltyRecord.id),
+            bilty_number: finalBiltyNumber,
+            booking_date: newBiltyRecord.bookingDate,
+            sender_name: newBiltyRecord.senderName,
+            sender_phone: newBiltyRecord.senderPhone,
+            receiver_name: newBiltyRecord.receiverName,
+            receiver_phone: newBiltyRecord.receiverPhone,
+            origin: newBiltyRecord.origin,
+            destination: newBiltyRecord.destination,
+            item_description: newBiltyRecord.itemDescription,
+            packages_count: Number(newBiltyRecord.packagesCount) || 1,
+            weight: Number(newBiltyRecord.weight) || 0,
+            total_freight: Number(newBiltyRecord.totalFreight) || 0,
+            payment_mode: newBiltyRecord.paymentMode || "TO-PAY",
+            status: newBiltyRecord.shipmentStatus || "Booked",
+            vehicle_number: newBiltyRecord.vehicleNumber || null,
+            driver_name: newBiltyRecord.driverName || null,
+          },
+        ]);
+
+        if (sbErr) {
+          lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
+        } else {
+          savedSuccessfully = true;
+          // Synchronize locally only after affirmative database write
+          saveStoredBilty(newBiltyRecord);
+        }
+
+        // Notify API in background for email/notifications
+        fetch("/api/admin/bilty", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newBiltyRecord),
+        }).catch((err) => console.warn("API audit dispatch notice:", err));
+      } else {
+        // Supabase not configured — try backend server API
         try {
-          await supabase.from("bilties").upsert([
-            {
-              id: String(newBiltyRecord.id),
-              bilty_number: finalBiltyNumber,
-              booking_date: newBiltyRecord.bookingDate,
-              sender_name: newBiltyRecord.senderName,
-              sender_phone: newBiltyRecord.senderPhone,
-              receiver_name: newBiltyRecord.receiverName,
-              receiver_phone: newBiltyRecord.receiverPhone,
-              origin: newBiltyRecord.origin,
-              destination: newBiltyRecord.destination,
-              item_description: newBiltyRecord.itemDescription,
-              packages_count: Number(newBiltyRecord.packagesCount) || 1,
-              weight: Number(newBiltyRecord.weight) || 0,
-              total_freight: Number(newBiltyRecord.totalFreight) || 0,
-              payment_mode: newBiltyRecord.paymentMode || "TO-PAY",
-              status: newBiltyRecord.shipmentStatus || "Booked",
-            },
-          ]);
-        } catch (sbErr) {
-          console.warn("Supabase bilty upsert warning:", sbErr);
+          const apiRes = await fetch("/api/admin/bilty", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newBiltyRecord),
+          });
+          const apiJson = await apiRes.json().catch(() => null);
+          if (apiRes.ok && apiJson?.success) {
+            savedSuccessfully = true;
+            saveStoredBilty(newBiltyRecord);
+          } else {
+            lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+          }
+        } catch (apiErr: any) {
+          lastErrorMessage = apiErr?.message || "Cloud database is disconnected. Please configure Supabase keys in Vercel.";
         }
       }
 
-      // 2. Cache in sessionStorage and localStorage for instant 0ms retrieval on detail page
+      if (!savedSuccessfully) {
+        throw new Error(
+          lastErrorMessage ||
+          "Database Save Failed: Cloud database is not connected. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Settings."
+        );
+      }
+
+      // 2. Cache in sessionStorage for instant 0ms retrieval on detail/print page
       if (typeof window !== "undefined") {
         try {
           sessionStorage.setItem("last_created_bilty", JSON.stringify(newBiltyRecord));
           localStorage.setItem("spd_selected_bilty", JSON.stringify(newBiltyRecord));
         } catch {}
-      }
-
-      // 3. Send to API in background (POST to /api/admin/bilty & /api/bilties)
-      try {
-        await Promise.allSettled([
-          fetch("/api/admin/bilty", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newBiltyRecord),
-          }),
-          fetch("/api/bilties", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newBiltyRecord),
-          }),
-        ]);
-      } catch (apiErr) {
-        console.warn("Serverless API fallback active — saved in local storage:", apiErr);
       }
 
       setSavedBilty(newBiltyRecord);

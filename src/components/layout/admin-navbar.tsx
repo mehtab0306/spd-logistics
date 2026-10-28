@@ -92,6 +92,7 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
 
     window.addEventListener("spd-profile-updated", handleProfileUpdated);
     window.addEventListener("spd-notifications-updated", handleNotificationsUpdated);
+    window.addEventListener("focus", fetchUser);
 
     // Poll count every 30 seconds
     const interval = setInterval(fetchNotificationsCount, 30000);
@@ -99,6 +100,7 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
     return () => {
       window.removeEventListener("spd-profile-updated", handleProfileUpdated);
       window.removeEventListener("spd-notifications-updated", handleNotificationsUpdated);
+      window.removeEventListener("focus", fetchUser);
       clearInterval(interval);
     };
   }, [fetchNotificationsCount]);

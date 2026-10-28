@@ -595,6 +595,12 @@ export default function BiltyPage() {
 
   useEffect(() => {
     fetchDependencies();
+    const handleFocus = () => {
+      fetchConsignments();
+      fetchDependencies();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   // Smart Search matchers

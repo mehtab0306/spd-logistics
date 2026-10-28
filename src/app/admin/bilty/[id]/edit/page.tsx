@@ -47,6 +47,7 @@ import { PAKISTAN_CITIES } from "@/lib/constants";
 import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
 import { toast } from "sonner";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export interface BiltyCargoItem {
   detail: string;
@@ -629,18 +630,70 @@ export default function EditBiltyPage() {
         updatedAt: timestamp,
       };
 
-      // Save locally
-      saveStoredBilty(updatedRecord);
+      // 1. Enforce Cloud Database Persistence
+      let updatedSuccessfully = false;
+      let lastErrorMessage = "";
 
-      // Background API update
-      try {
-        await fetch(`/api/admin/bilty/${biltyId}`, {
+      if (isSupabaseConfigured) {
+        const { error: sbErr } = await supabase.from("bilties").upsert([
+          {
+            id: String(updatedRecord.id || biltyId),
+            bilty_number: updatedRecord.biltyNumber || biltyId,
+            booking_date: updatedRecord.bookingDate,
+            sender_name: updatedRecord.senderName,
+            sender_phone: updatedRecord.senderPhone,
+            receiver_name: updatedRecord.receiverName,
+            receiver_phone: updatedRecord.receiverPhone,
+            origin: updatedRecord.origin,
+            destination: updatedRecord.destination,
+            item_description: updatedRecord.itemDescription,
+            packages_count: Number(updatedRecord.packagesCount) || 1,
+            weight: Number(updatedRecord.weight) || 0,
+            total_freight: Number(updatedRecord.totalFreight) || 0,
+            payment_mode: updatedRecord.paymentMode || "TO-PAY",
+            status: updatedRecord.shipmentStatus || "Booked",
+            vehicle_number: updatedRecord.vehicleNumber || null,
+            driver_name: updatedRecord.driverName || null,
+          },
+        ]);
+
+        if (sbErr) {
+          lastErrorMessage = `Supabase update failed: ${sbErr.message}`;
+        } else {
+          updatedSuccessfully = true;
+          saveStoredBilty(updatedRecord);
+        }
+
+        // Background sync to server API
+        fetch(`/api/admin/bilty/${biltyId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(updatedRecord),
-        });
-      } catch (apiErr) {
-        console.warn("Background API update:", apiErr);
+        }).catch(() => {});
+      } else {
+        try {
+          const apiRes = await fetch(`/api/admin/bilty/${biltyId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updatedRecord),
+          });
+          const apiJson = await apiRes.json().catch(() => null);
+          if (apiRes.ok && apiJson?.success) {
+            updatedSuccessfully = true;
+            saveStoredBilty(updatedRecord);
+          } else {
+            lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+          }
+        } catch (apiErr: any) {
+          lastErrorMessage = apiErr?.message || "Cloud database is disconnected. Please configure Supabase keys in Vercel.";
+        }
+      }
+
+      if (!updatedSuccessfully) {
+        throw new Error(
+          lastErrorMessage ||
+          "Database Update Failed: Cloud database is not connected. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Settings."
+        );
       }
 
       const successMsg = `Bilty [${updatedRecord.biltyNumber || biltyId}] saved successfully with all cargo particulars.`;
@@ -651,7 +704,9 @@ export default function EditBiltyPage() {
       }, 700);
     } catch (err: any) {
       console.error("[EditBilty] Error:", err);
-      setFormError(err.message || "Failed to update Bilty");
+      const msg = err.message || "Failed to update Bilty";
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }

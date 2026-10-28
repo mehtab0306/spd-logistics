@@ -172,20 +172,8 @@ function AdminProfileContent() {
   const fetchProfile = async () => {
     try {
       const localUser = getCurrentUser();
-      let localAvatar: string | null = localUser.avatar;
 
-      if (!localAvatar && typeof window !== "undefined") {
-        try {
-          localAvatar = localStorage.getItem("spd_admin_avatar");
-        } catch {}
-      }
-
-      if (localAvatar) {
-        setAvatar(localAvatar);
-        setPreviewAvatar(localAvatar);
-      }
-
-      // Query backend profile
+      // Query backend database profile
       const res = await fetch("/api/admin/profile");
       const data = await res.json();
       if (data.success && data.data) {
@@ -194,10 +182,14 @@ function AdminProfileContent() {
         setName(merged.fullName || merged.name || "System Admin");
         setEmail(merged.email || "admin@gmail.com");
         setPhone(merged.phone || "0325 2024433");
-        const activeAvatar = localAvatar || merged.avatar || null;
+        const activeAvatar = merged.avatar || null;
         setAvatar(activeAvatar);
         setPreviewAvatar(activeAvatar);
         setImageLoadFailed(false);
+      } else {
+        const activeAvatar = localUser.avatar || null;
+        setAvatar(activeAvatar);
+        setPreviewAvatar(activeAvatar);
       }
     } catch (err) {
       console.warn("Using local auth profile:", err);
@@ -206,13 +198,18 @@ function AdminProfileContent() {
 
   useEffect(() => {
     fetchProfile();
+    const handleFocus = () => {
+      fetchProfile();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Client-side quick validation
+    // Client-side validation
     const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type.toLowerCase())) {
       const msg = "Invalid file type. Please select a valid JPG, PNG, or WebP image.";
@@ -222,7 +219,15 @@ function AdminProfileContent() {
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      const msg = "Image exceeds 10MB. Please upload a smaller photo.";
+      const msg = "Image exceeds 10MB limit. Please upload a smaller photo.";
+      setFeedback({ type: "error", message: msg });
+      toast.error(msg);
+      return;
+    }
+
+    // Require cloud storage for persistent cross-device photo sync
+    if (!isSupabaseConfigured) {
+      const msg = "Cloud storage unavailable: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
       setFeedback({ type: "error", message: msg });
       toast.error(msg);
       return;
@@ -232,55 +237,65 @@ function AdminProfileContent() {
     setFeedback(null);
 
     try {
-      const base64Url = await convertFileToBase64(file);
-      let finalAvatarUrl = base64Url;
+      const fileExt = file.name.split(".").pop() || "jpg";
+      const fileName = `admin-avatar-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
 
-      // Real Supabase Storage upload to 'avatars' bucket
-      if (isSupabaseConfigured) {
-        try {
-          const fileExt = file.name.split(".").pop() || "jpg";
-          const fileName = `admin-avatar-${Date.now()}.${fileExt}`;
-          const filePath = `${fileName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
 
-          const { error: uploadError } = await supabase.storage
-            .from("avatars")
-            .upload(filePath, file, {
-              cacheControl: "3600",
-              upsert: true,
-            });
-
-          if (uploadError) {
-            console.warn("Supabase Storage upload warning, using local preview:", uploadError.message);
-          } else {
-            const { data: publicUrlData } = supabase.storage
-              .from("avatars")
-              .getPublicUrl(filePath);
-
-            if (publicUrlData?.publicUrl) {
-              finalAvatarUrl = publicUrlData.publicUrl;
-            }
-          }
-        } catch (supabaseErr: any) {
-          console.warn("Supabase Storage exception, using base64 preview:", supabaseErr);
-        }
+      if (uploadError) {
+        throw new Error(`Avatar upload failed: ${uploadError.message}`);
       }
 
-      // Update UI state immediately
+      const { data: publicUrlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      const finalAvatarUrl = publicUrlData?.publicUrl;
+      if (!finalAvatarUrl) {
+        throw new Error("Failed to retrieve public URL from cloud storage.");
+      }
+
+      // Update Supabase users table
+      try {
+        await supabase
+          .from("users")
+          .update({ avatar: finalAvatarUrl })
+          .or(`role.eq.SUPER_ADMIN,role.eq.ADMIN`);
+      } catch (sbErr) {
+        console.warn("Supabase user avatar update notice:", sbErr);
+      }
+
+      // Sync to server profile API
+      await fetch("/api/admin/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          avatar: finalAvatarUrl,
+        }),
+      });
+
+      // Update UI state immediately with cloud URL
       setAvatar(finalAvatarUrl);
       setPreviewAvatar(finalAvatarUrl);
       setImageLoadFailed(false);
 
-      // Store in localStorage
+      // Store cloud URL in session
       try {
         localStorage.setItem("spd_admin_avatar", finalAvatarUrl);
         const currentUser = user || getCurrentUser();
         const updated = { ...currentUser, avatar: finalAvatarUrl };
         localStorage.setItem("spd_active_user", JSON.stringify(updated));
         localStorage.setItem("spd_user", JSON.stringify(updated));
-        localStorage.setItem("spd_auth_user", JSON.stringify(updated));
-      } catch (storageErr) {
-        console.warn("Could not save avatar to localStorage:", storageErr);
-      }
+      } catch {}
 
       // Dispatch global profile update event
       if (typeof window !== "undefined") {
@@ -291,27 +306,12 @@ function AdminProfileContent() {
         );
       }
 
-      // Background non-blocking sync to server profile API
-      try {
-        fetch("/api/admin/profile", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name,
-            email,
-            phone,
-            avatar: finalAvatarUrl,
-          }),
-        }).catch(() => {});
-      } catch {}
-
-      const successMsg = "Profile photo uploaded and saved successfully!";
-      setFeedback({ type: "success", message: successMsg });
-      toast.success(successMsg);
+      const okMsg = "Profile photo uploaded and synced across all devices.";
+      setFeedback({ type: "success", message: okMsg });
+      toast.success(okMsg);
     } catch (err: any) {
-      console.error("Upload error:", err);
-      setPreviewAvatar(avatar);
-      const errMsg = err.message || "Failed to process photo. Please try again.";
+      console.error("Avatar upload exception:", err);
+      const errMsg = err?.message || "Failed to upload photo to cloud storage.";
       setFeedback({ type: "error", message: errMsg });
       toast.error(errMsg);
     } finally {

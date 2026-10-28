@@ -97,6 +97,11 @@ export default function ChallanInTransitPage() {
 
   useEffect(() => {
     fetchChallans();
+    const handleFocus = () => {
+      fetchChallans();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   const fetchChallans = async () => {

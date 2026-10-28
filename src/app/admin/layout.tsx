@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { AdminNavbar } from "@/components/layout/admin-navbar";
+import { DatabaseAlertBanner } from "@/components/admin/database-alert-banner";
 import { AiCopilotWidget } from "@/components/ai/ai-copilot-widget";
 import { TruckLoader } from "@/components/ui/truck-loader";
 import { Loader2, ShieldCheck } from "lucide-react";
@@ -178,6 +179,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <div className="flex flex-col flex-1 overflow-hidden lg:ml-0 min-w-0">
         <AdminNavbar onMenuClick={() => setMobileOpen(true)} />
+        <DatabaseAlertBanner />
         <main className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-6 lg:p-8 min-w-0">
           {children}
         </main>

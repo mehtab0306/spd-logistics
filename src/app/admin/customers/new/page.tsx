@@ -177,26 +177,78 @@ export default function NewCustomerPage() {
         updatedAt: timestamp,
       };
 
-      // 1. Immediately persist to localStorage (spd_customers & spd_local_customers)
-      saveStoredCustomer(newCustomerRecord);
+      // 1. Enforce Cloud Database Persistence
+      let savedSuccessfully = false;
+      let lastErrorMessage = "";
 
-      // 1b. Upsert into Supabase cloud database
       if (isSupabaseConfigured) {
+        const { error: sbErr } = await supabase.from("customers").upsert([
+          {
+            id: newCustomerRecord.id,
+            name: newCustomerRecord.name || newCustomerRecord.companyName,
+            phone: newCustomerRecord.phone,
+            email: newCustomerRecord.email,
+            address: newCustomerRecord.address,
+            city: newCustomerRecord.city,
+            opening_balance: openBal,
+            current_balance: openBal,
+          },
+        ]);
+
+        if (sbErr) {
+          lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
+        } else {
+          savedSuccessfully = true;
+          saveStoredCustomer(newCustomerRecord);
+        }
+
+        // Notify API in background
+        fetch("/api/admin/customers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...formData,
+            email: finalEmail,
+            password: finalPassword,
+            creditLimit: credLim,
+            openingBalance: openBal,
+            photo: photoUrl || null,
+          }),
+        }).catch(() => {});
+      } else {
         try {
-          await supabase.from("customers").upsert([
-            {
-              id: newCustomerRecord.id,
-              name: newCustomerRecord.name || newCustomerRecord.companyName,
-              phone: newCustomerRecord.phone,
-              city: newCustomerRecord.city,
-            },
-          ]);
-        } catch (sbErr) {
-          console.warn("Supabase customer upsert warning:", sbErr);
+          const apiRes = await fetch("/api/admin/customers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...formData,
+              email: finalEmail,
+              password: finalPassword,
+              creditLimit: credLim,
+              openingBalance: openBal,
+              photo: photoUrl || null,
+            }),
+          });
+          const apiJson = await apiRes.json().catch(() => null);
+          if (apiRes.ok && apiJson?.success) {
+            savedSuccessfully = true;
+            saveStoredCustomer(newCustomerRecord);
+          } else {
+            lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+          }
+        } catch (apiErr: any) {
+          lastErrorMessage = apiErr?.message || "Cloud database is disconnected. Please configure Supabase keys in Vercel.";
         }
       }
 
-      // 2. Also save portal login credentials in localStorage so /customer-login works immediately
+      if (!savedSuccessfully) {
+        throw new Error(
+          lastErrorMessage ||
+          "Database Save Failed: Cloud database is not connected. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Settings."
+        );
+      }
+
+      // 2. Cache credentials for instant portal login
       try {
         const credsRaw = localStorage.getItem("spd_customer_credentials");
         const creds = credsRaw ? JSON.parse(credsRaw) : [];
@@ -211,25 +263,7 @@ export default function NewCustomerPage() {
         localStorage.setItem("spd_customer_credentials", JSON.stringify(creds));
         localStorage.setItem("spd_customers_auth", JSON.stringify(creds));
       } catch (credErr) {
-        console.warn("Could not save customer credentials to localStorage:", credErr);
-      }
-
-      // 3. Try sending to backend API wrapped in try/catch (do NOT rollback or throw on serverless failure)
-      try {
-        await fetch("/api/admin/customers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...formData,
-            email: finalEmail,
-            password: finalPassword,
-            creditLimit: credLim,
-            openingBalance: openBal,
-            photo: photoUrl || null,
-          }),
-        });
-      } catch (apiErr) {
-        console.warn("Serverless API fallback active — customer saved in localStorage:", apiErr);
+        console.warn("Could not save customer credentials:", credErr);
       }
 
       setSuccessMessage(`Record created successfully! Customer ${newCustomerRecord.name} registered.`);

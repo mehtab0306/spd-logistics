@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { getCurrentUser, getAuthCookie } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { saveCentralRecord, getCentralCollection, updateCentralRecord, deleteCentralRecord } from '@/lib/server-store';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,6 +134,41 @@ export async function GET(request: Request) {
       if (!existingIds.has(c.id)) {
         challans.unshift(c);
         existingIds.add(c.id);
+      }
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data: sbChallans } = await supabase
+          .from('challans')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (Array.isArray(sbChallans) && sbChallans.length > 0) {
+          for (const r of sbChallans) {
+            const cId = String(r.id || '');
+            const cNo = String(r.challan_number || '');
+            if (cId && !existingIds.has(cId) && !existingIds.has(cNo)) {
+              challans.unshift({
+                id: r.id,
+                challanNumber: r.challan_number || r.id,
+                truckNumber: r.vehicle_number || 'Pending',
+                driverName: r.driver_name || 'Pending',
+                driverPhone: r.driver_phone || null,
+                origin: r.origin,
+                destination: r.destination,
+                totalAmount: Number(r.total_truck_hire) || 0,
+                truckFreight: Number(r.total_truck_hire) || 0,
+                advancePaidToDriver: Number(r.advance_paid) || 0,
+                status: r.status || 'IN_TRANSIT',
+                createdAt: r.created_at,
+              });
+              existingIds.add(cId);
+              if (cNo) existingIds.add(cNo);
+            }
+          }
+        }
+      } catch (sbErr) {
+        console.warn('Supabase challans query notice:', sbErr);
       }
     }
 
@@ -318,6 +354,28 @@ export async function POST(request: Request) {
         createdAt: new Date().toISOString(),
       };
       saveCentralRecord('challans', mockChallan);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('challans').upsert([
+            {
+              id: String(mockChallan.id || challanNumber),
+              challan_number: challanNumber,
+              vehicle_number: truckNumber,
+              driver_name: driverName,
+              driver_phone: driverPhone || null,
+              origin,
+              destination,
+              total_truck_hire: Number(truckFreight) || 0,
+              advance_paid: Number(advancePaidToDriver) || 0,
+              balance_payable: Math.max(0, (Number(truckFreight) || 0) - (Number(advancePaidToDriver) || 0)),
+              status: 'In Transit',
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn('Supabase challan upsert notice:', sbErr);
+        }
+      }
 
       return NextResponse.json({
         success: true,
