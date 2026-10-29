@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { saveCentralRecord, getCentralCollection, deleteCentralRecord } from '@/lib/server-store';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, safeUpsertCustomer } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -303,18 +303,17 @@ export async function POST(request: Request) {
 
       if (isSupabaseConfigured) {
         try {
-          await supabase.from('customers').upsert([
-            {
-              id: String(result.customer.id),
-              name: result.customer.name || result.customer.companyName,
-              phone: result.customer.phone || null,
-              email: result.customer.email || null,
-              address: result.customer.address || null,
-              city: result.customer.city || 'Lahore',
-              opening_balance: Number(result.customer.openingBalance) || 0,
-              current_balance: Number(result.customer.openingBalance) || 0,
-            },
-          ]);
+          await safeUpsertCustomer({
+            id: String(result.customer.id),
+            name: result.customer.name || result.customer.companyName,
+            phone: result.customer.phone || null,
+            email: result.customer.email || null,
+            address: result.customer.address || null,
+            city: result.customer.city || 'Karachi',
+            opening_balance: Number(result.customer.openingBalance) || 0,
+            current_balance: Number(result.customer.openingBalance) || 0,
+            avatar_url: result.customer.photo || result.customer.avatar_url || null,
+          });
         } catch (sbErr) {
           console.warn('Supabase customer upsert notice:', sbErr);
         }

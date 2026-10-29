@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, safeUpsertDriver } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -229,18 +229,16 @@ export async function POST(request: Request) {
 
     if (isSupabaseConfigured && result?.driver) {
       try {
-        await supabase.from('drivers').upsert([
-          {
-            id: String(result.driver.id),
-            name: result.driver.name,
-            phone: result.driver.phone || result.driver.contact || null,
-            cnic: result.driver.cnic || null,
-            license_number: result.driver.licenseNumber || null,
-            vehicle_number: result.driver.vehicleNumber || null,
-            status: result.driver.status || 'Active',
-            avatar_url: result.driver.photo || null,
-          },
-        ]);
+        await safeUpsertDriver({
+          id: String(result.driver.id),
+          name: result.driver.name,
+          phone: result.driver.phone || result.driver.contact || null,
+          cnic: result.driver.cnic || null,
+          license_number: result.driver.licenseNumber || null,
+          vehicle_number: result.driver.vehicleNumber || null,
+          status: result.driver.status || 'Active',
+          avatar_url: result.driver.photo || null,
+        });
       } catch (sbErr) {
         console.warn('Supabase driver upsert notice:', sbErr);
       }

@@ -195,6 +195,14 @@ create table if not exists system_settings (
   updated_at timestamptz default now()
 );
 
+-- Ensure columns exist in case of preexisting tables
+alter table customers add column if not exists current_balance numeric default 0;
+alter table customers add column if not exists opening_balance numeric default 0;
+alter table customers add column if not exists avatar_url text;
+alter table drivers add column if not exists avatar_url text;
+alter table drivers add column if not exists vehicle_number text;
+alter table vehicles add column if not exists driver_phone text;
+
 -- Disable Row Level Security (RLS) for seamless instant sync across all client devices
 alter table bilties disable row level security;
 alter table customers disable row level security;

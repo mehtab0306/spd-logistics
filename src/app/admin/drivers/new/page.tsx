@@ -30,7 +30,7 @@ import {
   saveStoredDriver,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertDriver } from "@/lib/supabase";
 
 export default function NewDriverPage() {
   const router = useRouter();
@@ -104,8 +104,7 @@ export default function NewDriverPage() {
     if (isSupabaseConfigured) {
       try {
         const fileExt = file.name.split(".").pop() || "jpg";
-        const fileName = `driver-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-        const filePath = `drivers/${fileName}`;
+        const filePath = `driver-${Date.now()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from("avatars")
           .upload(filePath, file, { cacheControl: "3600", upsert: true });
@@ -217,20 +216,18 @@ export default function NewDriverPage() {
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { error: sbErr } = await supabase.from("drivers").upsert([
-          {
-            id: newDriverRecord.id,
-            name: newDriverRecord.name,
-            phone: newDriverRecord.phone,
-            cnic: newDriverRecord.cnic,
-            license_number: newDriverRecord.licenseNumber,
-            vehicle_number: newDriverRecord.vehicleNumber,
-            status: newDriverRecord.status || "Active",
-            avatar_url: photoUrl || null,
-          },
-        ]);
+        const { success, error: sbErr } = await safeUpsertDriver({
+          id: newDriverRecord.id,
+          name: newDriverRecord.name,
+          phone: newDriverRecord.phone || null,
+          cnic: newDriverRecord.cnic || null,
+          license_number: newDriverRecord.licenseNumber || null,
+          vehicle_number: newDriverRecord.vehicleNumber || null,
+          status: newDriverRecord.status || "Active",
+          avatar_url: photoUrl || null,
+        });
 
-        if (sbErr) {
+        if (!success && sbErr) {
           lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
         } else {
           savedSuccessfully = true;

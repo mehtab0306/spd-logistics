@@ -54,7 +54,7 @@ import {
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertDriver } from "@/lib/supabase";
 
 export default function DriversPage() {
   const router = useRouter();
@@ -355,8 +355,7 @@ export default function DriversPage() {
     if (isSupabaseConfigured) {
       try {
         const fileExt = file.name.split(".").pop() || "jpg";
-        const fileName = `driver-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-        const filePath = `drivers/${fileName}`;
+        const filePath = `driver-${Date.now()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from("avatars")
           .upload(filePath, file, { cacheControl: "3600", upsert: true });
@@ -368,6 +367,8 @@ export default function DriversPage() {
           if (publicUrlData?.publicUrl) {
             return publicUrlData.publicUrl;
           }
+        } else {
+          console.warn("Supabase driver avatar upload error:", uploadError);
         }
       } catch (err) {
         console.warn("Supabase driver avatar upload fallback:", err);
@@ -417,20 +418,18 @@ export default function DriversPage() {
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { error: sbErr } = await supabase.from("drivers").upsert([
-          {
-            id: newDrv.id,
-            name: newDrv.name,
-            phone: newDrv.phone,
-            cnic: newDrv.cnic,
-            license_number: newDrv.licenseNumber,
-            vehicle_number: newDrv.vehicleNumber,
-            status: newDrv.status || "Active",
-            avatar_url: photoUrl || null,
-          },
-        ]);
+        const { success, error: sbErr } = await safeUpsertDriver({
+          id: newDrv.id,
+          name: newDrv.name,
+          phone: newDrv.phone || null,
+          cnic: newDrv.cnic || null,
+          license_number: newDrv.licenseNumber || null,
+          vehicle_number: newDrv.vehicleNumber || null,
+          status: newDrv.status || "Active",
+          avatar_url: photoUrl || null,
+        });
 
-        if (sbErr) {
+        if (!success && sbErr) {
           lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
         } else {
           savedSuccessfully = true;
@@ -530,23 +529,16 @@ export default function DriversPage() {
       // Cloud Supabase sync
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("drivers").upsert([
-            {
-              id: updated.id,
-              name: updated.name,
-              phone: updated.phone,
-              email: updated.email,
-              cnic: updated.cnic,
-              license_number: updated.licenseNumber,
-              license_expiry: updated.licenseExpiry,
-              address: updated.address,
-              emergency_contact: updated.emergencyContact,
-              vehicle_number: updated.vehicleNumber,
-              status: updated.status,
-              notes: updated.notes,
-              avatar_url: finalPhotoUrl || null,
-            },
-          ]);
+          await safeUpsertDriver({
+            id: updated.id,
+            name: updated.name,
+            phone: updated.phone || null,
+            cnic: updated.cnic || null,
+            license_number: updated.licenseNumber || null,
+            vehicle_number: updated.vehicleNumber || null,
+            status: updated.status || "Active",
+            avatar_url: finalPhotoUrl || null,
+          });
         } catch (sbErr) {
           console.warn("Supabase driver update warning:", sbErr);
         }

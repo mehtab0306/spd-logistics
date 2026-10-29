@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { getStoredCustomers, saveStoredCustomer } from "@/lib/local-persistence";
 import { LogisticsFormSkeleton } from "@/components/shared/logistics-loader";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertCustomer } from "@/lib/supabase";
 
 export default function EditCustomerPage() {
   const router = useRouter();
@@ -129,8 +129,7 @@ export default function EditCustomerPage() {
     if (isSupabaseConfigured) {
       try {
         const fileExt = file.name.split(".").pop() || "jpg";
-        const fileName = `customer-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-        const filePath = `customers/${fileName}`;
+        const filePath = `customer-${Date.now()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from("avatars")
           .upload(filePath, file, { cacheControl: "3600", upsert: true });
@@ -191,14 +190,15 @@ export default function EditCustomerPage() {
       // Supabase PostgreSQL direct sync
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("customers").update({
-            name: payload.name || payload.companyName,
-            phone: payload.phone,
-            email: payload.email,
-            address: payload.address,
-            city: payload.city,
+          await safeUpsertCustomer({
+            id: customerId,
+            name: String(payload.name || payload.companyName || "").trim(),
+            phone: payload.phone || null,
+            email: payload.email || null,
+            address: payload.address || null,
+            city: payload.city || "Karachi",
             avatar_url: finalPhotoUrl || null,
-          }).eq("id", customerId);
+          });
         } catch (sbErr) {
           console.warn("Supabase customer update error:", sbErr);
         }

@@ -52,7 +52,9 @@ import {
   Phone,
   MapPin,
   TrendingUp,
+  Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import { exportToExcel } from "@/lib/export-excel";
@@ -949,6 +951,54 @@ export default function AccountsPage() {
     }
   };
 
+  const handleDeleteAccount = async (account: any) => {
+    const targetId =
+      account.customerId ||
+      account.customer?.id ||
+      (typeof account.id === "string" && account.id.startsWith("acc-cust-")
+        ? account.id.replace("acc-cust-", "")
+        : account.id);
+    const accountName = account.accountName || account.customer?.name || "this customer ledger";
+
+    if (!confirm(`Are you sure you want to delete "${accountName}"? This will permanently remove the customer record and its ledger from the database.`)) {
+      return;
+    }
+
+    try {
+      if (isSupabaseConfigured) {
+        await supabase.from("customers").delete().eq("id", targetId);
+      }
+
+      // Also clean local persistence cache
+      try {
+        const localCustRaw = localStorage.getItem(LOCAL_CUSTOMERS_KEY);
+        if (localCustRaw) {
+          const localCusts = JSON.parse(localCustRaw);
+          const filtered = localCusts.filter((c: any) => String(c.id) !== String(targetId));
+          localStorage.setItem(LOCAL_CUSTOMERS_KEY, JSON.stringify(filtered));
+        }
+
+        const rawAcc = localStorage.getItem(LOCAL_ACCOUNTS_KEY);
+        if (rawAcc) {
+          const parsed = JSON.parse(rawAcc);
+          const filtered = parsed.filter(
+            (acc: any) => acc.id !== account.id && acc.customerId !== targetId
+          );
+          localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(filtered));
+        }
+      } catch {}
+
+      fetch(`/api/admin/customers?id=${encodeURIComponent(targetId)}`, { method: "DELETE" }).catch(() => {});
+
+      toast.success(`Customer "${accountName}" deleted successfully`);
+      setFeedback({ type: "success", message: `Customer "${accountName}" deleted successfully` });
+      await loadAccountsData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete customer");
+      setFeedback({ type: "error", message: err.message || "Failed to delete customer" });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast Feedback Notification */}
@@ -1290,6 +1340,15 @@ export default function AccountsPage() {
                         title="Add Voucher for this Account"
                       >
                         <Plus className="w-3 h-3 text-slate-500" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteAccount(a)}
+                        className="h-7 px-2 text-xs font-bold rounded-xl border-red-200 dark:border-red-900/50 hover:bg-red-50 text-red-600 dark:text-red-400"
+                        title="Delete Customer Account"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </TableCell>

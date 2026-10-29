@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, getAuthCookie } from '@/lib/auth';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,159 @@ export async function GET(request: Request) {
         },
         totalCount: 0,
       });
+    }
+
+    // 1. Direct Live Supabase Cloud Database Search
+    if (isSupabaseConfigured) {
+      try {
+        const [bRes, cRes, dRes, vRes, chRes] = await Promise.allSettled([
+          supabase
+            .from('bilties')
+            .select('*')
+            .or(`bilty_number.ilike.%${q}%,manual_bilty_number.ilike.%${q}%,sender_name.ilike.%${q}%,receiver_name.ilike.%${q}%,origin_station.ilike.%${q}%,destination_station.ilike.%${q}%`)
+            .limit(6),
+          supabase
+            .from('customers')
+            .select('*')
+            .or(`name.ilike.%${q}%,phone.ilike.%${q}%,city.ilike.%${q}%`)
+            .limit(5),
+          supabase
+            .from('drivers')
+            .select('*')
+            .or(`name.ilike.%${q}%,phone.ilike.%${q}%,vehicle_number.ilike.%${q}%`)
+            .limit(5),
+          supabase
+            .from('vehicles')
+            .select('*')
+            .or(`vehicle_number.ilike.%${q}%,vehicle_type.ilike.%${q}%,driver_name.ilike.%${q}%`)
+            .limit(5),
+          supabase
+            .from('challans')
+            .select('*')
+            .or(`challan_number.ilike.%${q}%,vehicle_number.ilike.%${q}%,driver_name.ilike.%${q}%`)
+            .limit(5),
+        ]);
+
+        let sbBilties: any[] = [];
+        let sbCustomers: any[] = [];
+        let sbDrivers: any[] = [];
+        let sbVehicles: any[] = [];
+        let sbChallans: any[] = [];
+
+        if (bRes.status === 'fulfilled' && Array.isArray(bRes.value.data)) {
+          sbBilties = bRes.value.data.filter((b: any) => !b.is_deleted && b.status !== 'DELETED');
+        }
+        if (cRes.status === 'fulfilled' && Array.isArray(cRes.value.data)) {
+          sbCustomers = cRes.value.data;
+        }
+        if (dRes.status === 'fulfilled' && Array.isArray(dRes.value.data)) {
+          sbDrivers = dRes.value.data;
+        }
+        if (vRes.status === 'fulfilled' && Array.isArray(vRes.value.data)) {
+          sbVehicles = vRes.value.data;
+        }
+        if (chRes.status === 'fulfilled' && Array.isArray(chRes.value.data)) {
+          sbChallans = chRes.value.data;
+        }
+
+        const formattedBilties = sbBilties.map((b: any) => {
+          const bNum = b.manual_bilty_number || b.bilty_number || b.id;
+          return {
+            id: b.id,
+            title: `Bilty #${bNum}`,
+            subtitle: `${b.sender_name || 'Sender'} → ${b.receiver_name || 'Receiver'} • ${b.origin_station || b.origin || 'Karachi'} → ${b.destination_station || b.destination || 'Lahore'}`,
+            badge: `Rs ${Number(b.freight_amount ?? b.total_freight ?? 0).toLocaleString()} • ${b.status || 'BOOKED'}`,
+            href: `/admin/bilty?highlight=${b.id}`,
+            category: 'BILTIES',
+          };
+        });
+
+        const trackingMatches = sbBilties.slice(0, 3).map((b: any) => {
+          const bNum = b.manual_bilty_number || b.bilty_number || b.id;
+          return {
+            id: `track-${b.id}`,
+            title: `Track: Bilty #${bNum}`,
+            subtitle: `Status: ${b.status || 'In Transit'} • ${b.origin_station || 'Karachi'} → ${b.destination_station || 'Lahore'}`,
+            badge: b.status || 'IN TRANSIT',
+            href: `/admin/tracking?q=${encodeURIComponent(bNum)}`,
+            category: 'TRACKING',
+          };
+        });
+
+        const formattedCustomers = sbCustomers.map((c: any) => ({
+          id: c.id,
+          title: c.name,
+          subtitle: `${c.phone ? 'Phone: ' + c.phone : ''}${c.city ? ' • ' + c.city : ''}`,
+          badge: 'CUSTOMER',
+          href: `/admin/customers?highlight=${c.id}`,
+          category: 'CUSTOMERS',
+        }));
+
+        const formattedDrivers = sbDrivers.map((d: any) => ({
+          id: d.id,
+          title: d.name,
+          subtitle: `Phone: ${d.phone || 'N/A'}${d.vehicle_number ? ' • Truck: ' + d.vehicle_number : ''}`,
+          badge: d.status || 'Active',
+          href: `/admin/drivers?highlight=${d.id}`,
+          category: 'DRIVERS',
+        }));
+
+        const formattedVehicles = sbVehicles.map((v: any) => ({
+          id: v.id,
+          title: v.vehicle_number,
+          subtitle: `${v.vehicle_type || 'Truck'}${v.driver_name ? ' • Driver: ' + v.driver_name : ''}`,
+          badge: v.status || 'Available',
+          href: `/admin/vehicles?highlight=${v.id}`,
+          category: 'VEHICLES',
+        }));
+
+        const formattedChallans = sbChallans.map((ch: any) => ({
+          id: ch.id,
+          title: ch.challan_number,
+          subtitle: `Truck: ${ch.vehicle_number || 'N/A'}${ch.driver_name ? ' • Driver: ' + ch.driver_name : ''}`,
+          badge: ch.status || 'In Transit',
+          href: `/admin/challan-in-transit?highlight=${ch.id}`,
+          category: 'CHALLANS',
+        }));
+
+        const formattedAccounts = sbCustomers.map((c: any) => ({
+          id: `acc-${c.id}`,
+          title: `${c.name} Ledger`,
+          subtitle: `Customer Account • ${c.city || 'Karachi'}`,
+          badge: 'ACCOUNTS',
+          href: `/admin/accounts?highlight=${c.id}`,
+          category: 'ACCOUNTS',
+        }));
+
+        const results = {
+          customers: formattedCustomers,
+          bilties: formattedBilties,
+          tracking: trackingMatches,
+          vehicles: formattedVehicles,
+          drivers: formattedDrivers,
+          cashBooks: [],
+          accounts: formattedAccounts,
+          challans: formattedChallans,
+        };
+
+        const totalCount =
+          formattedCustomers.length +
+          formattedBilties.length +
+          trackingMatches.length +
+          formattedVehicles.length +
+          formattedDrivers.length +
+          formattedAccounts.length +
+          formattedChallans.length;
+
+        return NextResponse.json({
+          success: true,
+          query: q,
+          results,
+          totalCount,
+        });
+      } catch (sbSearchErr) {
+        console.warn('Supabase global search fallback:', sbSearchErr);
+      }
     }
 
     const isCustomer = session.role === 'CUSTOMER';

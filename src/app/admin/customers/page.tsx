@@ -59,7 +59,7 @@ import {
 import { exportToExcel } from "@/lib/export-excel";
 import { MonthlyBillStatementModal } from "@/components/customers/monthly-bill-statement-modal";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertCustomer } from "@/lib/supabase";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -434,8 +434,7 @@ export default function CustomersPage() {
     if (isSupabaseConfigured) {
       try {
         const fileExt = file.name.split(".").pop() || "jpg";
-        const fileName = `customer-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-        const filePath = `customers/${fileName}`;
+        const filePath = `customer-${Date.now()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from("avatars")
           .upload(filePath, file, { cacheControl: "3600", upsert: true });
@@ -447,6 +446,8 @@ export default function CustomersPage() {
           if (publicUrlData?.publicUrl) {
             return publicUrlData.publicUrl;
           }
+        } else {
+          console.warn("Supabase customer avatar upload error:", uploadError);
         }
       } catch (err) {
         console.warn("Supabase customer avatar upload fallback:", err);
@@ -508,18 +509,16 @@ export default function CustomersPage() {
         let lastErrorMessage = "";
 
         if (isSupabaseConfigured) {
-          const { error: sbErr } = await supabase.from("customers").upsert([
-            {
-              id: updated.id,
-              name: updated.name || updated.companyName,
-              phone: updated.phone,
-              email: updated.email,
-              address: updated.address,
-              city: updated.city,
-              avatar_url: finalPhotoUrl || null,
-            },
-          ]);
-          if (sbErr) {
+          const { success, error: sbErr } = await safeUpsertCustomer({
+            id: updated.id,
+            name: updated.name || updated.companyName,
+            phone: updated.phone || null,
+            email: updated.email || null,
+            address: updated.address || null,
+            city: updated.city || "Karachi",
+            avatar_url: finalPhotoUrl || null,
+          });
+          if (!success && sbErr) {
             lastErrorMessage = `Supabase update failed: ${sbErr.message}`;
           } else {
             updatedSuccessfully = true;
@@ -586,20 +585,19 @@ export default function CustomersPage() {
         let lastErrorMessage = "";
 
         if (isSupabaseConfigured) {
-          const { error: sbErr } = await supabase.from("customers").upsert([
-            {
-              id: newCust.id,
-              name: newCust.name || newCust.companyName,
-              phone: newCust.phone,
-              email: newCust.email,
-              address: newCust.address,
-              city: newCust.city,
-              opening_balance: openBal,
-              current_balance: openBal,
-              avatar_url: finalPhotoUrl || null,
-            },
-          ]);
-          if (sbErr) {
+          const { success, error: sbErr } = await safeUpsertCustomer({
+            id: newCust.id,
+            name: String(newCust.name || newCust.companyName || "").trim(),
+            phone: newCust.phone || null,
+            email: newCust.email || null,
+            address: newCust.address || null,
+            city: newCust.city || "Karachi",
+            opening_balance: openBal,
+            current_balance: openBal,
+            avatar_url: finalPhotoUrl || null,
+            created_at: newCust.createdAt,
+          });
+          if (!success && sbErr) {
             lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
           } else {
             savedSuccessfully = true;

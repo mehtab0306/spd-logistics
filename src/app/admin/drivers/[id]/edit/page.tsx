@@ -28,7 +28,7 @@ import {
   getDeletedVehicleIds,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertDriver } from "@/lib/supabase";
 
 export default function EditDriverPage() {
   const router = useRouter();
@@ -138,8 +138,7 @@ export default function EditDriverPage() {
     if (isSupabaseConfigured) {
       try {
         const fileExt = file.name.split(".").pop() || "jpg";
-        const fileName = `driver-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-        const filePath = `drivers/${fileName}`;
+        const filePath = `driver-${Date.now()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from("avatars")
           .upload(filePath, file, { cacheControl: "3600", upsert: true });
@@ -207,15 +206,16 @@ export default function EditDriverPage() {
       // Supabase cloud direct update
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("drivers").update({
+          await safeUpsertDriver({
+            id: driverId,
             name: payload.name,
-            phone: payload.phone,
-            cnic: payload.cnic,
-            license_number: payload.licenseNumber,
-            vehicle_number: payload.vehicleNumber,
-            status: payload.status,
+            phone: payload.phone || null,
+            cnic: payload.cnic || null,
+            license_number: payload.licenseNumber || null,
+            vehicle_number: payload.vehicleNumber || null,
+            status: payload.status || "Active",
             avatar_url: finalPhotoUrl || null,
-          }).eq("id", driverId);
+          });
         } catch (sbErr) {
           console.warn("Supabase driver update warning:", sbErr);
         }

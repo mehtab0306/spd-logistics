@@ -58,7 +58,7 @@ import {
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertCustomer } from "@/lib/supabase";
 
 export interface BiltyCargoItem {
   detail: string;
@@ -409,15 +409,13 @@ export default function NewBiltyPage() {
       // Supabase cloud customer upsert (only name mandatory)
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("customers").upsert([
-            {
-              id: newCust.id,
-              name: newCust.name,
-              phone: newCust.phone || null,
-              city: newCust.city || null,
-              address: newCust.address || null,
-            },
-          ]);
+          await safeUpsertCustomer({
+            id: newCust.id,
+            name: newCust.name,
+            phone: newCust.phone || null,
+            city: newCust.city || "Karachi",
+            address: newCust.address || null,
+          });
         } catch (sbErr) {
           console.warn("Supabase customer upsert warning:", sbErr);
         }

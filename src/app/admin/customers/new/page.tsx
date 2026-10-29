@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { saveStoredCustomer, getStoredCustomers } from "@/lib/local-persistence";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertCustomer } from "@/lib/supabase";
 
 export default function NewCustomerPage() {
   const router = useRouter();
@@ -69,8 +69,7 @@ export default function NewCustomerPage() {
     if (isSupabaseConfigured) {
       try {
         const fileExt = file.name.split(".").pop() || "jpg";
-        const fileName = `customer-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-        const filePath = `customers/${fileName}`;
+        const filePath = `customer-${Date.now()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from("avatars")
           .upload(filePath, file, { cacheControl: "3600", upsert: true });
@@ -194,21 +193,20 @@ export default function NewCustomerPage() {
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { error: sbErr } = await supabase.from("customers").upsert([
-          {
-            id: newCustomerRecord.id,
-            name: newCustomerRecord.name || newCustomerRecord.companyName,
-            phone: newCustomerRecord.phone,
-            email: newCustomerRecord.email,
-            address: newCustomerRecord.address,
-            city: newCustomerRecord.city,
-            opening_balance: openBal,
-            current_balance: openBal,
-            avatar_url: photoUrl || null,
-          },
-        ]);
+        const { success, error: sbErr } = await safeUpsertCustomer({
+          id: newCustomerRecord.id,
+          name: String(newCustomerRecord.name || newCustomerRecord.companyName || "").trim(),
+          phone: newCustomerRecord.phone || null,
+          email: newCustomerRecord.email || null,
+          address: newCustomerRecord.address || null,
+          city: newCustomerRecord.city || "Karachi",
+          opening_balance: openBal,
+          current_balance: openBal,
+          avatar_url: photoUrl || null,
+          created_at: timestamp,
+        });
 
-        if (sbErr) {
+        if (!success && sbErr) {
           lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
         } else {
           savedSuccessfully = true;

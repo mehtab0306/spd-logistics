@@ -34,6 +34,104 @@ export default function ReportsPage() {
   const fetchReports = async () => {
     try {
       setLoading(true);
+
+      // Primary: Live Supabase queries if configured
+      if (isSupabaseConfigured) {
+        try {
+          const [bRes, cRes, dRes, vRes] = await Promise.allSettled([
+            supabase
+              .from("bilties")
+              .select("*")
+              .or("is_deleted.is.null,is_deleted.eq.false")
+              .neq("status", "DELETED"),
+            supabase.from("customers").select("*", { count: "exact", head: true }),
+            supabase.from("drivers").select("*", { count: "exact", head: true }),
+            supabase.from("vehicles").select("*", { count: "exact", head: true }),
+          ]);
+
+          const rawBilties = bRes.status === "fulfilled" && Array.isArray(bRes.value.data) ? bRes.value.data : [];
+          const activeBilties = rawBilties.filter((b: any) => !b.is_deleted && b.status !== "DELETED");
+
+          const totalConsignments = activeBilties.length;
+          const totalCustomers = cRes.status === "fulfilled" && typeof cRes.value.count === "number" ? cRes.value.count : 0;
+          const totalDrivers = dRes.status === "fulfilled" && typeof dRes.value.count === "number" ? dRes.value.count : 0;
+          const totalVehicles = vRes.status === "fulfilled" && typeof vRes.value.count === "number" ? vRes.value.count : 0;
+
+          const lahoreCount = activeBilties.filter(
+            (b: any) => (b.origin_station || b.origin || "").toLowerCase().includes("lahore")
+          ).length;
+          const karachiCount = activeBilties.filter(
+            (b: any) => (b.origin_station || b.origin || "").toLowerCase().includes("karachi")
+          ).length;
+          const deliveredCount = activeBilties.filter(
+            (b: any) => (b.status || "").toUpperCase() === "DELIVERED"
+          ).length;
+          const inTransitCount = activeBilties.filter((b: any) =>
+            ["IN_TRANSIT", "DISPATCHED"].includes((b.status || "").toUpperCase())
+          ).length;
+
+          const totalFreight = activeBilties.reduce(
+            (acc: number, b: any) => acc + (Number(b.freight_amount ?? b.total_freight ?? 0) || 0),
+            0
+          );
+          const totalPaid = activeBilties.reduce(
+            (acc: number, b: any) => acc + (Number(b.advance_paid ?? 0) || 0),
+            0
+          );
+          const totalRemaining = activeBilties.reduce((acc: number, b: any) => {
+            const freight = Number(b.freight_amount ?? b.total_freight ?? 0) || 0;
+            const paid = Number(b.advance_paid ?? 0) || 0;
+            const rem =
+              b.remaining_balance !== undefined && b.remaining_balance !== null
+                ? Number(b.remaining_balance)
+                : Math.max(0, freight - paid);
+            return acc + (isNaN(rem) ? 0 : rem);
+          }, 0);
+
+          let cashBooks: any[] = [];
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const res = await fetch("/api/admin/reports", { signal: controller.signal });
+            clearTimeout(timeoutId);
+            const data = await res.json();
+            if (data?.data?.cashBooks) {
+              cashBooks = data.data.cashBooks;
+            }
+          } catch {}
+
+          setReportData({
+            summary: {
+              totalCustomers,
+              totalDrivers,
+              totalVehicles,
+              totalConsignments,
+              deliveredConsignments: deliveredCount,
+              inTransitConsignments: inTransitCount,
+              totalFreightRevenue: totalFreight,
+              totalCollected: totalPaid,
+              totalOutstanding: totalRemaining,
+            },
+            warehouseComparison: {
+              lahore: {
+                count: lahoreCount,
+                percentage: totalConsignments > 0 ? Math.round((lahoreCount / totalConsignments) * 100) : 0,
+              },
+              karachi: {
+                count: karachiCount,
+                percentage: totalConsignments > 0 ? Math.round((karachiCount / totalConsignments) * 100) : 0,
+              },
+            },
+            cashBooks,
+            recentPayments: [],
+          });
+          return;
+        } catch (sbErr) {
+          console.warn("Direct Supabase reports query notice, falling back:", sbErr);
+        }
+      }
+
+      // Secondary fallback if Supabase not configured
       let apiData: any = null;
       try {
         const controller = new AbortController();
@@ -48,90 +146,14 @@ export default function ReportsPage() {
         console.warn("API reports fetch notice:", e);
       }
 
-      // Check if real entries exist in Supabase
-      let supabaseBilties: any[] = [];
-      if (isSupabaseConfigured && (!apiData || !apiData.summary || apiData.summary.totalConsignments === 0)) {
-        try {
-          const { data: sbB } = await supabase.from("bilties").select("*");
-          if (Array.isArray(sbB)) {
-            supabaseBilties = sbB.map((r: any) => ({
-              id: r.id || r.bilty_number,
-              biltyNumber: r.bilty_number || r.id,
-              origin: r.origin_station || r.origin || "Lahore",
-              destination: r.destination_station || r.destination || "Karachi",
-              totalFreight: Number(r.freight_amount ?? r.total_freight ?? 0),
-              paidAmount: Number(r.advance_paid ?? 0),
-              remainingBalance: Number(r.remaining_balance ?? 0),
-              status: r.status || "Booked",
-              shipmentStatus: (r.status || "BOOKED").toUpperCase(),
-            }));
-          }
-        } catch (e) {
-          console.warn("Supabase reports bilties fetch notice:", e);
-        }
-      }
-
-      // Check if real local entries exist
       const localBilties = getStoredBilties().filter(
         (b) => b && b.shipmentStatus !== "DELETED" && !String(b.id || "").startsWith("bilty-demo-")
       );
-      const activeBilties = supabaseBilties.length > 0 ? supabaseBilties : localBilties;
       const localCustomers = getStoredCustomers();
       const localDrivers = getStoredDrivers();
       const localVehicles = getStoredVehicles();
 
-      // If API summary is 0 or missing, but user has booked bilties:
-      if ((!apiData || !apiData.summary || apiData.summary.totalConsignments === 0) && activeBilties.length > 0) {
-        const totalConsignments = activeBilties.length;
-        const lahoreCount = activeBilties.filter(
-          (b) => (b.warehouse || "").toUpperCase().includes("LAHORE") || (b.origin || "").toLowerCase().includes("lahore")
-        ).length;
-        const karachiCount = activeBilties.filter(
-          (b) => (b.warehouse || "").toUpperCase().includes("KARACHI") || (b.origin || "").toLowerCase().includes("karachi")
-        ).length;
-        const deliveredCount = activeBilties.filter((b) => b.shipmentStatus === "DELIVERED").length;
-        const inTransitCount = activeBilties.filter(
-          (b) => b.shipmentStatus === "IN_TRANSIT" || b.shipmentStatus === "DISPATCHED"
-        ).length;
-
-        const totalFreight = activeBilties.reduce(
-          (acc, b) => acc + (parseFloat(b.freight || b.totalAmount || b.totalFreight) || 0),
-          0
-        );
-        const totalPaid = activeBilties.reduce((acc, b) => acc + (parseFloat(b.paidAmount) || 0), 0);
-        const totalRemaining = activeBilties.reduce((acc, b) => {
-          const tot = parseFloat(b.freight || b.totalAmount || b.totalFreight) || 0;
-          const pd = parseFloat(b.paidAmount) || 0;
-          const rem = b.remainingBalance !== undefined ? parseFloat(b.remainingBalance) : Math.max(0, tot - pd);
-          return acc + (isNaN(rem) ? 0 : rem);
-        }, 0);
-
-        setReportData({
-          summary: {
-            totalCustomers: Math.max(apiData?.summary?.totalCustomers || 0, localCustomers.length),
-            totalDrivers: Math.max(apiData?.summary?.totalDrivers || 0, localDrivers.length),
-            totalVehicles: Math.max(apiData?.summary?.totalVehicles || 0, localVehicles.length),
-            totalConsignments,
-            deliveredConsignments: deliveredCount,
-            inTransitConsignments: inTransitCount,
-            totalFreightRevenue: totalFreight,
-            totalCollected: totalPaid,
-            totalOutstanding: totalRemaining,
-          },
-          warehouseComparison: {
-            lahore: {
-              count: lahoreCount,
-              percentage: totalConsignments > 0 ? Math.round((lahoreCount / totalConsignments) * 100) : 0,
-            },
-            karachi: {
-              count: karachiCount,
-              percentage: totalConsignments > 0 ? Math.round((karachiCount / totalConsignments) * 100) : 0,
-            },
-          },
-          cashBooks: apiData?.cashBooks || [],
-          recentPayments: apiData?.recentPayments || [],
-        });
-      } else if (apiData) {
+      if (apiData) {
         setReportData(apiData);
       } else {
         setReportData({
@@ -139,7 +161,7 @@ export default function ReportsPage() {
             totalCustomers: localCustomers.length,
             totalDrivers: localDrivers.length,
             totalVehicles: localVehicles.length,
-            totalConsignments: 0,
+            totalConsignments: localBilties.length,
             deliveredConsignments: 0,
             inTransitConsignments: 0,
             totalFreightRevenue: 0,
