@@ -163,11 +163,7 @@ export default function EditCustomerPage() {
       setFormError("Customer name is required.");
       return;
     }
-    if (!formData.phone.trim()) {
-      console.log("[EditCustomer] Validation warning: Phone number is missing");
-      setFormError("Phone number is required.");
-      return;
-    }
+
 
     setSubmitting(true);
     setFormError("");
@@ -472,11 +468,11 @@ export default function EditCustomerPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
-                Phone Number *
+                Phone Number (Optional)
               </Label>
               <Input
-                required
                 value={formData.phone}
+                placeholder="0300 1234567"
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className="rounded-xl h-10 text-xs"
               />

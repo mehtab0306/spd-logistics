@@ -37,320 +37,19 @@ import {
   Sparkles,
   Navigation,
   Eye,
+  Trash2,
 } from "lucide-react";
 import { formatDateTime, formatDate, cn } from "@/lib/utils";
 import { SHIPMENT_STATUS_LABELS, SHIPMENT_STATUS_COLORS } from "@/lib/constants";
 import { buildWhatsAppUrl, getBiltyTrackingWhatsAppMessage } from "@/lib/whatsapp";
-import { getStoredBilties, saveStoredBilty } from "@/lib/local-persistence";
+import { getStoredBilties, saveStoredBilty, removeLocalBilty, moveToTrash } from "@/lib/local-persistence";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { toast } from "sonner";
 
 const LOCAL_BILTIES_KEY = "spd_local_bilties";
 const LOCAL_TRACKING_KEY = "spd_local_tracking";
 
-const FALLBACK_CONSIGNMENTS = [
-  {
-    id: "bilty-cust-101",
-    trackingId: "SPD-2026-00101",
-    biltyNumber: "SPD-LHR-2026-0101",
-    origin: "Lahore",
-    destination: "Karachi",
-    warehouse: "LAHORE",
-    shipmentStatus: "IN_TRANSIT",
-    senderName: "Standard Customer (Prime Logistics)",
-    senderPhone: "0300 1234567",
-    receiverName: "Karachi Commercial Mart",
-    receiverPhone: "0321 9876543",
-    packageDetails: "Industrial Auto Parts & Machinery",
-    quantity: 80,
-    weight: 3200,
-    driverName: "Muhammad Khan",
-    vehicleNumber: "LES-8921",
-    createdAt: new Date(Date.now() - 3600000 * 20).toISOString(),
-    trackingEvents: [
-      {
-        id: "te-101-1",
-        status: "IN_TRANSIT",
-        location: "Sadiqabad Motorway Interchange M-5",
-        description: "Cargo convoy in transit on Motorway M-5.",
-        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-      },
-      {
-        id: "te-101-2",
-        status: "DISPATCHED",
-        location: "Lahore Central Logistics Hub",
-        description: "Dispatched from Lahore terminal via Vehicle LES-8921.",
-        timestamp: new Date(Date.now() - 3600000 * 8).toISOString(),
-      },
-      {
-        id: "te-101-3",
-        status: "BOOKED",
-        location: "Lahore Station",
-        description: "Consignment booked and verified.",
-        timestamp: new Date(Date.now() - 3600000 * 20).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "bilty-cust-102",
-    trackingId: "SPD-2026-00102",
-    biltyNumber: "SPD-KHI-2026-0102",
-    origin: "Karachi",
-    destination: "Islamabad",
-    warehouse: "KARACHI",
-    shipmentStatus: "DISPATCHED",
-    senderName: "Standard Customer (Prime Logistics)",
-    senderPhone: "0300 1234567",
-    receiverName: "Islamabad Distribution Center",
-    receiverPhone: "0333 8765432",
-    packageDetails: "Electronics & Commercial Displays",
-    quantity: 120,
-    weight: 2400,
-    driverName: "Abdul Ghaffar",
-    vehicleNumber: "KHI-7720",
-    createdAt: new Date(Date.now() - 3600000 * 10).toISOString(),
-    trackingEvents: [
-      {
-        id: "te-102-1",
-        status: "DISPATCHED",
-        location: "Hyderabad Highway Bypass",
-        description: "En route to toll checkpoint.",
-        timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-      },
-      {
-        id: "te-102-2",
-        status: "BOOKED",
-        location: "Karachi Port Hub",
-        description: "Bilty registered and loaded onto vehicle.",
-        timestamp: new Date(Date.now() - 3600000 * 10).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "bilty-cust-103",
-    trackingId: "SPD-2026-00103",
-    biltyNumber: "SPD-LHR-2026-0103",
-    origin: "Lahore",
-    destination: "Peshawar",
-    warehouse: "LAHORE",
-    shipmentStatus: "DELIVERED",
-    senderName: "Standard Customer (Prime Logistics)",
-    senderPhone: "0300 1234567",
-    receiverName: "Peshawar Wholesale Depot",
-    receiverPhone: "0301 2345678",
-    packageDetails: "Consumer Packaged Goods & Beverages",
-    quantity: 150,
-    weight: 4100,
-    driverName: "Rashid Ali",
-    vehicleNumber: "PMA-7102",
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    deliveryDate: new Date(Date.now() - 3600000 * 5).toISOString(),
-    trackingEvents: [
-      {
-        id: "te-103-1",
-        status: "DELIVERED",
-        location: "Peshawar Depot",
-        description: "Delivered to receiving manager.",
-        timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
-      },
-      {
-        id: "te-103-2",
-        status: "OUT_FOR_DELIVERY",
-        location: "Peshawar Ring Road",
-        description: "Out for final delivery.",
-        timestamp: new Date(Date.now() - 3600000 * 12).toISOString(),
-      },
-      {
-        id: "te-103-3",
-        status: "BOOKED",
-        location: "Lahore Station",
-        description: "Booking confirmed.",
-        timestamp: new Date(Date.now() - 86400000 * 2).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "cons-1",
-    trackingId: "SPD-2026-000142",
-    biltyNumber: "SPD-LHR-2026-0042",
-    origin: "Lahore",
-    destination: "Karachi",
-    warehouse: "LAHORE",
-    shipmentStatus: "IN_TRANSIT",
-    senderName: "Crescent Textile Mills Ltd",
-    senderPhone: "0300 1234567",
-    receiverName: "Metro Cash & Carry Terminal",
-    receiverPhone: "0321 9876543",
-    packageDetails: "Textile Fabrics & Yarn Cartons",
-    quantity: 120,
-    weight: 4500,
-    driverName: "Muhammad Khan",
-    vehicleNumber: "LES-8921",
-    createdAt: new Date(Date.now() - 3600000 * 18).toISOString(),
-    trackingEvents: [
-      {
-        id: "te-1",
-        status: "IN_TRANSIT",
-        location: "Sadiqabad Motorway Interchange",
-        description: "Cargo convoy in transit on Motorway M-5.",
-        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-      },
-      {
-        id: "te-2",
-        status: "DISPATCHED",
-        location: "Lahore Central Logistics Hub",
-        description: "Dispatched from Lahore terminal via Vehicle LES-8921.",
-        timestamp: new Date(Date.now() - 3600000 * 8).toISOString(),
-      },
-      {
-        id: "te-3",
-        status: "BOOKED",
-        location: "Lahore Station",
-        description: "Consignment booked and documents verified.",
-        timestamp: new Date(Date.now() - 3600000 * 18).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "cons-2",
-    trackingId: "SPD-2026-000141",
-    biltyNumber: "SPD-KHI-2026-0038",
-    origin: "Karachi",
-    destination: "Islamabad",
-    warehouse: "KARACHI",
-    shipmentStatus: "DISPATCHED",
-    senderName: "Universal Pharma Karachi",
-    senderPhone: "0333 4567890",
-    receiverName: "Shifa International Hospital",
-    receiverPhone: "0345 6789012",
-    packageDetails: "Medical Consumables & Lab Kits",
-    quantity: 85,
-    weight: 1800,
-    driverName: "Tariq Mehmood",
-    vehicleNumber: "KHI-4420",
-    createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    trackingEvents: [
-      {
-        id: "te-21",
-        status: "DISPATCHED",
-        location: "Karachi Port Gate #3",
-        description: "Dispatched and outbound on National Highway.",
-        timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-      },
-      {
-        id: "te-22",
-        status: "BOOKED",
-        location: "Karachi Hub",
-        description: "Shipment booked and verified.",
-        timestamp: new Date(Date.now() - 3600000 * 12).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "cons-3",
-    trackingId: "SPD-2026-000140",
-    biltyNumber: "SPD-LHR-2026-0035",
-    origin: "Lahore",
-    destination: "Peshawar",
-    warehouse: "LAHORE",
-    shipmentStatus: "DELIVERED",
-    senderName: "Lahore Auto Spares",
-    senderPhone: "0312 3456789",
-    receiverName: "Khyber Engineering Works",
-    receiverPhone: "0301 2345678",
-    packageDetails: "Industrial Machinery Parts & Lubricants",
-    quantity: 40,
-    weight: 2200,
-    driverName: "Rashid Ali",
-    vehicleNumber: "PMA-7102",
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    deliveryDate: new Date(Date.now() - 3600000 * 5).toISOString(),
-    trackingEvents: [
-      {
-        id: "te-31",
-        status: "DELIVERED",
-        location: "Peshawar Industrial Estate",
-        description: "Successfully handed over to recipient. Signatures collected.",
-        timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
-      },
-      {
-        id: "te-32",
-        status: "OUT_FOR_DELIVERY",
-        location: "Peshawar City Station",
-        description: "Out for final destination delivery.",
-        timestamp: new Date(Date.now() - 3600000 * 10).toISOString(),
-      },
-      {
-        id: "te-33",
-        status: "BOOKED",
-        location: "Lahore Hub",
-        description: "Bilty generated and booked.",
-        timestamp: new Date(Date.now() - 86400000 * 2).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "cons-4",
-    trackingId: "SPD-2026-000139",
-    biltyNumber: "SPD-MUL-2026-0012",
-    origin: "Multan",
-    destination: "Faisalabad",
-    warehouse: "MULTAN",
-    shipmentStatus: "BOOKED",
-    senderName: "Multan Mango & Fruits Cargo",
-    senderPhone: "0302 9876543",
-    receiverName: "Faisalabad Agro Cold Chain",
-    receiverPhone: "0322 1234567",
-    packageDetails: "Wooden Crates of Seasonal Produce",
-    quantity: 250,
-    weight: 5200,
-    driverName: "Zahid Qureshi",
-    vehicleNumber: "MN-9811",
-    createdAt: new Date(Date.now() - 3600000 * 3).toISOString(),
-    trackingEvents: [
-      {
-        id: "te-41",
-        status: "BOOKED",
-        location: "Multan Cargo Station",
-        description: "Bilty registered and shipment queued for vehicle loading.",
-        timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "cons-5",
-    trackingId: "SPD-2026-000138",
-    biltyNumber: "SPD-LHR-2026-0029",
-    origin: "Lahore",
-    destination: "Quetta",
-    warehouse: "LAHORE",
-    shipmentStatus: "IN_TRANSIT",
-    senderName: "Hafeez Center Electronics",
-    senderPhone: "0300 7654321",
-    receiverName: "Bolan IT Market Traders",
-    receiverPhone: "0331 4321098",
-    packageDetails: "Laptops & Network Hardware Boxes",
-    quantity: 65,
-    weight: 980,
-    driverName: "Gulzar Ahmad",
-    vehicleNumber: "LES-5541",
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    trackingEvents: [
-      {
-        id: "te-51",
-        status: "IN_TRANSIT",
-        location: "D.G. Khan Transit Station",
-        description: "Passing D.G. Khan checkpoint towards Fort Munro pass.",
-        timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
-      },
-      {
-        id: "te-52",
-        status: "BOOKED",
-        location: "Lahore Terminal",
-        description: "Shipment booked and loaded.",
-        timestamp: new Date(Date.now() - 3600000 * 24).toISOString(),
-      },
-    ],
-  },
-];
+const FALLBACK_CONSIGNMENTS: any[] = [];
 
 function AdminTrackingContent() {
   const router = useRouter();
@@ -385,27 +84,78 @@ function AdminTrackingContent() {
     }
   }, [selectedConsignment]);
 
-  // Load consignments from local storage and backend API
+  // Load consignments from live Supabase and local storage
   const loadData = async () => {
     setLoading(true);
     let items: any[] = [];
 
-    // 1. Try fetching from API
-    try {
-      const res = await fetch("/api/admin/bilty?limit=50");
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        items = data.data;
+    // 1. Direct Supabase query
+    if (isSupabaseConfigured) {
+      try {
+        const { data: sbBilties, error } = await supabase
+          .from("bilties")
+          .select("*")
+          .or("is_deleted.is.null,is_deleted.eq.false")
+          .order("created_at", { ascending: false });
+
+        if (!error && Array.isArray(sbBilties) && sbBilties.length > 0) {
+          items = sbBilties
+            .filter((b: any) => b.status !== "DELETED")
+            .map((b: any) => ({
+              id: b.id,
+              trackingId: b.tracking_id || b.bilty_number,
+              biltyNumber: b.bilty_number,
+              origin: b.origin_station || b.origin || "Lahore",
+              destination: b.destination_station || b.destination || "Karachi",
+              warehouse: b.origin_station || "LAHORE",
+              shipmentStatus: b.status || "BOOKED",
+              status: b.status || "BOOKED",
+              senderName: b.sender_name || "Sender",
+              senderPhone: b.sender_phone || "",
+              receiverName: b.receiver_name || "Receiver",
+              receiverPhone: b.receiver_phone || "",
+              packageDetails: b.item_description || b.package_details || "Consignment Packages",
+              packages: b.packages_count || b.pieces || 1,
+              totalAmount: b.freight_amount || b.total_freight || 0,
+              freight: b.freight_amount || 0,
+              weight: b.weight || "0 kg",
+              currentLocation: b.origin_station || "Terminal",
+              createdAt: b.created_at,
+              trackingEvents: b.tracking_events || [
+                {
+                  id: `te_${b.id}`,
+                  status: b.status || "BOOKED",
+                  location: `${b.origin_station || "Origin"} Hub`,
+                  description: "Shipment booked and registered in system.",
+                  timestamp: b.created_at,
+                },
+              ],
+            }));
+        }
+      } catch (sbErr) {
+        console.warn("Direct Supabase bilty query error in tracking:", sbErr);
       }
-    } catch (err) {
-      console.warn("API bilty query in tracking failed:", err);
     }
 
-    // 2. Read and merge local bilties & tracking store (ensures newly created bilties and updated statuses show immediately)
+    // 2. Try fetching from API if Supabase returned 0 items
+    if (items.length === 0) {
+      try {
+        const res = await fetch("/api/admin/bilty?limit=50");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          items = data.data;
+        }
+      } catch (err) {
+        console.warn("API bilty query in tracking failed:", err);
+      }
+    }
+
+    // 3. Read and merge local bilties & tracking store
     if (typeof window !== "undefined") {
       try {
         const localItems = getStoredBilties();
         for (const lb of localItems) {
+          if (lb.isDeleted || lb.status === "DELETED" || lb.shipmentStatus === "DELETED") continue;
           const idx = items.findIndex(
             (b) => b.id === lb.id || (lb.biltyNumber && b.biltyNumber === lb.biltyNumber)
           );
@@ -420,6 +170,7 @@ function AdminTrackingContent() {
         if (rawTracking) {
           const trackingItems: any[] = JSON.parse(rawTracking);
           for (const tb of trackingItems) {
+            if (tb.isDeleted || tb.status === "DELETED" || tb.shipmentStatus === "DELETED") continue;
             const idx = items.findIndex(
               (b) => b.id === tb.id || (tb.biltyNumber && b.biltyNumber === tb.biltyNumber) || (tb.trackingId && b.trackingId === tb.trackingId)
             );
@@ -435,6 +186,7 @@ function AdminTrackingContent() {
         if (rawDeliveries) {
           const deliveryItems: any[] = JSON.parse(rawDeliveries);
           for (const db of deliveryItems) {
+            if (db.isDeleted || db.status === "DELETED" || db.shipmentStatus === "DELETED") continue;
             const idx = items.findIndex(
               (b) => b.id === db.id || (db.biltyNumber && b.biltyNumber === db.biltyNumber) || (db.trackingId && b.trackingId === db.trackingId)
             );
@@ -450,21 +202,53 @@ function AdminTrackingContent() {
       }
     }
 
-    // 3. Ensure fallback consignments (e.g. seeded SPD-2026-00101/102/103) are always present
-    for (const fb of FALLBACK_CONSIGNMENTS) {
-      const idx = items.findIndex(
-        (b) => b.id === fb.id || b.biltyNumber === fb.biltyNumber || (fb.trackingId && b.trackingId === fb.trackingId)
-      );
-      if (idx === -1) {
-        items.push(fb);
-      }
-    }
-
     // Filter out deleted
-    items = items.filter((b) => b.shipmentStatus !== "DELETED");
+    items = items.filter((b) => !b.isDeleted && b.shipmentStatus !== "DELETED" && b.status !== "DELETED");
 
     setConsignments(items);
     setLoading(false);
+  };
+
+  const handleDeleteConsignment = async (c: any) => {
+    if (!c) return;
+    const confirmDelete = window.confirm(
+      `Are you sure you want to move Bilty/Tracking ${c.trackingId || c.biltyNumber || c.id} to the Recycle Bin?`
+    );
+    if (!confirmDelete) return;
+
+    // 1. Move to local trash store
+    moveToTrash("bilty", c);
+    removeLocalBilty(c.id);
+
+    // 2. Direct Supabase soft-delete
+    if (isSupabaseConfigured) {
+      try {
+        await supabase
+          .from("bilties")
+          .update({
+            is_deleted: true,
+            deleted_at: new Date().toISOString(),
+            status: "DELETED",
+          })
+          .or(`id.eq.${c.id},bilty_number.eq.${c.biltyNumber || c.id}`);
+      } catch (sbErr) {
+        console.warn("Supabase tracking delete error:", sbErr);
+      }
+    }
+
+    // 3. Call backend API delete
+    try {
+      await fetch(`/api/admin/bilty?id=${encodeURIComponent(c.id)}`, { method: "DELETE" });
+    } catch (apiErr) {
+      console.warn("API tracking delete error:", apiErr);
+    }
+
+    // 4. Update state
+    setConsignments((prev) => prev.filter((item) => item.id !== c.id && item.biltyNumber !== c.biltyNumber));
+    if (selectedConsignment?.id === c.id) {
+      setSelectedConsignment(null);
+    }
+    toast.success(`Consignment ${c.trackingId || c.biltyNumber || c.id} moved to Recycle Bin.`);
   };
 
   const handleSaveStatus = (e: React.FormEvent) => {
@@ -788,6 +572,16 @@ function AdminTrackingContent() {
                         <ExternalLink className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">Track Portal</span>
                       </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteConsignment(c)}
+                      title="Move to Recycle Bin"
+                      className="rounded-xl text-xs font-semibold text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Delete</span>
                     </Button>
                   </div>
                 </div>

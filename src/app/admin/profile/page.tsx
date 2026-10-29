@@ -176,19 +176,32 @@ function AdminProfileContent() {
       // Check Supabase directly first if available
       if (isSupabaseConfigured) {
         try {
+          let cloudAvatar: string | null = null;
+          try {
+            const { data: settingData } = await supabase
+              .from("system_settings")
+              .select("value")
+              .eq("key", "admin_avatar_url")
+              .maybeSingle();
+            if (settingData?.value) {
+              cloudAvatar = settingData.value;
+            }
+          } catch {}
+
           const { data: sbUser } = await supabase
             .from("users")
             .select("*")
             .eq("role", "SUPER_ADMIN")
             .maybeSingle();
-          if (sbUser) {
-            const activePic = sbUser.avatar_url || sbUser.avatar || null;
+
+          const activePic = cloudAvatar || sbUser?.avatar_url || sbUser?.avatar || null;
+          if (sbUser || activePic) {
             const merged = {
               ...localUser,
-              fullName: sbUser.name || localUser.fullName || "System Admin",
-              name: sbUser.name || localUser.name || "System Admin",
-              email: sbUser.email || localUser.email || "admin@gmail.com",
-              phone: sbUser.phone || localUser.phone || "0325 2024433",
+              fullName: sbUser?.name || localUser.fullName || "System Admin",
+              name: sbUser?.name || localUser.name || "System Admin",
+              email: sbUser?.email || localUser.email || "admin@gmail.com",
+              phone: sbUser?.phone || localUser.phone || "0325 2024433",
               avatar: activePic,
             };
             setUser(merged);
@@ -291,6 +304,15 @@ function AdminProfileContent() {
       const finalAvatarUrl = publicUrlData?.publicUrl;
       if (!finalAvatarUrl) {
         throw new Error("Failed to retrieve public URL from cloud storage.");
+      }
+
+      // Save persistent public URL to Supabase system_settings table
+      try {
+        await supabase
+          .from("system_settings")
+          .upsert({ key: "admin_avatar_url", value: finalAvatarUrl });
+      } catch (settingErr) {
+        console.warn("Supabase system_settings upsert notice:", settingErr);
       }
 
       // Update Supabase users table

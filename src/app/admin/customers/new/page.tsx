@@ -104,12 +104,6 @@ export default function NewCustomerPage() {
       setFormError("Customer / Dealer Name is required.");
       return;
     }
-    if (!formData.phone.trim()) {
-      console.log("[NewCustomer] Validation warning: Phone number is missing");
-      setFormError("Phone number is required.");
-      return;
-    }
-
     // Client-side deduplication check before proceeding
     const normPhone = formData.phone.trim().replace(/[^0-9]/g, "");
     const normName = formData.name.trim().toLowerCase();
@@ -119,7 +113,7 @@ export default function NewCustomerPage() {
       const cName = (c.name || "").trim().toLowerCase();
       const phoneMatch = normPhone.length >= 7 && cPhone.length >= 7 && normPhone === cPhone;
       const nameMatch = normName.length > 1 && normName === cName;
-      return phoneMatch || nameMatch;
+      return (normPhone.length >= 7 && phoneMatch) || nameMatch;
     });
 
     if (existingCust) {
@@ -515,11 +509,11 @@ export default function NewCustomerPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
-                Phone Number *
+                Phone Number (Optional)
               </Label>
               <Input
-                required
                 value={formData.phone}
+                placeholder="0300 1234567"
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className="rounded-xl h-10 text-xs"
               />

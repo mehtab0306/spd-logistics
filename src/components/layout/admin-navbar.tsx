@@ -56,6 +56,20 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
     const fetchUser = async () => {
       if (isSupabaseConfigured) {
         try {
+          const { data: settingData } = await supabase
+            .from("system_settings")
+            .select("value")
+            .eq("key", "admin_avatar_url")
+            .maybeSingle();
+          if (settingData?.value) {
+            setCurrentUser((prev: any) => ({
+              ...(prev || {}),
+              avatar: settingData.value,
+            }));
+          }
+        } catch {}
+
+        try {
           const { data: sbUser } = await supabase
             .from("users")
             .select("name, email, role, avatar, avatar_url")
@@ -63,15 +77,13 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
             .maybeSingle();
           if (sbUser) {
             const avatarUrl = sbUser.avatar_url || sbUser.avatar || null;
-            if (avatarUrl) {
-              setCurrentUser((prev: any) => ({
-                ...(prev || {}),
-                name: sbUser.name || prev?.name || "System Admin",
-                email: sbUser.email || prev?.email || "admin@gmail.com",
-                role: sbUser.role || "SUPER_ADMIN",
-                avatar: avatarUrl,
-              }));
-            }
+            setCurrentUser((prev: any) => ({
+              ...(prev || {}),
+              name: sbUser.name || prev?.name || "System Admin",
+              email: sbUser.email || prev?.email || "admin@gmail.com",
+              role: sbUser.role || "SUPER_ADMIN",
+              avatar: prev?.avatar || avatarUrl,
+            }));
           }
         } catch {}
       }

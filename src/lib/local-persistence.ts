@@ -569,6 +569,8 @@ export function removeStoredBilty(id: string, recordToTrash?: any): any[] {
   return list;
 }
 
+export const removeLocalBilty = removeStoredBilty;
+
 // ==========================================
 // 3. DRIVERS (`spd_drivers` & `spd_local_drivers`)
 // ==========================================

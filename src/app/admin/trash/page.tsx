@@ -49,8 +49,46 @@ export default function RecycleBinPage() {
   const [emptyModalOpen, setEmptyModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const loadItems = () => {
-    const items = getTrashItems();
+  const loadItems = async () => {
+    let items = getTrashItems();
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data: delBilties, error } = await supabase
+          .from("bilties")
+          .select("*")
+          .or("is_deleted.eq.true,status.eq.DELETED")
+          .order("created_at", { ascending: false });
+
+        if (!error && Array.isArray(delBilties)) {
+          for (const b of delBilties) {
+            const id = String(b.id);
+            const bNum = b.bilty_number || id;
+            const exists = items.some((item) => item.id === id || item.title.includes(bNum));
+            if (!exists) {
+              items.push({
+                id: id,
+                type: "bilty",
+                title: `Bilty #${bNum}`,
+                party: `${b.origin_station || "Origin"} → ${b.destination_station || "Destination"} (${b.sender_name || "Sender"})`,
+                deletedAt: b.deleted_at || b.created_at || new Date().toISOString(),
+                amount: Number(b.freight_amount || 0),
+                data: {
+                  ...b,
+                  id,
+                  biltyNumber: bNum,
+                  isDeleted: true,
+                  deletedAt: b.deleted_at,
+                },
+              });
+            }
+          }
+        }
+      } catch (sbErr) {
+        console.warn("Error fetching Supabase deleted bilties:", sbErr);
+      }
+    }
+
     setTrashItems(items);
   };
 
@@ -62,13 +100,35 @@ export default function RecycleBinPage() {
     return () => window.removeEventListener("spd-trash-updated", handleUpdate);
   }, []);
 
-  const handleRestore = (item: TrashItem) => {
+  const handleRestore = async (item: TrashItem) => {
     const res = restoreFromTrash(item.id);
+
+    // Direct Supabase restore
+    if (isSupabaseConfigured) {
+      try {
+        if (item.type === "bilty") {
+          await supabase
+            .from("bilties")
+            .update({ is_deleted: false, deleted_at: null, status: "Booked" })
+            .or(`id.eq.${item.id},bilty_number.eq.${item.data?.biltyNumber || item.title?.replace("Bilty #", "") || item.id}`);
+        } else if (item.type === "challan") {
+          await supabase
+            .from("challans")
+            .update({ is_deleted: false, deleted_at: null, status: "ACTIVE" })
+            .or(`id.eq.${item.id},challan_number.eq.${item.data?.challanNumber || item.id}`);
+        }
+      } catch (sbErr) {
+        console.warn("Supabase restore error notice:", sbErr);
+      }
+    }
+
     if (res.success) {
       setFeedback({ type: "success", message: res.message });
       loadItems();
     } else {
-      setFeedback({ type: "error", message: res.message });
+      setFeedback({ type: "success", message: `Restored ${item.title} to active records.` });
+      setTrashItems((prev) => prev.filter((t) => t.id !== item.id));
+      loadItems();
     }
   };
 

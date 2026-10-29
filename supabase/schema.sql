@@ -33,6 +33,8 @@ create table if not exists bilties (
   payment_status text default 'PENDING',
   vehicle_number text,
   driver_name text,
+  is_deleted boolean default false,
+  deleted_at timestamptz,
   created_at timestamptz default now()
 );
 
@@ -173,6 +175,13 @@ create table if not exists users (
   created_at timestamptz default now()
 );
 
+-- 12. SYSTEM SETTINGS TABLE (Cloud settings & global configurations)
+create table if not exists system_settings (
+  key text primary key,
+  value text,
+  updated_at timestamptz default now()
+);
+
 -- Disable Row Level Security (RLS) for seamless instant sync across all client devices
 alter table bilties disable row level security;
 alter table customers disable row level security;
@@ -186,6 +195,7 @@ alter table payables disable row level security;
 alter table deliveries disable row level security;
 alter table notifications disable row level security;
 alter table users disable row level security;
+alter table system_settings disable row level security;
 
 -- Setup Supabase Storage Bucket for Profile Avatars
 insert into storage.buckets (id, name, public)

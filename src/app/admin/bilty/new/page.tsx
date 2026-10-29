@@ -394,9 +394,9 @@ export default function NewBiltyPage() {
         id: `cust-${Date.now()}`,
         name: quickCustomerData.name.trim(),
         companyName: quickCustomerData.name.trim(),
-        phone: quickCustomerData.phone.trim() || "0300-0000000",
-        city: quickCustomerData.city || "Pakistan",
-        address: quickCustomerData.address.trim() || `${quickCustomerData.city}, Pakistan`,
+        phone: quickCustomerData.phone.trim() || null,
+        city: quickCustomerData.city || null,
+        address: quickCustomerData.address.trim() || null,
         ntn: quickCustomerData.ntn.trim() || null,
         strn: quickCustomerData.strn.trim() || null,
         balance: 0,
@@ -406,15 +406,16 @@ export default function NewBiltyPage() {
       saveStoredCustomer(newCust);
       setCustomers((prev) => [newCust, ...prev]);
 
-      // Supabase cloud customer upsert
+      // Supabase cloud customer upsert (only name mandatory)
       if (isSupabaseConfigured) {
         try {
           await supabase.from("customers").upsert([
             {
               id: newCust.id,
               name: newCust.name,
-              phone: newCust.phone,
-              city: newCust.city,
+              phone: newCust.phone || null,
+              city: newCust.city || null,
+              address: newCust.address || null,
             },
           ]);
         } catch (sbErr) {
@@ -427,16 +428,16 @@ export default function NewBiltyPage() {
           ...prev,
           customerId: newCust.id,
           senderName: newCust.name,
-          senderPhone: newCust.phone,
-          senderAddress: newCust.address,
+          senderPhone: newCust.phone || "",
+          senderAddress: newCust.address || "",
           senderNtn: newCust.ntn || "",
         }));
       } else {
         setFormData((prev) => ({
           ...prev,
           receiverName: newCust.name,
-          receiverPhone: newCust.phone,
-          receiverAddress: newCust.address,
+          receiverPhone: newCust.phone || "",
+          receiverAddress: newCust.address || "",
           receiverNtn: newCust.ntn || "",
         }));
       }
@@ -2268,11 +2269,10 @@ export default function NewBiltyPage() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs font-bold">Mobile / Phone Number *</Label>
+              <Label className="text-xs font-bold">Mobile / Phone Number (Optional)</Label>
               <Input
-                required
                 value={quickCustomerData.phone}
-                placeholder=""
+                placeholder="0300 1234567"
                 onChange={(e) => setQuickCustomerData({ ...quickCustomerData, phone: e.target.value })}
                 className="rounded-xl h-9 text-xs font-mono"
               />
@@ -2280,12 +2280,12 @@ export default function NewBiltyPage() {
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label className="text-xs font-bold">City *</Label>
+                <Label className="text-xs font-bold">City (Optional)</Label>
                 <HybridCombobox
                   value={quickCustomerData.city}
                   onChange={(val) => setQuickCustomerData({ ...quickCustomerData, city: val })}
                   options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
-                  placeholder=""
+                  placeholder="Select or enter city"
                   inputClassName="h-9 rounded-xl font-semibold text-xs"
                 />
               </div>

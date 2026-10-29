@@ -85,6 +85,20 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     const fetchUser = async () => {
       if (isSupabaseConfigured) {
         try {
+          const { data: settingData } = await supabase
+            .from("system_settings")
+            .select("value")
+            .eq("key", "admin_avatar_url")
+            .maybeSingle();
+          if (settingData?.value) {
+            setCurrentUser((prev: any) => ({
+              ...(prev || {}),
+              avatar: settingData.value,
+            }));
+          }
+        } catch {}
+
+        try {
           const { data: sbUser } = await supabase
             .from("users")
             .select("name, email, role, avatar, avatar_url")
@@ -92,15 +106,13 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
             .maybeSingle();
           if (sbUser) {
             const avatarUrl = sbUser.avatar_url || sbUser.avatar || null;
-            if (avatarUrl || sbUser.name) {
-              setCurrentUser((prev: any) => ({
-                ...(prev || {}),
-                name: sbUser.name || prev?.name || "System Admin",
-                email: sbUser.email || prev?.email || "admin@spd.com",
-                role: sbUser.role || "SUPER_ADMIN",
-                avatar: avatarUrl || prev?.avatar,
-              }));
-            }
+            setCurrentUser((prev: any) => ({
+              ...(prev || {}),
+              name: sbUser.name || prev?.name || "System Admin",
+              email: sbUser.email || prev?.email || "admin@spd.com",
+              role: sbUser.role || "SUPER_ADMIN",
+              avatar: prev?.avatar || avatarUrl,
+            }));
           }
         } catch {}
       }

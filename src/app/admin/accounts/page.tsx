@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import {
   Table,
   TableBody,
@@ -224,17 +225,40 @@ export default function AccountsPage() {
       } catch {}
       setCustomers(custList);
 
-      // 3. Read LocalStorage accounts
+      // 3. Read LocalStorage accounts (sanitize any legacy mock accounts)
+      const FAKE_MOCK_NAMES = ["crescent textile", "packages limited", "al-karam towel", "national steel traders"];
+      const FAKE_MOCK_IDS = ["acc-1", "acc-2", "acc-3", "acc-4"];
+
       let localAccounts: any[] = [];
       try {
         const rawAcc = localStorage.getItem(LOCAL_ACCOUNTS_KEY);
-        if (rawAcc) localAccounts = JSON.parse(rawAcc);
+        if (rawAcc) {
+          const parsed = JSON.parse(rawAcc);
+          localAccounts = (Array.isArray(parsed) ? parsed : []).filter((a: any) => {
+            const name = (a.accountName || "").toLowerCase();
+            const id = String(a.id || "").toLowerCase();
+            return !FAKE_MOCK_IDS.includes(id) && !FAKE_MOCK_NAMES.some((fn) => name.includes(fn));
+          });
+          localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(localAccounts));
+        }
       } catch {}
 
-      // Combine base and local accounts
+      // Combine base and local accounts, purging any mock accounts
       const allAccMap = new Map<string, any>();
-      for (const a of baseAccounts) allAccMap.set(a.id, a);
-      for (const la of localAccounts) allAccMap.set(la.id, { ...allAccMap.get(la.id), ...la });
+      for (const a of baseAccounts) {
+        const name = (a.accountName || "").toLowerCase();
+        const id = String(a.id || "").toLowerCase();
+        if (!FAKE_MOCK_IDS.includes(id) && !FAKE_MOCK_NAMES.some((fn) => name.includes(fn))) {
+          allAccMap.set(a.id, a);
+        }
+      }
+      for (const la of localAccounts) {
+        const name = (la.accountName || "").toLowerCase();
+        const id = String(la.id || "").toLowerCase();
+        if (!FAKE_MOCK_IDS.includes(id) && !FAKE_MOCK_NAMES.some((fn) => name.includes(fn))) {
+          allAccMap.set(la.id, { ...allAccMap.get(la.id), ...la });
+        }
+      }
 
       let combinedAccounts = Array.from(allAccMap.values());
 
@@ -483,28 +507,7 @@ export default function AccountsPage() {
           });
         }
 
-        // If no dynamic transactions were added, keep initial API demo transactions
-        if (txList.length === (runningBalance !== 0 ? 1 : 0) && acc.transactions && acc.transactions.length > 0) {
-          let demoBal = Number(acc.openingBalance) || 0;
-          for (const d of acc.transactions) {
-            const deb = Number(d.debit) || 0;
-            const crd = Number(d.credit) || 0;
-            demoBal = demoBal + deb - crd;
-            txList.push({
-              id: d.id,
-              date: d.date,
-              voucherNumber: d.voucherNumber || "VCH",
-              description: d.description,
-              debit: deb,
-              credit: crd,
-              balance: demoBal,
-              paymentMethod: d.paymentMethod,
-              reference: d.reference,
-              source: "MANUAL",
-            });
-          }
-          runningBalance = demoBal;
-        }
+
 
         // Sort transactions chronologically
         txList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -1158,11 +1161,32 @@ export default function AccountsPage() {
               </TableRow>
             ) : filteredAccounts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-xs text-slate-400">
-                  <div className="space-y-1">
-                    <BookOpen className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-1" />
-                    <p className="font-bold text-slate-700 dark:text-slate-300">No accounts match the criteria</p>
-                    <p className="text-[11px]">Try clearing your search terms or create a new ledger account above.</p>
+                <TableCell colSpan={7} className="h-44 text-center text-xs text-slate-400">
+                  <div className="space-y-2 max-w-sm mx-auto p-4">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 mx-auto flex items-center justify-center text-slate-400">
+                      <BookOpen className="w-6 h-6 text-spd-blue" />
+                    </div>
+                    <p className="font-bold text-sm text-slate-800 dark:text-slate-200">No Accounts Found</p>
+                    <p className="text-xs text-slate-500">Create an account or booking to view ledger.</p>
+                    <div className="pt-2 flex justify-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => setCreateAccountOpen(true)}
+                        className="bg-spd-blue hover:bg-spd-blue/90 text-white font-bold text-xs rounded-xl h-8 px-3 gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Create Account</span>
+                      </Button>
+                      <Link href="/admin/bilty/new">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="font-bold text-xs rounded-xl h-8 px-3 gap-1.5 border-slate-300 dark:border-slate-700"
+                        >
+                          <span>New Bilty Booking</span>
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </TableCell>
               </TableRow>

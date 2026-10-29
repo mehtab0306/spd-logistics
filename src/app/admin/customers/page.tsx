@@ -414,11 +414,6 @@ export default function CustomersPage() {
       return;
     }
 
-    if (!customerForm.phone.trim()) {
-      setFormError("Customer phone number is required.");
-      return;
-    }
-
     // Deduplication check for newly added customers
     if (!editingCustomer) {
       const normPhone = (customerForm.phone || "").replace(/[^0-9]/g, "");
@@ -427,10 +422,9 @@ export default function CustomersPage() {
         if (!c || c.status === "DELETED") return false;
         const cPhone = (c.phone || "").replace(/[^0-9]/g, "");
         const cName = (c.name || "").trim().toLowerCase();
-        return (
-          (normPhone.length >= 7 && cPhone.length >= 7 && normPhone === cPhone) ||
-          (normName.length > 1 && normName === cName)
-        );
+        const phoneMatch = normPhone.length >= 7 && cPhone.length >= 7 && normPhone === cPhone;
+        const nameMatch = normName.length > 1 && normName === cName;
+        return (normPhone.length >= 7 && phoneMatch) || nameMatch;
       });
 
       if (alreadyExists) {
