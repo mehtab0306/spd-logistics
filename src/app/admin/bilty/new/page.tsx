@@ -137,9 +137,9 @@ export default function NewBiltyPage() {
     manualBiltyNumber: "",
     trackingId: "",
     date: new Date().toISOString().slice(0, 10),
-    warehouse: "LAHORE",
-    origin: "Lahore",
-    destination: "Karachi",
+    warehouse: "KARACHI",
+    origin: "Karachi",
+    destination: "Lahore",
 
     // Parties
     customerId: "",
@@ -196,7 +196,7 @@ export default function NewBiltyPage() {
       if (!prev.biltyNumber) {
         return {
           ...prev,
-          biltyNumber: generateBiltyNumberCandidate(prev.origin || "Lahore"),
+          biltyNumber: generateBiltyNumberCandidate(prev.origin || "Karachi"),
         };
       }
       return prev;
@@ -446,7 +446,7 @@ export default function NewBiltyPage() {
       setQuickCustomerData({
         name: "",
         phone: "",
-        city: "Lahore",
+        city: "Karachi",
         address: "",
         ntn: "",
         strn: "",
@@ -615,7 +615,7 @@ export default function NewBiltyPage() {
   };
 
   const handleResetFormForNewBilty = () => {
-    const nextBiltyNo = generateBiltyNumberCandidate(formData.origin || "Lahore");
+    const nextBiltyNo = generateBiltyNumberCandidate(formData.origin || "Karachi");
     setFormData({
       billTo: "Sender",
       amountType: "To Pay",
@@ -624,9 +624,9 @@ export default function NewBiltyPage() {
       manualBiltyNumber: "",
       trackingId: `SPD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
       date: new Date().toISOString().slice(0, 10),
-      warehouse: formData.origin?.toUpperCase().includes("KARACHI") ? "KARACHI" : "LAHORE",
-      origin: formData.origin || "Lahore",
-      destination: formData.destination || "Karachi",
+      warehouse: formData.origin?.toUpperCase().includes("LAHORE") ? "LAHORE" : "KARACHI",
+      origin: formData.origin || "Karachi",
+      destination: formData.destination || "Lahore",
       customerId: "",
       senderName: "",
       senderPhone: "",
@@ -699,12 +699,6 @@ export default function NewBiltyPage() {
       toast.error(err);
       return;
     }
-    if (!formData.receiverPhone.trim()) {
-      const err = "Receiver mobile phone number is required.";
-      setFormError(err);
-      toast.error(err);
-      return;
-    }
     if (!formData.origin.trim() || !formData.destination.trim()) {
       const err = "Origin and Destination routes are required.";
       setFormError(err);
@@ -725,7 +719,7 @@ export default function NewBiltyPage() {
       const manualInput = (formData.manualBiltyNumber || "").trim();
       const standardInput = (formData.biltyNumber || "").trim();
       // If user entered a manual bilty number (e.g. 5040 or SPD-5040), save that exact string
-      const finalBiltyNumber = manualInput || standardInput || generateBiltyNumberCandidate(formData.origin || "Lahore");
+      const finalBiltyNumber = manualInput || standardInput || generateBiltyNumberCandidate(formData.origin || "Karachi");
       const manualBiltyNumberToSave = manualInput || finalBiltyNumber;
 
       const finalTrackingId =
@@ -784,9 +778,9 @@ export default function NewBiltyPage() {
         deliveryAddress: formData.deliveryAddress.trim() || formData.receiverAddress.trim(),
 
         // Route
-        origin: formData.origin?.trim() || "Lahore",
-        destination: formData.destination?.trim() || "Karachi",
-        warehouse: formData.warehouse || (formData.origin.toUpperCase().includes("KARACHI") ? "KARACHI" : "LAHORE"),
+        origin: formData.origin?.trim() || "Karachi",
+        destination: formData.destination?.trim() || "Lahore",
+        warehouse: formData.warehouse || (formData.origin.toUpperCase().includes("LAHORE") ? "LAHORE" : "KARACHI"),
 
         // Cargo Details (MUST NOT BE DROPPED)
         itemDescription: itemDesc,
@@ -897,8 +891,8 @@ export default function NewBiltyPage() {
           manual_bilty_number: manualBiltyNumberToSave,
           sender_name: (newBiltyRecord.senderName || "Walk-in Shipper").trim(),
           receiver_name: (newBiltyRecord.receiverName || "Consignee").trim(),
-          origin_station: (newBiltyRecord.origin || "Lahore").trim(),
-          destination_station: (newBiltyRecord.destination || "Karachi").trim(),
+          origin_station: (newBiltyRecord.origin || "Karachi").trim(),
+          destination_station: (newBiltyRecord.destination || "Lahore").trim(),
           freight_amount: Number(newBiltyRecord.totalFreight) || 0,
           advance_paid: Number(newBiltyRecord.paidAmount) || 0,
           remaining_balance: Math.max(0, (Number(newBiltyRecord.totalFreight) || 0) - (Number(newBiltyRecord.paidAmount) || 0)),
@@ -1186,7 +1180,7 @@ export default function NewBiltyPage() {
                 setFormData({
                   ...formData,
                   manualBiltyNumber: val,
-                  biltyNumber: val ? val.toUpperCase() : generateBiltyNumberCandidate(formData.origin || "Lahore"),
+                  biltyNumber: val ? val.toUpperCase() : generateBiltyNumberCandidate(formData.origin || "Karachi"),
                 });
               }}
               className="rounded-xl h-10 text-xs font-mono tracking-wider font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:border-red-500"
@@ -1417,10 +1411,9 @@ export default function NewBiltyPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Sender Phone *
+                Sender Phone (Optional)
               </Label>
               <Input
-                required
                 value={formData.senderPhone}
                 placeholder=""
                 onChange={(e) => setFormData({ ...formData, senderPhone: e.target.value })}
@@ -1502,10 +1495,9 @@ export default function NewBiltyPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Receiver Phone *
+                Receiver Phone (Optional)
               </Label>
               <Input
-                required
                 value={formData.receiverPhone}
                 placeholder=""
                 onChange={(e) => setFormData({ ...formData, receiverPhone: e.target.value })}

@@ -274,8 +274,8 @@ export const PAGINATION = {
 
 // Clean Pakistan Transport Stations / Cities (NO "Hub" or "Terminal" technical jargon)
 export const PAKISTAN_CITIES = [
-  'Lahore',
   'Karachi',
+  'Lahore',
   'Rawalpindi',
   'Islamabad',
   'Faisalabad',

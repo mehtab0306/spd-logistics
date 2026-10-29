@@ -187,8 +187,8 @@ export default function AdminDashboard() {
       const formattedRecent = biltiesList.slice(0, 6).map((c: any) => ({
         id: c.id || c.bilty_number || c.biltyNumber,
         biltyNumber: c.bilty_number || c.biltyNumber || c.id,
-        origin: c.origin_station || c.origin || "Lahore",
-        destination: c.destination_station || c.destination || "Karachi",
+        origin: c.origin_station || c.origin || "Karachi",
+        destination: c.destination_station || c.destination || "Lahore",
         senderName: c.sender_name || c.senderName || "Walk-in Customer",
         customerName: c.customer?.companyName || c.sender_name || c.senderName || "Walk-in Customer",
         totalAmount: Number(c.freight_amount ?? c.total_freight ?? c.totalFreight ?? c.totalAmount ?? 0),
@@ -376,6 +376,24 @@ export default function AdminDashboard() {
           </div>
 
           <div className="space-y-4">
+            {/* Karachi Hub (Head Office) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-spd-blue" />
+                  Karachi South Hub (Port & Transport Nagar - Head Office)
+                </span>
+                <span className="text-slate-900 dark:text-white">{karachiCount} ({karachiPct}%)</span>
+              </div>
+              <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.max(5, karachiPct)}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-slate-400">Head Office & primary gateway hub for Sindh, coastal, and shipping terminal cargo.</p>
+            </div>
+
             {/* Lahore Hub */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs font-bold">
@@ -391,36 +409,18 @@ export default function AdminDashboard() {
                   style={{ width: `${Math.max(5, lahorePct)}%` }}
                 />
               </div>
-              <p className="text-[11px] text-slate-400">Main hub for Punjab and Northern dispatch operations.</p>
-            </div>
-
-            {/* Karachi Hub */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-spd-blue" />
-                  Karachi South Hub (Port & Transport Nagar)
-                </span>
-                <span className="text-slate-900 dark:text-white">{karachiCount} ({karachiPct}%)</span>
-              </div>
-              <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.max(5, karachiPct)}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-slate-400">Gateway hub for Sindh, coastal, and shipping terminal cargo.</p>
+              <p className="text-[11px] text-slate-400">Regional hub for Punjab and Northern dispatch operations.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 pt-2">
+            <Link href="/admin/cash-books" className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 hover:border-spd-blue/40 transition-colors">
+              <p className="text-[11px] font-bold text-slate-400 uppercase">Hammad Cash Book</p>
+              <p className="text-sm font-black text-slate-900 dark:text-white mt-0.5">Karachi Office (Head Office)</p>
+            </Link>
             <Link href="/admin/cash-books" className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 hover:border-spd-red/40 transition-colors">
               <p className="text-[11px] font-bold text-slate-400 uppercase">Hammad Cash Book</p>
               <p className="text-sm font-black text-slate-900 dark:text-white mt-0.5">Lahore Office</p>
-            </Link>
-            <Link href="/admin/cash-books" className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 hover:border-spd-blue/40 transition-colors">
-              <p className="text-[11px] font-bold text-slate-400 uppercase">Hammad Cash Book</p>
-              <p className="text-sm font-black text-slate-900 dark:text-white mt-0.5">Karachi Office</p>
             </Link>
           </div>
         </div>

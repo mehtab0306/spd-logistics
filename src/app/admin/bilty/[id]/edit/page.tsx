@@ -118,9 +118,9 @@ export default function EditBiltyPage() {
     biltyNumber: "",
     trackingId: "",
     date: new Date().toISOString().slice(0, 10),
-    warehouse: "LAHORE",
-    origin: "Lahore",
-    destination: "Karachi",
+    warehouse: "KARACHI",
+    origin: "Karachi",
+    destination: "Lahore",
 
     customerId: "",
     senderName: "",
@@ -669,8 +669,8 @@ export default function EditBiltyPage() {
           bilty_number: (updatedRecord.biltyNumber || biltyId).trim(),
           sender_name: (updatedRecord.senderName || "Walk-in Shipper").trim(),
           receiver_name: (updatedRecord.receiverName || "Consignee").trim(),
-          origin_station: (updatedRecord.origin || "Lahore").trim(),
-          destination_station: (updatedRecord.destination || "Karachi").trim(),
+          origin_station: (updatedRecord.origin || "Karachi").trim(),
+          destination_station: (updatedRecord.destination || "Lahore").trim(),
           freight_amount: Number(updatedRecord.totalFreight) || 0,
           advance_paid: Number(updatedRecord.paidAmount) || 0,
           remaining_balance: Math.max(0, (Number(updatedRecord.totalFreight) || 0) - (Number(updatedRecord.paidAmount) || 0)),
@@ -1019,10 +1019,9 @@ export default function EditBiltyPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Sender Phone *
+                Sender Phone (Optional)
               </Label>
               <Input
-                required
                 value={formData.senderPhone}
                 placeholder=""
                 onChange={(e) => setFormData({ ...formData, senderPhone: e.target.value })}
@@ -1090,10 +1089,9 @@ export default function EditBiltyPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Receiver Phone *
+                Receiver Phone (Optional)
               </Label>
               <Input
-                required
                 value={formData.receiverPhone}
                 placeholder=""
                 onChange={(e) => setFormData({ ...formData, receiverPhone: e.target.value })}

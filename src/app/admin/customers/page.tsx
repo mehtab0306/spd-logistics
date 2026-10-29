@@ -114,8 +114,8 @@ export default function CustomersPage() {
     cnic: "",
     businessRef: "",
     address: "",
-    city: "Lahore",
-    warehouse: "LAHORE",
+    city: "Karachi",
+    warehouse: "KARACHI",
     creditLimit: "",
     openingBalance: "0",
     photo: "",
@@ -150,8 +150,8 @@ export default function CustomersPage() {
       cnic: c.cnic || "",
       businessRef: c.businessRef || "",
       address: c.address || "",
-      city: c.city || "Lahore",
-      warehouse: c.warehouse || "LAHORE",
+      city: c.city || "Karachi",
+      warehouse: c.warehouse || "KARACHI",
       creditLimit: c.creditLimit !== null && c.creditLimit !== undefined ? String(c.creditLimit) : "",
       openingBalance: c.openingBalance !== null && c.openingBalance !== undefined ? String(c.openingBalance) : "0",
       photo: photoUrl,
@@ -517,8 +517,8 @@ export default function CustomersPage() {
           cnic: customerForm.cnic?.trim() || null,
           businessRef: customerForm.businessRef?.trim() || null,
           address: customerForm.address?.trim() || null,
-          city: customerForm.city?.trim() || "Lahore",
-          warehouse: customerForm.warehouse || "LAHORE",
+          city: customerForm.city?.trim() || "Karachi",
+          warehouse: customerForm.warehouse || "KARACHI",
           creditLimit: credLim,
           openingBalance: openBal,
           photo: finalPhotoUrl || null,
@@ -719,8 +719,8 @@ export default function CustomersPage() {
       "WhatsApp": c.whatsapp || c.phone || "",
       "Email / Login": c.email || "",
       "CNIC / NTN": c.cnic || "",
-      "City": c.city || "Lahore",
-      "Warehouse Station": c.warehouse || "LAHORE",
+      "City": c.city || "Karachi",
+      "Warehouse Station": c.warehouse || "KARACHI",
       "Address": c.address || "",
       "Status": c.status || "ACTIVE",
       "Opening Balance (PKR)": c.openingBalance || 0,
@@ -804,8 +804,8 @@ export default function CustomersPage() {
             className="flex-1 sm:flex-initial h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]"
           >
             <option value="">All Warehouses</option>
+            <option value="KARACHI">Karachi Hub (Head Office)</option>
             <option value="LAHORE">Lahore Hub</option>
-            <option value="KARACHI">Karachi Hub</option>
           </select>
 
           <select
@@ -929,7 +929,7 @@ export default function CustomersPage() {
                             : "bg-red-100 dark:bg-red-950/70 text-spd-red"
                         }`}
                       >
-                        {c.warehouse || "LAHORE"}
+                        {c.warehouse || "KARACHI"}
                       </span>
                       <span className="text-xs text-slate-500">{c.city}</span>
                     </div>

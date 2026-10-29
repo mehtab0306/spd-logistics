@@ -373,9 +373,6 @@ export async function POST(request: Request) {
     if (!receiverName || !String(receiverName).trim()) {
       return NextResponse.json({ success: false, error: 'Receiver name is required' }, { status: 400 });
     }
-    if (!receiverPhone || !String(receiverPhone).trim()) {
-      return NextResponse.json({ success: false, error: 'Receiver phone number is required' }, { status: 400 });
-    }
     if (!origin || !String(origin).trim() || !destination || !String(destination).trim()) {
       return NextResponse.json({ success: false, error: 'Origin and Destination stations are required' }, { status: 400 });
     }

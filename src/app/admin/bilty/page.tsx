@@ -132,9 +132,9 @@ export default function BiltyPage() {
     receiverName: "",
     receiverPhone: "",
     receiverAddress: "",
-    origin: "Lahore",
-    destination: "Karachi",
-    warehouse: "LAHORE",
+    origin: "Karachi",
+    destination: "Lahore",
+    warehouse: "KARACHI",
     vehicleId: "",
     vehicleNumber: "",
     driverId: "",
@@ -165,9 +165,9 @@ export default function BiltyPage() {
     receiverName: "",
     receiverPhone: "",
     receiverAddress: "",
-    origin: "Lahore",
-    destination: "Karachi",
-    warehouse: "LAHORE",
+    origin: "Karachi",
+    destination: "Lahore",
+    warehouse: "KARACHI",
     vehicleId: "",
     vehicleNumber: "",
     driverId: "",
@@ -279,9 +279,9 @@ export default function BiltyPage() {
               senderPhone: r.sender_phone || "",
               receiverName: r.receiver_name || "Consignee",
               receiverPhone: r.receiver_phone || "",
-              origin: r.origin_station || r.origin || "Lahore",
-              destination: r.destination_station || r.destination || "Karachi",
-              warehouse: r.warehouse || (String(r.origin_station || r.origin || "").toUpperCase().includes("KARACHI") ? "KARACHI" : "LAHORE"),
+              origin: r.origin_station || r.origin || "Karachi",
+              destination: r.destination_station || r.destination || "Lahore",
+              warehouse: r.warehouse || (String(r.origin_station || r.origin || "").toUpperCase().includes("LAHORE") ? "LAHORE" : "KARACHI"),
               itemDescription: r.item_description || r.package_details || "General Cargo",
               packageDetails: r.item_description || r.package_details || "General Cargo",
               packagesCount: Number(r.packages_count) || 1,
@@ -700,9 +700,9 @@ export default function BiltyPage() {
       receiverName: "",
       receiverPhone: "",
       receiverAddress: "",
-      origin: "Lahore",
-      destination: "Karachi",
-      warehouse: "LAHORE",
+      origin: "Karachi",
+      destination: "Lahore",
+      warehouse: "KARACHI",
       vehicleId: "",
       vehicleNumber: "",
       driverId: "",
@@ -741,9 +741,9 @@ export default function BiltyPage() {
       receiverName: bilty.receiverName || "",
       receiverPhone: bilty.receiverPhone || "",
       receiverAddress: bilty.receiverAddress || "",
-      origin: bilty.origin || "Lahore",
-      destination: bilty.destination || "Karachi",
-      warehouse: bilty.warehouse || "LAHORE",
+      origin: bilty.origin || "Karachi",
+      destination: bilty.destination || "Lahore",
+      warehouse: bilty.warehouse || "KARACHI",
       vehicleId: bilty.vehicleId || "",
       vehicleNumber: bilty.vehicleNumber || (bilty.vehicle ? bilty.vehicle.vehicleNumber : ""),
       driverId: bilty.driverId || "",
@@ -1025,9 +1025,9 @@ export default function BiltyPage() {
         receiverAddress: formData.receiverAddress?.trim() || "",
 
         // Route
-        origin: formData.origin?.trim() || "Lahore",
-        destination: formData.destination?.trim() || "Karachi",
-        warehouse: formData.warehouse || "LAHORE",
+        origin: formData.origin?.trim() || "Karachi",
+        destination: formData.destination?.trim() || "Lahore",
+        warehouse: formData.warehouse || "KARACHI",
 
         // Cargo Details (MUST NOT BE DROPPED)
         itemDescription: itemDesc,
@@ -1064,8 +1064,8 @@ export default function BiltyPage() {
           {
             id: `te_${Date.now()}`,
             status: formData.shipmentStatus || "BOOKED",
-            location: `${formData.origin || "Lahore"} Dispatch Station`,
-            description: `Consignment Bilty #${finalBiltyNumber} booked for transit to ${formData.destination || "Karachi"}.`,
+            location: `${formData.origin || "Karachi"} Dispatch Station`,
+            description: `Consignment Bilty #${finalBiltyNumber} booked for transit to ${formData.destination || "Lahore"}.`,
             timestamp: new Date(),
           },
         ],
@@ -1093,8 +1093,8 @@ export default function BiltyPage() {
             bilty_number: finalBiltyNumber || `SPD-${Date.now()}`,
             sender_name: (createdBilty.senderName || "Walk-in Shipper").trim(),
             receiver_name: (createdBilty.receiverName || "Consignee").trim(),
-            origin_station: (createdBilty.origin || "Lahore").trim(),
-            destination_station: (createdBilty.destination || "Karachi").trim(),
+            origin_station: (createdBilty.origin || "Karachi").trim(),
+            destination_station: (createdBilty.destination || "Lahore").trim(),
             freight_amount: Number(createdBilty.totalFreight) || 0,
             advance_paid: Number(createdBilty.paidAmount) || 0,
             remaining_balance: Math.max(0, (Number(createdBilty.totalFreight) || 0) - (Number(createdBilty.paidAmount) || 0)),
@@ -1352,8 +1352,8 @@ export default function BiltyPage() {
             className="flex-1 sm:flex-initial h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]"
           >
             <option value="">All Stations</option>
-            <option value="LAHORE">Lahore</option>
             <option value="KARACHI">Karachi</option>
+            <option value="LAHORE">Lahore</option>
           </select>
 
           <select
@@ -1469,7 +1469,7 @@ export default function BiltyPage() {
                           : "bg-red-100 text-spd-red dark:bg-red-950/60 dark:text-red-400"
                       }`}
                     >
-                      {c.warehouse || "LAHORE"}
+                      {c.warehouse || "KARACHI"}
                     </span>
                   </div>
 
@@ -1701,7 +1701,7 @@ export default function BiltyPage() {
                                   : "bg-red-100 text-spd-red dark:bg-red-950/60 dark:text-red-400"
                               }`}
                             >
-                              {c.warehouse || "LAHORE"}
+                              {c.warehouse || "KARACHI"}
                             </span>
                           </div>
                         </TableCell>
@@ -1977,7 +1977,7 @@ export default function BiltyPage() {
               </span>
             </div>
             <DialogDescription className="text-xs text-slate-500 mt-1">
-              Route: {viewDetailsBilty?.origin} &rarr; {viewDetailsBilty?.destination} &bull; Hub: {viewDetailsBilty?.warehouse || "LAHORE"}
+              Route: {viewDetailsBilty?.origin} &rarr; {viewDetailsBilty?.destination} &bull; Hub: {viewDetailsBilty?.warehouse || "KARACHI"}
             </DialogDescription>
           </DialogHeader>
 

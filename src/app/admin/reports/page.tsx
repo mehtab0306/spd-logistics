@@ -335,6 +335,24 @@ export default function ReportsPage() {
             </div>
 
             <div className="grid gap-6 sm:grid-cols-2">
+              <div className="p-4 rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-blue-50/30 dark:bg-blue-950/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-spd-blue uppercase">Karachi South Station (Head Office)</span>
+                  <span className="font-black text-sm text-slate-900 dark:text-white">
+                    {reportData?.warehouseComparison?.karachi?.count || 0} ({reportData?.warehouseComparison?.karachi?.percentage || 0}%)
+                  </span>
+                </div>
+                <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-spd-blue rounded-full transition-all duration-500"
+                    style={{ width: `${reportData?.warehouseComparison?.karachi?.percentage || 0}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Head office, seaport and industrial dispatch hub connecting southern ports, coastal routes, and Sindh regions.
+                </p>
+              </div>
+
               <div className="p-4 rounded-xl border border-red-200/60 dark:border-red-900/40 bg-red-50/30 dark:bg-red-950/10 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs text-spd-red uppercase">Lahore Central Station</span>
@@ -349,25 +367,7 @@ export default function ReportsPage() {
                   />
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Primary booking and distribution terminal serving Punjab, KPK, and Northern Pakistan corridors.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-blue-50/30 dark:bg-blue-950/10 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-spd-blue uppercase">Karachi South Station</span>
-                  <span className="font-black text-sm text-slate-900 dark:text-white">
-                    {reportData?.warehouseComparison?.karachi?.count || 0} ({reportData?.warehouseComparison?.karachi?.percentage || 0}%)
-                  </span>
-                </div>
-                <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-spd-blue rounded-full transition-all duration-500"
-                    style={{ width: `${reportData?.warehouseComparison?.karachi?.percentage || 0}%` }}
-                  />
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Seaport and industrial dispatch hub connecting southern ports, coastal routes, and Sindh regions.
+                  Regional terminal serving Punjab, KPK, and Northern Pakistan corridors.
                 </p>
               </div>
             </div>

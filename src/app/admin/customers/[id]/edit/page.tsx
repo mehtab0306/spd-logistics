@@ -41,8 +41,8 @@ export default function EditCustomerPage() {
     cnic: "",
     businessRef: "",
     address: "",
-    city: "Lahore",
-    warehouse: "LAHORE",
+    city: "Karachi",
+    warehouse: "KARACHI",
     creditLimit: "",
     photo: "",
     notes: "",
@@ -91,8 +91,8 @@ export default function EditCustomerPage() {
             cnic: found.cnic || "",
             businessRef: found.businessRef || "",
             address: found.address || "",
-            city: found.city || "Lahore",
-            warehouse: found.warehouse || "LAHORE",
+            city: found.city || "Karachi",
+            warehouse: found.warehouse || "KARACHI",
             creditLimit: found.creditLimit !== undefined && found.creditLimit !== null ? String(found.creditLimit) : "",
             photo: photoUrl,
             notes: found.notes || "",
@@ -425,8 +425,8 @@ export default function EditCustomerPage() {
                 onChange={(e) => setFormData({ ...formData, warehouse: e.target.value })}
                 className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold"
               >
+                <option value="KARACHI">Karachi South Hub (Head Office)</option>
                 <option value="LAHORE">Lahore Central Hub</option>
-                <option value="KARACHI">Karachi South Hub</option>
                 <option value="RAWALPINDI">Rawalpindi / Islamabad Hub</option>
                 <option value="FAISALABAD">Faisalabad Hub</option>
                 <option value="MULTAN">Multan Hub</option>

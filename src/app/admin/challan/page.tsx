@@ -66,7 +66,7 @@ export default function ChallanPage() {
 
   // Search & Filter for left column
   const [biltySearch, setBiltySearch] = useState("");
-  const [warehouseFilter, setWarehouseFilter] = useState("LAHORE");
+  const [warehouseFilter, setWarehouseFilter] = useState("KARACHI");
 
   // Printable Challan modal
   const [printedChallan, setPrintedChallan] = useState<any>(null);
@@ -75,9 +75,9 @@ export default function ChallanPage() {
   const [challanData, setChallanData] = useState({
     challanNumber: "",
     date: new Date().toISOString().slice(0, 10),
-    warehouse: "LAHORE",
-    origin: "Lahore",
-    destination: "Karachi",
+    warehouse: "KARACHI",
+    origin: "Karachi",
+    destination: "Lahore",
 
     hiringMode: "COMPANY_FLEET" as "COMPANY_FLEET" | "MARKET_BROKER",
     brokerId: "",
@@ -161,8 +161,8 @@ export default function ChallanPage() {
               trackingId: r.bilty_number || r.id,
               senderName: r.sender_name || "Walk-in Shipper",
               receiverName: r.receiver_name || "Consignee",
-              origin: r.origin_station || r.origin || "Lahore",
-              destination: r.destination_station || r.destination || "Karachi",
+              origin: r.origin_station || r.origin || "Karachi",
+              destination: r.destination_station || r.destination || "Lahore",
               packagesCount: Number(r.packages_count) || 1,
               weight: Number(r.weight) || 0,
               totalFreight: Number(r.freight_amount ?? r.total_freight ?? 0),
@@ -428,7 +428,7 @@ export default function ChallanPage() {
       "Date": b.date ? new Date(b.date).toLocaleDateString("en-GB") : "",
       "Origin": b.origin || "",
       "Destination": b.destination || "",
-      "Warehouse": b.warehouse || "Lahore",
+      "Warehouse": b.warehouse || "Karachi",
       "Goods / Item": b.packageDetails || b.description || "General Cargo",
       "Sender": b.senderName || "",
       "Receiver": b.receiverName || "",
@@ -488,9 +488,9 @@ export default function ChallanPage() {
         challanNumber: finalChallanNo,
         date: challanData.date ? new Date(challanData.date).toISOString() : timestamp,
         time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-        warehouse: challanData.warehouse || "LAHORE",
-        origin: challanData.origin || "Lahore",
-        destination: challanData.destination || "Karachi",
+        warehouse: challanData.warehouse || "KARACHI",
+        origin: challanData.origin || "Karachi",
+        destination: challanData.destination || "Lahore",
         hiringMode: challanData.hiringMode,
         brokerId: isBroker ? challanData.brokerId || null : null,
         brokerName: isBroker ? challanData.brokerName || null : null,
@@ -784,8 +784,8 @@ export default function ChallanPage() {
                   onChange={(e) => setWarehouseFilter(e.target.value)}
                   className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 w-full sm:w-auto"
                 >
-                  <option value="LAHORE">Lahore</option>
                   <option value="KARACHI">Karachi</option>
+                  <option value="LAHORE">Lahore</option>
                   <option value="">All Stations</option>
                 </select>
                 <Button
@@ -874,7 +874,7 @@ export default function ChallanPage() {
                             <span className="font-semibold block text-slate-800 dark:text-slate-200">
                               {b.origin} → {b.destination}
                             </span>
-                            <span className="text-[10px] text-slate-400">{b.warehouse || "Lahore"}</span>
+                            <span className="text-[10px] text-slate-400">{b.warehouse || "Karachi"}</span>
                           </td>
                           <td className="p-3">
                             <span className="font-semibold block text-slate-800 dark:text-slate-200">
