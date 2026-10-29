@@ -380,7 +380,7 @@ export default function NewBiltyPage() {
       setQuickCustomerData({
         name: "",
         phone: "",
-        city: "Lahore",
+        city: "Karachi",
         address: "",
         ntn: "",
         strn: "",

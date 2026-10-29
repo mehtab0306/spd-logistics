@@ -22,6 +22,7 @@ import { FormSectionCard } from "@/components/shared/form-section-card";
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { saveStoredBroker } from "@/lib/local-persistence";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function NewBrokerPage() {
   const router = useRouter();
@@ -37,7 +38,7 @@ export default function NewBrokerPage() {
     whatsapp: "",
     cnic: "",
     ntn: "",
-    city: "Lahore",
+    city: "Karachi",
     commissionType: "FIXED" as "FIXED" | "PERCENTAGE",
     commissionRate: "",
     openingBalance: "",
@@ -93,7 +94,27 @@ export default function NewBrokerPage() {
         updatedAt: new Date().toISOString(),
       };
 
-      // 1. Immediately save to local dual-persistence store
+      // 1. Enforce Cloud Database Persistence
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("brokers").upsert([
+            {
+              id: brokerId,
+              name: brokerPayload.name,
+              phone: brokerPayload.phone || null,
+              company_name: brokerPayload.contactPerson || brokerPayload.name,
+              city: brokerPayload.city || "Karachi",
+              balance: openBal,
+              status: brokerPayload.status || "ACTIVE",
+              created_at: brokerPayload.createdAt,
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase broker write warning:", sbErr);
+        }
+      }
+
+      // 2. Immediately save to local dual-persistence store
       saveStoredBroker(brokerPayload);
 
       // 2. Sync to centralized server store in background

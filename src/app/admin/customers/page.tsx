@@ -192,27 +192,64 @@ export default function CustomersPage() {
       if (warehouseFilter) params.append("warehouse", warehouseFilter);
       if (statusFilter) params.append("status", statusFilter);
 
-      let supabaseCustomers: any[] = [];
-      try {
-        const { data, error } = await supabase
-          .from("customers")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (!error && Array.isArray(data) && data.length > 0) {
-          supabaseCustomers = data.map((r: any) => ({
-            id: r.id,
-            name: r.name,
-            companyName: r.name,
-            phone: r.phone,
-            city: r.city,
-            photo: r.avatar_url || r.photo || null,
-            user: { avatar: r.avatar_url || r.photo || null },
-            createdAt: r.created_at,
-            ...r,
-          }));
+      // 1. Direct Live Supabase Cloud Database Query
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("customers")
+            .select("*")
+            .order("created_at", { ascending: false });
+
+          if (!error && Array.isArray(data)) {
+            const mapped = data.map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              companyName: r.name,
+              phone: r.phone || "",
+              city: r.city || "Karachi",
+              address: r.address || "",
+              photo: r.avatar_url || r.photo || null,
+              user: { avatar: r.avatar_url || r.photo || null },
+              openingBalance: Number(r.opening_balance) || 0,
+              currentBalance: Number(r.current_balance) || 0,
+              createdAt: r.created_at,
+              ...r,
+            }));
+
+            // Sync to local storage mirror
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem("spd_customers", JSON.stringify(mapped));
+                localStorage.setItem("spd_local_customers", JSON.stringify(mapped));
+              } catch {}
+            }
+
+            let filtered = mapped;
+            if (search.trim()) {
+              const q = search.trim().toLowerCase();
+              filtered = filtered.filter(
+                (c) =>
+                  c.name?.toLowerCase().includes(q) ||
+                  c.companyName?.toLowerCase().includes(q) ||
+                  c.phone?.toLowerCase().includes(q) ||
+                  c.email?.toLowerCase().includes(q) ||
+                  c.city?.toLowerCase().includes(q)
+              );
+            }
+            if (warehouseFilter) {
+              filtered = filtered.filter((c) => c.warehouse === warehouseFilter);
+            }
+            if (statusFilter) {
+              filtered = filtered.filter((c) => c.status === statusFilter);
+            }
+
+            setCustomers(filtered);
+            setLoading(false);
+            return;
+          }
+        } catch (sbErr) {
+          console.warn("Supabase fetch customers error:", sbErr);
         }
-      } catch (sbErr) {
-        console.warn("Supabase fetch customers warning:", sbErr);
       }
 
       let apiList: any[] = [];
@@ -226,13 +263,10 @@ export default function CustomersPage() {
         console.warn("API customer fetch error:", err);
       }
 
-      // Merge local customers + Supabase customers (kept at top) with API seed customers
+      // Merge local customers + fallback
       const localList = getStoredCustomers();
-      const combinedActive = supabaseCustomers.length > 0
-        ? mergeLocalWithApi(supabaseCustomers, localList, [])
-        : localList;
       const deletedIds = getDeletedCustomerIds();
-      let list = mergeLocalWithApi(combinedActive, apiList, deletedIds);
+      let list = mergeLocalWithApi(localList, apiList, deletedIds);
 
       // Strict deduplication safeguard across merged list
       const dedupedList: any[] = [];
@@ -375,7 +409,25 @@ export default function CustomersPage() {
       fetchCustomers();
     };
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+    window.addEventListener("spd-customer-updated", handleFocus);
+    window.addEventListener("spd-data-updated", handleFocus);
+
+    let channel: any = null;
+    if (isSupabaseConfigured) {
+      channel = supabase
+        .channel("realtime-customers")
+        .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => {
+          fetchCustomers();
+        })
+        .subscribe();
+    }
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("spd-customer-updated", handleFocus);
+      window.removeEventListener("spd-data-updated", handleFocus);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [search, warehouseFilter, statusFilter]);
 
   const handleUploadPhoto = async (file: File): Promise<string> => {

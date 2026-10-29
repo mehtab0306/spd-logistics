@@ -74,6 +74,7 @@ export default function AdminDashboard() {
   const fetchDashboardMetrics = useCallback(async () => {
     try {
       let biltiesList: any[] = [];
+      let vehList: any[] = [];
       let custCount = 0;
       let drvList: any[] = [];
       let chList: any[] = [];
@@ -83,7 +84,7 @@ export default function AdminDashboard() {
       // 1. Direct Live Supabase Cloud Database Query
       if (isSupabaseConfigured) {
         try {
-          const [bRes, cRes, dRes, chRes, cbRes, nRes] = await Promise.allSettled([
+          const [bRes, cRes, dRes, vRes, chRes, cbRes, nRes] = await Promise.allSettled([
             supabase
               .from("bilties")
               .select("*")
@@ -92,6 +93,7 @@ export default function AdminDashboard() {
               .order("created_at", { ascending: false }),
             supabase.from("customers").select("*", { count: "exact", head: true }),
             supabase.from("drivers").select("*"),
+            supabase.from("vehicles").select("*"),
             supabase.from("challans").select("*"),
             supabase.from("cash_books").select("id", { count: "exact", head: true }),
             supabase.from("notifications").select("*").order("created_at", { ascending: false }).limit(6),
@@ -105,6 +107,9 @@ export default function AdminDashboard() {
           }
           if (dRes.status === "fulfilled" && Array.isArray(dRes.value.data)) {
             drvList = dRes.value.data;
+          }
+          if (vRes.status === "fulfilled" && Array.isArray(vRes.value.data)) {
+            vehList = vRes.value.data;
           }
           if (chRes.status === "fulfilled" && Array.isArray(chRes.value.data)) {
             chList = chRes.value.data;
@@ -177,7 +182,7 @@ export default function AdminDashboard() {
       setTotalFreight(totalBiltyFreight);
       setTotalPaid(totalPaidAmount);
       setTotalRemaining(outstandingBalance);
-      setTrucksCount(chList.length);
+      setTrucksCount(vehList.length > 0 ? vehList.length : chList.length);
       setDriversCount(drvList.length);
       setCashBooksCount(cbCount);
       setLahoreCount(lhr);
@@ -218,11 +223,29 @@ export default function AdminDashboard() {
     window.addEventListener("spd-bilty-updated", handleFocus);
     window.addEventListener("spd-customer-updated", handleFocus);
     window.addEventListener("spd-data-updated", handleFocus);
+
+    let channel: any = null;
+    if (isSupabaseConfigured) {
+      channel = supabase
+        .channel("realtime-dashboard")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public" },
+          () => {
+            fetchDashboardMetrics();
+          }
+        )
+        .subscribe();
+    }
+
     return () => {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("spd-bilty-updated", handleFocus);
       window.removeEventListener("spd-customer-updated", handleFocus);
       window.removeEventListener("spd-data-updated", handleFocus);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [fetchDashboardMetrics]);
 

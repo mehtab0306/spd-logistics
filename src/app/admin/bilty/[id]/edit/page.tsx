@@ -400,6 +400,23 @@ export default function EditBiltyPage() {
       saveStoredCustomer(newCust);
       setCustomers((prev) => [newCust, ...prev]);
 
+      // Supabase cloud customer upsert (only name mandatory)
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("customers").upsert([
+            {
+              id: newCust.id,
+              name: newCust.name,
+              phone: newCust.phone || null,
+              city: newCust.city || null,
+              address: newCust.address || null,
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase customer upsert warning:", sbErr);
+        }
+      }
+
       if (quickCustomerTarget === "sender") {
         setFormData((prev) => ({
           ...prev,

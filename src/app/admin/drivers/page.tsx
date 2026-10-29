@@ -150,24 +150,21 @@ export default function DriversPage() {
       if (search) params.append("search", search);
       if (statusFilter) params.append("status", statusFilter);
 
-      let supabaseDrivers: any[] = [];
+      // 1. Direct Live Supabase Cloud Database Query
       if (isSupabaseConfigured) {
         try {
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Supabase timeout")), 2500)
-          );
-          const fetchPromise = supabase
+          const { data, error } = await supabase
             .from("drivers")
             .select("*")
             .order("created_at", { ascending: false });
-          const { data, error }: any = await Promise.race([fetchPromise, timeoutPromise]);
-          if (!error && Array.isArray(data) && data.length > 0) {
-            supabaseDrivers = data.map((d: any) => ({
+
+          if (!error && Array.isArray(data)) {
+            const mapped = data.map((d: any) => ({
               id: d.id,
               name: d.name,
               phone: d.phone,
               contact: d.phone,
-              email: d.email,
+              email: d.email || `driver.${d.phone || d.id}@spdlogistics.com`,
               cnic: d.cnic,
               licenseNumber: d.license_number,
               licenseExpiry: d.license_expiry,
@@ -181,9 +178,37 @@ export default function DriversPage() {
               createdAt: d.created_at,
               ...d,
             }));
+
+            // Sync to local storage mirror
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem("spd_drivers", JSON.stringify(mapped));
+                localStorage.setItem("spd_local_drivers", JSON.stringify(mapped));
+              } catch {}
+            }
+
+            let filtered = mapped;
+            if (search.trim()) {
+              const q = search.trim().toLowerCase();
+              filtered = filtered.filter(
+                (d) =>
+                  d.name?.toLowerCase().includes(q) ||
+                  d.phone?.toLowerCase().includes(q) ||
+                  d.cnic?.toLowerCase().includes(q) ||
+                  d.licenseNumber?.toLowerCase().includes(q) ||
+                  d.vehicleNumber?.toLowerCase().includes(q)
+              );
+            }
+            if (statusFilter) {
+              filtered = filtered.filter((d) => d.status?.toUpperCase() === statusFilter.toUpperCase());
+            }
+
+            setDrivers(filtered);
+            setLoading(false);
+            return;
           }
         } catch (sbErr) {
-          console.warn("Supabase fetch drivers warning:", sbErr);
+          console.warn("Supabase fetch drivers error:", sbErr);
         }
       }
 
@@ -198,13 +223,10 @@ export default function DriversPage() {
         console.warn("API driver fetch error:", err);
       }
 
-      // Merge local drivers + Supabase drivers (kept at top) with API seed drivers
+      // Merge local drivers + fallback
       const localList = getStoredDrivers();
-      const combinedActive = supabaseDrivers.length > 0
-        ? mergeLocalWithApi(supabaseDrivers, localList, [])
-        : localList;
       const deletedIds = getDeletedDriverIds();
-      let list = mergeLocalWithApi(combinedActive, apiList, deletedIds);
+      let list = mergeLocalWithApi(localList, apiList, deletedIds);
 
       // Strict deduplication safeguard across merged drivers list
       const dedupedList: any[] = [];
@@ -312,7 +334,21 @@ export default function DriversPage() {
       fetchVehicles();
     };
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+
+    let channel: any = null;
+    if (isSupabaseConfigured) {
+      channel = supabase
+        .channel("realtime-drivers")
+        .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, () => {
+          fetchDrivers();
+        })
+        .subscribe();
+    }
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [search, statusFilter]);
 
   const handleUploadPhoto = async (file: File): Promise<string> => {

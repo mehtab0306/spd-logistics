@@ -102,7 +102,20 @@ create table if not exists vehicles (
   vehicle_type text default 'Mazda / Linehaul Truck',
   capacity text,
   driver_name text,
+  driver_phone text,
   status text default 'Available',
+  created_at timestamptz default now()
+);
+
+-- 6b. BROKERS TABLE
+create table if not exists brokers (
+  id text primary key,
+  name text not null,
+  phone text,
+  company_name text,
+  city text default 'Karachi',
+  balance numeric default 0,
+  status text default 'ACTIVE',
   created_at timestamptz default now()
 );
 
@@ -196,6 +209,7 @@ alter table deliveries disable row level security;
 alter table notifications disable row level security;
 alter table users disable row level security;
 alter table system_settings disable row level security;
+alter table brokers disable row level security;
 
 -- Setup Supabase Storage Bucket for Profile Avatars
 insert into storage.buckets (id, name, public)
@@ -226,3 +240,4 @@ truncate table receivables;
 truncate table payables;
 truncate table deliveries;
 truncate table notifications;
+truncate table brokers;

@@ -110,6 +110,61 @@ export default function VehiclesPage() {
       if (search) params.append("search", search);
       if (statusFilter) params.append("status", statusFilter);
 
+      // 1. Direct Live Supabase Cloud Database Query
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("vehicles")
+            .select("*")
+            .order("created_at", { ascending: false });
+
+          if (!error && Array.isArray(data)) {
+            const mapped = data.map((sv: any) => ({
+              id: sv.id,
+              vehicleNumber: sv.vehicle_number || sv.registration_number,
+              registrationNumber: sv.registration_number || sv.vehicle_number,
+              type: sv.vehicle_type || "Heavy Truck (22-Wheeler)",
+              vehicleType: sv.vehicle_type || "Heavy Truck (22-Wheeler)",
+              capacity: sv.capacity || "35 Tons",
+              status: sv.status || "AVAILABLE",
+              driverName: sv.driver_name,
+              driverPhone: sv.driver_phone,
+              driver: sv.driver_name ? { name: sv.driver_name, phone: sv.driver_phone } : undefined,
+              createdAt: sv.created_at,
+              ...sv,
+            }));
+
+            // Sync to local storage mirror
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem("spd_vehicles", JSON.stringify(mapped));
+                localStorage.setItem("spd_local_vehicles", JSON.stringify(mapped));
+              } catch {}
+            }
+
+            let filtered = mapped;
+            if (search.trim()) {
+              const q = search.trim().toLowerCase();
+              filtered = filtered.filter(
+                (v) =>
+                  v.vehicleNumber?.toLowerCase().includes(q) ||
+                  v.registrationNumber?.toLowerCase().includes(q) ||
+                  v.driver_name?.toLowerCase().includes(q)
+              );
+            }
+            if (statusFilter) {
+              filtered = filtered.filter((v) => v.status === statusFilter);
+            }
+
+            setVehicles(filtered);
+            setLoading(false);
+            return;
+          }
+        } catch (sbErr) {
+          console.warn("Supabase vehicles fetch error:", sbErr);
+        }
+      }
+
       let apiList: any[] = [];
       try {
         const res = await fetch(`/api/admin/vehicles?${params.toString()}`);
@@ -121,29 +176,7 @@ export default function VehiclesPage() {
         console.warn("API vehicle fetch error:", err);
       }
 
-      // Live Supabase database synchronization
-      if (isSupabaseConfigured) {
-        try {
-          const { data: sbVehicles, error: sbErr } = await supabase.from("vehicles").select("*");
-          if (!sbErr && Array.isArray(sbVehicles) && sbVehicles.length > 0) {
-            const mappedSb = sbVehicles.map((sv: any) => ({
-              id: sv.id,
-              vehicleNumber: sv.vehicle_number || sv.registration_number,
-              registrationNumber: sv.registration_number || sv.vehicle_number,
-              type: sv.vehicle_type || "Mazda / Linehaul Truck",
-              capacity: sv.capacity || "15 Tons",
-              status: sv.status || "AVAILABLE",
-              driver: sv.driver_name ? { name: sv.driver_name } : undefined,
-              createdAt: sv.created_at,
-            }));
-            apiList = [...mappedSb, ...apiList];
-          }
-        } catch (sbErr) {
-          console.warn("Supabase vehicles fetch notice:", sbErr);
-        }
-      }
-
-      // Merge local vehicles (kept at top) with API seed vehicles
+      // Fallback merge
       const localList = getLocalVehicles();
       const deletedIds = getDeletedVehicleIds();
       let list = mergeLocalWithApi(localList, apiList, deletedIds, "vehicleNumber").filter(
@@ -211,13 +244,17 @@ export default function VehiclesPage() {
         setSelectedVehicle(null);
       }
 
+      if (isSupabaseConfigured && deleteVehicle) {
+        try {
+          await supabase.from("vehicles").delete().eq("id", deleteVehicle.id);
+        } catch (sbErr) {
+          console.warn("Supabase vehicle delete error:", sbErr);
+        }
+      }
+
       fetch(`/api/admin/vehicles?id=${deleteVehicle.id}`, {
         method: "DELETE",
       }).catch(() => {});
-
-      if (isSupabaseConfigured && deleteVehicle) {
-        Promise.resolve(supabase.from("vehicles").delete().eq("id", deleteVehicle.id)).catch(() => {});
-      }
 
       setActionFeedback({
         type: "success",
@@ -252,6 +289,20 @@ export default function VehiclesPage() {
   useEffect(() => {
     fetchVehicles();
     fetchDrivers();
+
+    let channel: any = null;
+    if (isSupabaseConfigured) {
+      channel = supabase
+        .channel("realtime-vehicles")
+        .on("postgres_changes", { event: "*", schema: "public", table: "vehicles" }, () => {
+          fetchVehicles();
+        })
+        .subscribe();
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [search, statusFilter]);
 
   const handleCreateVehicle = async (e: React.FormEvent) => {
@@ -294,18 +345,21 @@ export default function VehiclesPage() {
       }).catch((err) => console.warn("Background vehicle API save:", err));
 
       if (isSupabaseConfigured) {
-        Promise.resolve(
-          supabase.from("vehicles").upsert({
+        try {
+          await supabase.from("vehicles").upsert({
             id: newVeh.id,
             vehicle_number: newVeh.vehicleNumber,
             registration_number: newVeh.registrationNumber || newVeh.vehicleNumber,
             vehicle_type: newVeh.vehicleType || "Heavy Truck (22-Wheeler)",
             capacity: String(newVeh.capacity),
             driver_name: assignedDriver?.name || null,
+            driver_phone: assignedDriver?.phone || null,
             status: newVeh.status || "AVAILABLE",
             created_at: new Date().toISOString(),
-          })
-        ).catch((sbErr: any) => console.warn("Supabase vehicle save notice:", sbErr));
+          });
+        } catch (sbErr: any) {
+          console.warn("Supabase vehicle save notice:", sbErr);
+        }
       }
 
       setAddModalOpen(false);

@@ -150,6 +150,8 @@ function CashBooksContent() {
 
   const [cashBooks, setCashBooks] = useState<CashBookItem[]>([]);
   const [selectedBook, setSelectedBook] = useState<CashBookItem | null>(null);
+  const selectedBookRef = useRef<CashBookItem | null>(null);
+  selectedBookRef.current = selectedBook;
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [txLoading, setTxLoading] = useState(false);
@@ -228,20 +230,42 @@ function CashBooksContent() {
   // Smart highlight hook
   const { highlightClass } = useSmartHighlight(transactions);
 
-  // 1. Initial Load of Cash Books and Dropdown data
+  // 1. Initial Load of Cash Books and Dropdown data with Real-time synchronization
   useEffect(() => {
     fetchCashBooks();
     fetchDropdownData();
 
     const handleFocus = () => {
       fetchCashBooks();
-      if (selectedBook) {
-        fetchTransactions(selectedBook.id);
+      if (selectedBookRef.current) {
+        fetchTransactions(selectedBookRef.current.id);
       }
     };
     window.addEventListener("focus", handleFocus);
+
+    if (isSupabaseConfigured) {
+      const channel = supabase
+        .channel("realtime-cash-books")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "cash_books" },
+          () => {
+            fetchCashBooks();
+            if (selectedBookRef.current) {
+              fetchTransactions(selectedBookRef.current.id);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        window.removeEventListener("focus", handleFocus);
+        supabase.removeChannel(channel);
+      };
+    }
+
     return () => window.removeEventListener("focus", handleFocus);
-  }, [selectedBook?.id]);
+  }, []);
 
   // 2. Respond to bookIdParam when books are loaded
   useEffect(() => {
@@ -335,25 +359,23 @@ function CashBooksContent() {
       let supabaseTxs: any[] = [];
       if (isSupabaseConfigured) {
         try {
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Supabase timeout")), 2500)
-          );
-          const fetchPromise = supabase
+          const { data: sbData, error: sbErr } = await supabase
             .from("cash_books")
             .select("*")
             .order("created_at", { ascending: false });
-          const { data: sbData, error: sbErr }: any = await Promise.race([fetchPromise, timeoutPromise]);
-          if (!sbErr && Array.isArray(sbData) && sbData.length > 0) {
+          if (!sbErr && Array.isArray(sbData)) {
             supabaseTxs = sbData.map((t: any) => ({
               id: t.id,
               date: t.date || t.created_at,
               voucherNumber: t.id.slice(0, 8),
               description: t.description || "",
+              party: t.party || "",
               type: t.type === "IN" ? "IN" : "OUT",
               amount: Number(t.amount) || 0,
               credit: t.type === "IN" ? Number(t.amount) || 0 : 0,
               debit: t.type === "OUT" ? Number(t.amount) || 0 : 0,
-              category: t.description || (t.type === "IN" ? "Cash In" : "Cash Out"),
+              balance: Number(t.balance) || 0,
+              category: t.category || (t.type === "IN" ? "Cash In" : "Cash Out"),
               paymentMethod: "CASH",
               createdAt: t.created_at,
             }));
@@ -563,8 +585,11 @@ function CashBooksContent() {
               id: `cb-in-${Date.now()}`,
               date: txFormData.date,
               description: payload.description || payload.category,
+              category: payload.category || "Freight Collection",
+              party: payload.party || null,
               type: "IN",
               amount: amountVal,
+              balance: (selectedBook?.currentBalance || 0) + amountVal,
             },
           ]);
         } catch (sbErr) {
@@ -640,8 +665,11 @@ function CashBooksContent() {
               id: `cb-out-${Date.now()}`,
               date: txFormData.date,
               description: payload.description || payload.category,
+              category: payload.category || "Diesel / Fuel",
+              party: payload.party || null,
               type: "OUT",
               amount: amountVal,
+              balance: (selectedBook?.currentBalance || 0) - amountVal,
             },
           ]);
         } catch (sbErr) {

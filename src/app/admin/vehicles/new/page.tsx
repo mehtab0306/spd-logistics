@@ -25,6 +25,7 @@ import {
   saveStoredVehicle,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function NewVehiclePage() {
   const router = useRouter();
@@ -114,10 +115,29 @@ export default function NewVehiclePage() {
         updatedAt: timestamp,
       };
 
-      // 1. Immediately save to localStorage (spd_vehicles & spd_local_vehicles)
+      // 1. Enforce Cloud Database Persistence
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("vehicles").upsert({
+            id: uniqueId,
+            vehicle_number: plate,
+            registration_number: formData.registrationNumber.trim() || plate,
+            vehicle_type: formData.vehicleType || "Heavy Truck (22-Wheeler)",
+            capacity: String(formData.capacity || "35"),
+            driver_name: selectedDrv?.name || null,
+            driver_phone: selectedDrv?.phone || null,
+            status: formData.status || "AVAILABLE",
+            created_at: timestamp,
+          });
+        } catch (sbErr) {
+          console.warn("Supabase vehicle new page save warning:", sbErr);
+        }
+      }
+
+      // 2. Immediately save to localStorage (spd_vehicles & spd_local_vehicles)
       saveStoredVehicle(newVehicleRecord);
 
-      // 2. Try sending to backend API wrapped in try/catch (do NOT rollback or throw on serverless failure)
+      // 3. Try sending to backend API wrapped in try/catch (do NOT rollback or throw on serverless failure)
       try {
         await fetch("/api/admin/vehicles", {
           method: "POST",

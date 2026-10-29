@@ -62,6 +62,7 @@ import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import { exportToExcel } from "@/lib/export-excel";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function BrokersPage() {
   const [brokers, setBrokers] = useState<any[]>([]);
@@ -78,6 +79,17 @@ export default function BrokersPage() {
   // Ledger Dialog State
   const [selectedBrokerForLedger, setSelectedBrokerForLedger] = useState<any | null>(null);
 
+  // Quick Add Broker State
+  const [addBrokerOpen, setAddBrokerOpen] = useState(false);
+  const [savingBroker, setSavingBroker] = useState(false);
+  const [brokerFormData, setBrokerFormData] = useState({
+    name: "",
+    phone: "",
+    companyName: "",
+    city: "Karachi",
+    balance: "0",
+  });
+
   // Payment Recording Dialog State
   const [paymentBroker, setPaymentBroker] = useState<any | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -91,34 +103,79 @@ export default function BrokersPage() {
   useEffect(() => {
     fetchBrokersData();
     syncWithServer();
+
+    if (isSupabaseConfigured) {
+      const channel = supabase
+        .channel("realtime-brokers")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "brokers" },
+          () => {
+            fetchBrokersData();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, []);
 
   const fetchBrokersData = async () => {
     setLoading(true);
 
-    // 1. Load local brokers & challans immediately
+    // 1. Check live Supabase Cloud Database first
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from("brokers")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          const mapped = data.map((b: any) => ({
+            id: b.id,
+            name: b.name,
+            contactPerson: b.company_name || b.name,
+            phone: b.phone || "",
+            whatsapp: b.phone || "",
+            city: b.city || "Karachi",
+            netPayableBalance: Number(b.balance || 0),
+            openingBalance: Number(b.balance || 0),
+            status: b.status || "ACTIVE",
+            totalTrips: 0,
+            totalFreightAgreed: 0,
+            totalAdvancePaid: 0,
+            createdAt: b.created_at,
+            ...b,
+          }));
+          setBrokers(mapped);
+          try {
+            localStorage.setItem("spd_brokers", JSON.stringify(mapped));
+          } catch {}
+        }
+      } catch (sbErr) {
+        console.warn("Supabase broker fetch warning:", sbErr);
+      }
+    }
+
+    // 2. Load local brokers & challans fallback
     const localBrokers = getStoredBrokers();
     const deletedIds = getDeletedBrokerIds();
     const localChallans = getStoredChallans();
     setChallans(localChallans);
 
-    if (localBrokers.length > 0) {
+    if (localBrokers.length > 0 && brokers.length === 0) {
       setBrokers(localBrokers);
     }
 
-    // 2. Fetch from API & sync
+    // 3. Fetch auxiliary cash books and challans
     try {
-      const [brokerRes, cbRes, chRes] = await Promise.all([
-        fetch("/api/admin/brokers"),
+      const [cbRes, chRes] = await Promise.all([
         fetch("/api/admin/cash-books"),
         fetch("/api/admin/challan"),
       ]);
-
-      const brokerData = await brokerRes.json();
-      if (brokerData.success && Array.isArray(brokerData.data)) {
-        const merged = mergeLocalWithApi(localBrokers, brokerData.data, deletedIds);
-        setBrokers(merged);
-      }
 
       const cbData = await cbRes.json();
       if (cbData.success && Array.isArray(cbData.data)) {
@@ -133,9 +190,63 @@ export default function BrokersPage() {
         setChallans(chData.data);
       }
     } catch (err) {
-      console.warn("API broker query fallback to local state:", err);
+      console.warn("Auxiliary data query notice:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveBroker = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!brokerFormData.name.trim()) return;
+    setSavingBroker(true);
+
+    try {
+      const brokerId = `brk-${Date.now()}`;
+      const openBal = parseFloat(brokerFormData.balance) || 0;
+      const newBroker = {
+        id: brokerId,
+        name: brokerFormData.name.trim(),
+        contactPerson: brokerFormData.companyName.trim() || brokerFormData.name.trim(),
+        phone: brokerFormData.phone.trim(),
+        whatsapp: brokerFormData.phone.trim(),
+        city: brokerFormData.city || "Karachi",
+        netPayableBalance: openBal,
+        openingBalance: openBal,
+        status: "ACTIVE",
+        totalTrips: 0,
+        totalFreightAgreed: 0,
+        totalAdvancePaid: 0,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("brokers").upsert([
+            {
+              id: brokerId,
+              name: newBroker.name,
+              phone: newBroker.phone || null,
+              company_name: newBroker.contactPerson,
+              city: newBroker.city,
+              balance: openBal,
+              status: "ACTIVE",
+              created_at: newBroker.createdAt,
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn("Supabase quick broker save warning:", sbErr);
+        }
+      }
+
+      saveStoredBroker(newBroker);
+      setBrokers((prev) => [newBroker, ...prev]);
+      setAddBrokerOpen(false);
+      setBrokerFormData({ name: "", phone: "", companyName: "", city: "Karachi", balance: "0" });
+    } catch (err) {
+      console.error("Save broker error:", err);
+    } finally {
+      setSavingBroker(false);
     }
   };
 
@@ -213,10 +324,17 @@ export default function BrokersPage() {
     }
   };
 
-  const handleDeleteBroker = (brokerId: string, brokerName: string) => {
+  const handleDeleteBroker = async (brokerId: string, brokerName: string) => {
     if (!confirm(`Are you sure you want to archive broker "${brokerName}"?`)) return;
     removeStoredBroker(brokerId);
     setBrokers((prev) => prev.filter((b) => b.id !== brokerId));
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from("brokers").delete().eq("id", brokerId);
+      } catch (sbErr) {
+        console.warn("Supabase delete broker warning:", sbErr);
+      }
+    }
     fetch(`/api/admin/brokers?id=${encodeURIComponent(brokerId)}`, { method: "DELETE" }).catch(() => {});
   };
 
@@ -310,6 +428,14 @@ export default function BrokersPage() {
           >
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
             <span>Sync Live</span>
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setAddBrokerOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold gap-1.5 shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Quick Add Broker</span>
           </Button>
           <Button
             asChild
@@ -855,6 +981,115 @@ export default function BrokersPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Quick Add Broker Modal */}
+      <Dialog open={addBrokerOpen} onOpenChange={setAddBrokerOpen}>
+        <DialogContent className="sm:max-w-[480px] p-6 rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black flex items-center gap-2">
+              <Handshake className="w-5 h-5 text-emerald-600" />
+              <span>Quick Add Broker</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Instantly register a third-party transport broker with live cloud sync.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveBroker} className="space-y-4 pt-2">
+            <div className="space-y-1">
+              <label className="font-bold uppercase text-[11px] text-slate-500">
+                Broker / Agency Name *
+              </label>
+              <Input
+                placeholder="e.g. Al-Madina Goods Karachi"
+                value={brokerFormData.name}
+                onChange={(e) => setBrokerFormData({ ...brokerFormData, name: e.target.value })}
+                className="rounded-xl h-10 text-xs font-semibold"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold uppercase text-[11px] text-slate-500">
+                  Phone (Optional)
+                </label>
+                <Input
+                  placeholder="0300-1234567"
+                  value={brokerFormData.phone}
+                  onChange={(e) => setBrokerFormData({ ...brokerFormData, phone: e.target.value })}
+                  className="rounded-xl h-10 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold uppercase text-[11px] text-slate-500">
+                  Contact Person
+                </label>
+                <Input
+                  placeholder="e.g. Haji Aslam"
+                  value={brokerFormData.companyName}
+                  onChange={(e) => setBrokerFormData({ ...brokerFormData, companyName: e.target.value })}
+                  className="rounded-xl h-10 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold uppercase text-[11px] text-slate-500">
+                  Base City
+                </label>
+                <select
+                  value={brokerFormData.city}
+                  onChange={(e) => setBrokerFormData({ ...brokerFormData, city: e.target.value })}
+                  className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200"
+                >
+                  {PAKISTAN_CITIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold uppercase text-[11px] text-slate-500">
+                  Opening Balance (PKR)
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={brokerFormData.balance}
+                  onChange={(e) => setBrokerFormData({ ...brokerFormData, balance: e.target.value })}
+                  className="rounded-xl h-10 text-xs font-mono font-bold"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAddBrokerOpen(false)}
+                className="rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={savingBroker || !brokerFormData.name.trim()}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold gap-1.5 shadow-sm"
+              >
+                {savingBroker ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                <span>Save Broker</span>
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
