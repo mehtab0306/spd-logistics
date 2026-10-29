@@ -558,6 +558,12 @@ export default function BiltyPage() {
         type: "success",
         text: `Bilty ${deletingBilty.biltyNumber || ""} (${deletingBilty.trackingId || ""}) was successfully deleted.`,
       });
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("spd-bilty-updated"));
+        window.dispatchEvent(new CustomEvent("spd-data-updated"));
+      }
+
       setDeleteStep(0);
       setDeletingBilty(null);
     } catch (err: any) {

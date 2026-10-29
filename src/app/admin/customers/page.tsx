@@ -694,6 +694,12 @@ export default function CustomersPage() {
       }).catch(() => {});
 
       setActionFeedback({ type: "success", text: `Customer ${deleteCustomer.name} deleted successfully.` });
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("spd-customer-updated"));
+        window.dispatchEvent(new CustomEvent("spd-data-updated"));
+      }
+
       setDeleteCustomer(null);
       setTimeout(() => setActionFeedback(null), 4000);
     } catch (err: any) {

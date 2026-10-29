@@ -413,13 +413,26 @@ export async function DELETE(request: Request) {
 
     if (id) {
       deleteCentralRecord('customers', id);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('customers').delete().eq('id', id);
+        } catch (sbErr) {
+          console.warn('Supabase customer hard delete error:', sbErr);
+        }
+      }
+
       try {
-        await prisma.customer.update({
-          where: { id },
-          data: { status: 'DELETED' },
-        });
-      } catch (dbErr) {
-        console.warn('DB soft delete customer error:', dbErr);
+        await prisma.customer.delete({ where: { id } });
+      } catch {
+        try {
+          await prisma.customer.update({
+            where: { id },
+            data: { status: 'DELETED' },
+          });
+        } catch (dbErr) {
+          console.warn('DB delete customer error:', dbErr);
+        }
       }
     }
 

@@ -8,6 +8,7 @@ import {
   deleteCentralRecord,
   INITIAL_CASH_BOOKS,
 } from '@/lib/server-store';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -683,23 +684,43 @@ export async function DELETE(request: Request) {
         console.warn('Prisma delete tx warning:', dbErr);
       }
 
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('cash_books').delete().eq('id', txId);
+        } catch (sbErr) {
+          console.warn('Supabase delete tx error:', sbErr);
+        }
+      }
+
       deleteCentralRecord('cashTransactions', txId);
       return NextResponse.json({ success: true, message: 'Transaction deleted successfully' });
     }
 
-    // Soft delete / archive entire Cash Book
+    // Delete / archive entire Cash Book
     if (cashBookId) {
-      try {
-        await prisma.cashBook.update({
-          where: { id: cashBookId },
-          data: { status: 'DELETED' },
-        });
-      } catch (dbErr) {
-        console.warn('Prisma archive book warning:', dbErr);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('cash_books').delete().eq('id', cashBookId);
+        } catch (sbErr) {
+          console.warn('Supabase delete cash_book error:', sbErr);
+        }
       }
 
-      updateCentralRecord('cashBooks', cashBookId, { status: 'DELETED' });
-      return NextResponse.json({ success: true, message: 'Cash book archived successfully' });
+      try {
+        await prisma.cashBook.delete({ where: { id: cashBookId } });
+      } catch {
+        try {
+          await prisma.cashBook.update({
+            where: { id: cashBookId },
+            data: { status: 'DELETED' },
+          });
+        } catch (dbErr) {
+          console.warn('Prisma archive book warning:', dbErr);
+        }
+      }
+
+      deleteCentralRecord('cashBooks', cashBookId);
+      return NextResponse.json({ success: true, message: 'Cash book removed successfully' });
     }
 
     return NextResponse.json({ success: false, error: 'Missing txId or cashBookId' }, { status: 400 });

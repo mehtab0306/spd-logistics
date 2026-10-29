@@ -25,8 +25,33 @@ interface AdminNavbarProps {
 export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarProps) {
   const { theme, setTheme } = useTheme();
   const [currentUser, setCurrentUser] = React.useState<any>(null);
+  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
   const [unreadCount, setUnreadCount] = React.useState<number>(0);
   const [mobileSearchOpen, setMobileSearchOpen] = React.useState<boolean>(false);
+
+  const fetchAvatar = React.useCallback(async () => {
+    if (isSupabaseConfigured) {
+      try {
+        const { data } = await supabase
+          .from("system_settings")
+          .select("value")
+          .eq("key", "admin_avatar_url")
+          .maybeSingle();
+        if (data?.value) {
+          setAvatarUrl(data.value);
+          return;
+        } else {
+          setAvatarUrl(null);
+        }
+      } catch (e) {
+        console.warn("Navbar avatar fetch error:", e);
+      }
+    }
+    if (typeof window !== "undefined") {
+      const local = localStorage.getItem("spd_admin_avatar");
+      setAvatarUrl(local || null);
+    }
+  }, []);
 
   const fetchNotificationsCount = React.useCallback(async () => {
     try {
@@ -44,7 +69,6 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
       if (typeof window !== "undefined") {
         const readIds = JSON.parse(localStorage.getItem("spd_notifications_read_ids") || "[]");
         const deletedIds = JSON.parse(localStorage.getItem("spd_notifications_deleted_ids") || "[]");
-
       }
       setUnreadCount(count);
     } catch {
@@ -53,36 +77,22 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
   }, []);
 
   React.useEffect(() => {
+    fetchAvatar();
+
     const fetchUser = async () => {
       if (isSupabaseConfigured) {
-        try {
-          const { data: settingData } = await supabase
-            .from("system_settings")
-            .select("value")
-            .eq("key", "admin_avatar_url")
-            .maybeSingle();
-          if (settingData?.value) {
-            setCurrentUser((prev: any) => ({
-              ...(prev || {}),
-              avatar: settingData.value,
-            }));
-          }
-        } catch {}
-
         try {
           const { data: sbUser } = await supabase
             .from("users")
             .select("name, email, role, avatar, avatar_url")
-            .eq("role", "SUPER_ADMIN")
+            .or("role.eq.SUPER_ADMIN,role.eq.ADMIN")
             .maybeSingle();
           if (sbUser) {
-            const avatarUrl = sbUser.avatar_url || sbUser.avatar || null;
             setCurrentUser((prev: any) => ({
               ...(prev || {}),
               name: sbUser.name || prev?.name || "System Admin",
               email: sbUser.email || prev?.email || "admin@gmail.com",
               role: sbUser.role || "SUPER_ADMIN",
-              avatar: prev?.avatar || avatarUrl,
             }));
           }
         } catch {}
@@ -90,34 +100,44 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
 
       try {
         const storedUser = localStorage.getItem('spd_user');
-        const storedAvatar = localStorage.getItem('spd_admin_avatar');
         if (storedUser) {
           const parsed = JSON.parse(storedUser);
-          if (storedAvatar) parsed.avatar = storedAvatar;
-          setCurrentUser(parsed);
-        } else if (storedAvatar) {
-          setCurrentUser({ avatar: storedAvatar, name: 'System Admin' });
+          setCurrentUser((prev: any) => ({ ...(prev || {}), ...parsed }));
         }
       } catch {}
+
       try {
         const res = await fetch("/api/admin/profile");
         const data = await res.json();
         if (data.success && data.data) {
-          const storedAvatar = localStorage.getItem('spd_admin_avatar');
-          setCurrentUser({ ...data.data, avatar: storedAvatar || data.data.avatar });
+          setCurrentUser((prev: any) => ({ ...(prev || {}), ...data.data }));
         }
-      } catch {
-        // Fallback
-      }
+      } catch {}
     };
+
     fetchUser();
     fetchNotificationsCount();
 
     const handleProfileUpdated = (e: any) => {
-      if (e.detail) {
-        setCurrentUser(e.detail);
+      if (e.detail?.avatarUrl !== undefined) {
+        setAvatarUrl(e.detail.avatarUrl);
+      } else if (e.detail?.avatar !== undefined) {
+        setAvatarUrl(e.detail.avatar);
+      }
+      if (e.detail?.name) {
+        setCurrentUser((prev: any) => ({ ...(prev || {}), ...e.detail }));
       } else {
         fetchUser();
+      }
+    };
+
+    const handleAvatarUpdated = (e: any) => {
+      if (e.detail?.avatarUrl !== undefined) {
+        setAvatarUrl(e.detail.avatarUrl);
+      } else if (e.detail?.avatar !== undefined) {
+        setAvatarUrl(e.detail.avatar);
+      } else {
+        fetchAvatar();
       }
     };
 
@@ -125,20 +145,28 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
       fetchNotificationsCount();
     };
 
+    window.addEventListener("spd-admin-avatar-updated", handleAvatarUpdated);
     window.addEventListener("spd-profile-updated", handleProfileUpdated);
     window.addEventListener("spd-notifications-updated", handleNotificationsUpdated);
-    window.addEventListener("focus", fetchUser);
+    window.addEventListener("focus", () => {
+      fetchAvatar();
+      fetchUser();
+    });
 
     // Poll count every 30 seconds
     const interval = setInterval(fetchNotificationsCount, 30000);
 
     return () => {
+      window.removeEventListener("spd-admin-avatar-updated", handleAvatarUpdated);
       window.removeEventListener("spd-profile-updated", handleProfileUpdated);
       window.removeEventListener("spd-notifications-updated", handleNotificationsUpdated);
-      window.removeEventListener("focus", fetchUser);
+      window.removeEventListener("focus", () => {
+        fetchAvatar();
+        fetchUser();
+      });
       clearInterval(interval);
     };
-  }, [fetchNotificationsCount]);
+  }, [fetchAvatar, fetchNotificationsCount]);
 
   const handleLogout = async () => {
     try {
@@ -231,16 +259,19 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
           {/* Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full ring-1 ring-border">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage
-                    src={currentUser?.avatar || undefined}
-                    alt={currentUser?.name || "@admin"}
+              <Button variant="ghost" className="relative h-9 w-9 rounded-full ring-1 ring-border p-0 overflow-hidden flex items-center justify-center">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Admin"
+                    className="w-8 h-8 rounded-full object-cover"
+                    onError={() => setAvatarUrl(null)}
                   />
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                    {currentUser?.name?.slice(0, 2).toUpperCase() || "AD"}
-                  </AvatarFallback>
-                </Avatar>
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
+                    {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : "AD"}
+                  </div>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 z-[9999]" align="end" forceMount>

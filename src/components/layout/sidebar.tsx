@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -74,6 +74,31 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  const fetchAvatar = useCallback(async () => {
+    if (isSupabaseConfigured) {
+      try {
+        const { data } = await supabase
+          .from("system_settings")
+          .select("value")
+          .eq("key", "admin_avatar_url")
+          .maybeSingle();
+        if (data?.value) {
+          setAvatarUrl(data.value);
+          return;
+        } else {
+          setAvatarUrl(null);
+        }
+      } catch (e) {
+        console.warn("Sidebar avatar fetch error:", e);
+      }
+    }
+    if (typeof window !== "undefined") {
+      const local = localStorage.getItem("spd_admin_avatar");
+      setAvatarUrl(local || null);
+    }
+  }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem("spd_sidebar_collapsed");
@@ -81,23 +106,10 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       setCollapsed(stored === "true");
     }
     setMounted(true);
+    fetchAvatar();
 
     const fetchUser = async () => {
       if (isSupabaseConfigured) {
-        try {
-          const { data: settingData } = await supabase
-            .from("system_settings")
-            .select("value")
-            .eq("key", "admin_avatar_url")
-            .maybeSingle();
-          if (settingData?.value) {
-            setCurrentUser((prev: any) => ({
-              ...(prev || {}),
-              avatar: settingData.value,
-            }));
-          }
-        } catch {}
-
         try {
           const { data: sbUser } = await supabase
             .from("users")
@@ -105,13 +117,11 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
             .or("role.eq.SUPER_ADMIN,role.eq.ADMIN")
             .maybeSingle();
           if (sbUser) {
-            const avatarUrl = sbUser.avatar_url || sbUser.avatar || null;
             setCurrentUser((prev: any) => ({
               ...(prev || {}),
               name: sbUser.name || prev?.name || "System Admin",
               email: sbUser.email || prev?.email || "admin@spd.com",
               role: sbUser.role || "SUPER_ADMIN",
-              avatar: prev?.avatar || avatarUrl,
             }));
           }
         } catch {}
@@ -119,13 +129,9 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
       try {
         const storedUser = localStorage.getItem("spd_user");
-        const storedAvatar = localStorage.getItem("spd_admin_avatar");
         if (storedUser) {
           const parsed = JSON.parse(storedUser);
-          if (storedAvatar) parsed.avatar = storedAvatar;
-          setCurrentUser(parsed);
-        } else if (storedAvatar) {
-          setCurrentUser({ avatar: storedAvatar, name: "System Admin" });
+          setCurrentUser((prev: any) => ({ ...(prev || {}), ...parsed }));
         }
       } catch {}
 
@@ -133,8 +139,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         const res = await fetch("/api/admin/profile");
         const data = await res.json();
         if (data.success && data.data) {
-          const storedAvatar = localStorage.getItem("spd_admin_avatar");
-          setCurrentUser({ ...data.data, avatar: storedAvatar || data.data.avatar });
+          setCurrentUser((prev: any) => ({ ...(prev || {}), ...data.data }));
         }
       } catch {
         // Ignore fallback
@@ -144,20 +149,44 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     fetchUser();
 
     const handleProfileUpdated = (e: any) => {
-      if (e.detail) {
-        setCurrentUser(e.detail);
+      if (e.detail?.avatarUrl !== undefined) {
+        setAvatarUrl(e.detail.avatarUrl);
+      } else if (e.detail?.avatar !== undefined) {
+        setAvatarUrl(e.detail.avatar);
+      }
+      if (e.detail?.name) {
+        setCurrentUser((prev: any) => ({ ...(prev || {}), ...e.detail }));
       } else {
         fetchUser();
       }
     };
 
-    window.addEventListener("spd-profile-updated", handleProfileUpdated);
-    window.addEventListener("focus", fetchUser);
-    return () => {
-      window.removeEventListener("spd-profile-updated", handleProfileUpdated);
-      window.removeEventListener("focus", fetchUser);
+    const handleAvatarUpdated = (e: any) => {
+      if (e.detail?.avatarUrl !== undefined) {
+        setAvatarUrl(e.detail.avatarUrl);
+      } else if (e.detail?.avatar !== undefined) {
+        setAvatarUrl(e.detail.avatar);
+      } else {
+        fetchAvatar();
+      }
     };
-  }, []);
+
+    window.addEventListener("spd-admin-avatar-updated", handleAvatarUpdated);
+    window.addEventListener("spd-profile-updated", handleProfileUpdated);
+    window.addEventListener("focus", () => {
+      fetchAvatar();
+      fetchUser();
+    });
+
+    return () => {
+      window.removeEventListener("spd-admin-avatar-updated", handleAvatarUpdated);
+      window.removeEventListener("spd-profile-updated", handleProfileUpdated);
+      window.removeEventListener("focus", () => {
+        fetchAvatar();
+        fetchUser();
+      });
+    };
+  }, [fetchAvatar]);
 
   // Automatically close mobile sidebar on navigation
   useEffect(() => {
@@ -286,14 +315,12 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           <Link href="/admin/profile" title="Admin Profile & Settings">
             <div className={cn("flex items-center gap-3 rounded-md p-2 hover:bg-accent transition-colors", collapsed && "justify-center px-0")}>
               <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border border-slate-200 dark:border-slate-700">
-                {currentUser?.avatar ? (
+                {avatarUrl ? (
                   <img
-                    src={currentUser.avatar}
-                    alt={currentUser.name || "Admin User"}
+                    src={avatarUrl}
+                    alt={currentUser?.name || "Admin User"}
                     className="h-full w-full object-cover rounded-full"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
+                    onError={() => setAvatarUrl(null)}
                   />
                 ) : (
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-200">

@@ -23,6 +23,20 @@ export const isSupabaseConfigured =
 const supabaseUrl = isValidUrl(rawUrl) ? rawUrl : 'https://placeholder.supabase.co';
 const supabaseAnonKey = rawKey || 'placeholder-anon-key';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Client with zero-cache enforcement (cache: 'no-store') for real-time mobile & desktop sync
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+  },
+  global: {
+    fetch: (url, options) => {
+      return fetch(url, {
+        ...options,
+        cache: 'no-store',
+      });
+    },
+  },
+});
 
+export const supabaseClient = supabase;
 export default supabase;

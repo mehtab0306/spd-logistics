@@ -365,11 +365,16 @@ function AdminProfileContent() {
         localStorage.setItem("spd_user", JSON.stringify(updated));
       } catch {}
 
-      // Dispatch global profile update event
+      // Dispatch global profile and avatar update events
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("spd-profile-updated", {
-            detail: { name, email, phone, avatar: finalAvatarUrl },
+            detail: { name, email, phone, avatar: finalAvatarUrl, avatarUrl: finalAvatarUrl },
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent("spd-admin-avatar-updated", {
+            detail: { avatarUrl: finalAvatarUrl },
           })
         );
       }
@@ -414,12 +419,20 @@ function AdminProfileContent() {
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("spd-profile-updated", {
-            detail: { name, email, phone, avatar: null },
+            detail: { name, email, phone, avatar: null, avatarUrl: null },
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent("spd-admin-avatar-updated", {
+            detail: { avatarUrl: null },
           })
         );
       }
 
       if (isSupabaseConfigured) {
+        try {
+          await supabase.from("system_settings").delete().eq("key", "admin_avatar_url");
+        } catch {}
         try {
           await supabase
             .from("users")

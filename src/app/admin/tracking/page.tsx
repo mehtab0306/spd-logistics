@@ -212,24 +212,19 @@ function AdminTrackingContent() {
   const handleDeleteConsignment = async (c: any) => {
     if (!c) return;
     const confirmDelete = window.confirm(
-      `Are you sure you want to move Bilty/Tracking ${c.trackingId || c.biltyNumber || c.id} to the Recycle Bin?`
+      `Are you sure you want to permanently delete Bilty/Tracking ${c.trackingId || c.biltyNumber || c.id}? This will remove it from all ledgers and reports.`
     );
     if (!confirmDelete) return;
 
-    // 1. Move to local trash store
-    moveToTrash("bilty", c);
+    // 1. Remove from local store
     removeLocalBilty(c.id);
 
-    // 2. Direct Supabase soft-delete
+    // 2. Direct Supabase hard deletion
     if (isSupabaseConfigured) {
       try {
         await supabase
           .from("bilties")
-          .update({
-            is_deleted: true,
-            deleted_at: new Date().toISOString(),
-            status: "DELETED",
-          })
+          .delete()
           .or(`id.eq.${c.id},bilty_number.eq.${c.biltyNumber || c.id}`);
       } catch (sbErr) {
         console.warn("Supabase tracking delete error:", sbErr);
@@ -243,12 +238,18 @@ function AdminTrackingContent() {
       console.warn("API tracking delete error:", apiErr);
     }
 
-    // 4. Update state
+    // 4. Update state and trigger global recalculation
     setConsignments((prev) => prev.filter((item) => item.id !== c.id && item.biltyNumber !== c.biltyNumber));
     if (selectedConsignment?.id === c.id) {
       setSelectedConsignment(null);
     }
-    toast.success(`Consignment ${c.trackingId || c.biltyNumber || c.id} moved to Recycle Bin.`);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("spd-bilty-updated"));
+      window.dispatchEvent(new CustomEvent("spd-data-updated"));
+    }
+
+    toast.success(`Consignment ${c.trackingId || c.biltyNumber || c.id} permanently removed.`);
   };
 
   const handleSaveStatus = (e: React.FormEvent) => {

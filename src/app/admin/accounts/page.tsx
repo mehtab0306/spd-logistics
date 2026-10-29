@@ -555,9 +555,15 @@ export default function AccountsPage() {
     };
     window.addEventListener("storage", handleStorageChange);
     window.addEventListener("focus", handleStorageChange);
+    window.addEventListener("spd-bilty-updated", handleStorageChange);
+    window.addEventListener("spd-customer-updated", handleStorageChange);
+    window.addEventListener("spd-data-updated", handleStorageChange);
     return () => {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("focus", handleStorageChange);
+      window.removeEventListener("spd-bilty-updated", handleStorageChange);
+      window.removeEventListener("spd-customer-updated", handleStorageChange);
+      window.removeEventListener("spd-data-updated", handleStorageChange);
     };
   }, []);
 

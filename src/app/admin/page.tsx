@@ -47,32 +47,61 @@ export default function AdminDashboard() {
   const [recentBilties, setRecentBilties] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
 
+  // Initial load: Purge any legacy stale offline cache keys from window.localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const legacyCacheKeys = [
+          "spd_local_bilties",
+          "spd_bilties",
+          "spd_local_tracking",
+          "spd_deliveries",
+          "spd_ledger_items",
+          "spd_offline_accounts",
+          "spd_cached_stats",
+          "spd_offline_bilties",
+          "spd_cache_v1",
+          "spd_local_challans",
+          "spd_local_customers",
+        ];
+        legacyCacheKeys.forEach((key) => localStorage.removeItem(key));
+      } catch (e) {
+        console.warn("Storage cache purge notice:", e);
+      }
+    }
+  }, []);
+
   const fetchDashboardMetrics = useCallback(async () => {
     try {
       let biltiesList: any[] = [];
       let custCount = 0;
       let drvList: any[] = [];
       let chList: any[] = [];
-      let cbCount = 2;
+      let cbCount = 0;
       let logsList: any[] = [];
 
-      // 1. Direct Supabase Cloud Database Query
+      // 1. Direct Live Supabase Cloud Database Query
       if (isSupabaseConfigured) {
         try {
           const [bRes, cRes, dRes, chRes, cbRes, nRes] = await Promise.allSettled([
-            supabase.from("bilties").select("*").order("created_at", { ascending: false }),
-            supabase.from("customers").select("*", { count: "exact" }),
+            supabase
+              .from("bilties")
+              .select("*")
+              .or("is_deleted.is.null,is_deleted.eq.false")
+              .neq("status", "DELETED")
+              .order("created_at", { ascending: false }),
+            supabase.from("customers").select("*", { count: "exact", head: true }),
             supabase.from("drivers").select("*"),
             supabase.from("challans").select("*"),
-            supabase.from("cash_books").select("id", { count: "exact" }),
+            supabase.from("cash_books").select("id", { count: "exact", head: true }),
             supabase.from("notifications").select("*").order("created_at", { ascending: false }).limit(6),
           ]);
 
           if (bRes.status === "fulfilled" && Array.isArray(bRes.value.data)) {
-            biltiesList = bRes.value.data;
+            biltiesList = bRes.value.data.filter((b: any) => !b.is_deleted && b.status !== "DELETED");
           }
-          if (cRes.status === "fulfilled") {
-            custCount = cRes.value.count ?? (Array.isArray(cRes.value.data) ? cRes.value.data.length : 0);
+          if (cRes.status === "fulfilled" && typeof cRes.value.count === "number") {
+            custCount = cRes.value.count;
           }
           if (dRes.status === "fulfilled" && Array.isArray(dRes.value.data)) {
             drvList = dRes.value.data;
@@ -81,7 +110,7 @@ export default function AdminDashboard() {
             chList = chRes.value.data;
           }
           if (cbRes.status === "fulfilled" && typeof cbRes.value.count === "number") {
-            cbCount = Math.max(2, cbRes.value.count);
+            cbCount = cbRes.value.count;
           }
           if (nRes.status === "fulfilled" && Array.isArray(nRes.value.data)) {
             logsList = nRes.value.data.map((n: any) => ({
@@ -93,60 +122,40 @@ export default function AdminDashboard() {
             }));
           }
         } catch (sbErr) {
-          console.warn("Supabase dashboard metrics load notice:", sbErr);
+          console.warn("Supabase dashboard live query error:", sbErr);
         }
+      } else {
+        // Fallback only if Supabase environment variables are missing
+        try {
+          const res = await fetch("/api/admin/bilty", { cache: "no-store" });
+          const data = await res.json();
+          if (data.success && Array.isArray(data.data)) {
+            biltiesList = data.data.filter((b: any) => !b.is_deleted && b.status !== "DELETED");
+          }
+        } catch {}
       }
 
-      // 2. Resilient Fallback to local storage or API if database returns empty
-      if (biltiesList.length === 0) {
-        const local = getStoredBilties();
-        if (local && local.length > 0) {
-          biltiesList = local;
-        } else {
-          try {
-            const res = await fetch("/api/admin/bilty");
-            const data = await res.json();
-            if (data.success && Array.isArray(data.data)) {
-              biltiesList = data.data;
-            }
-          } catch {}
-        }
-      }
-
-      if (custCount === 0) {
-        const localCust = getStoredCustomers();
-        custCount = localCust.length;
-      }
-
-      if (drvList.length === 0) {
-        drvList = getStoredDrivers();
-      }
-
-      if (chList.length === 0) {
-        chList = getStoredChallans();
-      }
-
-      // Calculate Real-Time KPIs
+      // Calculate Real-Time KPIs directly from active Supabase records
       const totalConsignments = biltiesList.length;
-      const activeInTransit = biltiesList.filter((b) => {
+      const activeInTransit = biltiesList.filter((b: any) => {
         const st = String(b.status || b.shipmentStatus || "").toLowerCase();
-        return st.includes("transit") || st.includes("dispatch");
+        return st === "in-transit" || st === "in_transit" || st.includes("transit") || st.includes("dispatch");
       }).length;
 
-      const delivered = biltiesList.filter((b) => {
+      const delivered = biltiesList.filter((b: any) => {
         const st = String(b.status || b.shipmentStatus || "").toLowerCase();
-        return st.includes("deliver");
+        return st === "delivered" || st.includes("deliver");
       }).length;
 
-      const totalBiltyFreight = biltiesList.reduce((acc, b) => {
-        return acc + (Number(b.freight_amount ?? b.totalFreight ?? b.totalAmount ?? b.total_freight) || 0);
+      const totalBiltyFreight = biltiesList.reduce((acc: number, b: any) => {
+        return acc + (Number(b.freight_amount ?? b.total_freight ?? b.totalFreight ?? b.totalAmount) || 0);
       }, 0);
 
-      const totalPaidAmount = biltiesList.reduce((acc, b) => {
+      const totalPaidAmount = biltiesList.reduce((acc: number, b: any) => {
         return acc + (Number(b.advance_paid ?? b.paidAmount) || 0);
       }, 0);
 
-      const outstandingBalance = biltiesList.reduce((acc, b) => {
+      const outstandingBalance = biltiesList.reduce((acc: number, b: any) => {
         return acc + (Number(b.remaining_balance ?? b.remainingBalance) || 0);
       }, 0);
 
@@ -182,7 +191,7 @@ export default function AdminDashboard() {
         destination: c.destination_station || c.destination || "Karachi",
         senderName: c.sender_name || c.senderName || "Walk-in Customer",
         customerName: c.customer?.companyName || c.sender_name || c.senderName || "Walk-in Customer",
-        totalAmount: Number(c.freight_amount ?? c.totalFreight ?? c.totalAmount ?? c.total_freight ?? 0),
+        totalAmount: Number(c.freight_amount ?? c.total_freight ?? c.totalFreight ?? c.totalAmount ?? 0),
         shipmentStatus: String(c.status || c.shipmentStatus || "BOOKED").toUpperCase(),
       }));
       setRecentBilties(formattedRecent);
@@ -207,9 +216,13 @@ export default function AdminDashboard() {
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("spd-bilty-updated", handleFocus);
+    window.addEventListener("spd-customer-updated", handleFocus);
+    window.addEventListener("spd-data-updated", handleFocus);
     return () => {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("spd-bilty-updated", handleFocus);
+      window.removeEventListener("spd-customer-updated", handleFocus);
+      window.removeEventListener("spd-data-updated", handleFocus);
     };
   }, [fetchDashboardMetrics]);
 

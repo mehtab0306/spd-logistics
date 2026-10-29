@@ -1229,6 +1229,18 @@ export async function DELETE(request: Request) {
 
     deleteCentralRecord('bilties', id);
 
+    // Direct Supabase hard deletion
+    if (isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('bilties')
+          .delete()
+          .or(`id.eq.${id},bilty_number.eq.${id}`);
+      } catch (sbErr) {
+        console.warn('Supabase bilty hard delete error in API:', sbErr);
+      }
+    }
+
     try {
       const consignment = await prisma.consignment.findUnique({
         where: { id },
@@ -1236,13 +1248,17 @@ export async function DELETE(request: Request) {
       });
 
       if (consignment) {
-        await prisma.consignment.update({
-          where: { id },
-          data: { shipmentStatus: 'DELETED' },
-        });
+        try {
+          await prisma.consignment.delete({ where: { id } });
+        } catch {
+          await prisma.consignment.update({
+            where: { id },
+            data: { shipmentStatus: 'DELETED' },
+          });
+        }
       }
     } catch (dbErr) {
-      console.warn('DB delete soft error (falling back):', dbErr);
+      console.warn('DB delete error (falling back):', dbErr);
     }
 
     return NextResponse.json({
