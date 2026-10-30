@@ -269,7 +269,7 @@ export function AdminNavbar({ onMenuClick, title = "Dashboard" }: AdminNavbarPro
                   />
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
-                    {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : "AD"}
+                    {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : "SY"}
                   </div>
                 )}
               </Button>

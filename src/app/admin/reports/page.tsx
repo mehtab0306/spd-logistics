@@ -52,33 +52,40 @@ export default function ReportsPage() {
           const rawBilties = bRes.status === "fulfilled" && Array.isArray(bRes.value.data) ? bRes.value.data : [];
           const activeBilties = rawBilties.filter((b: any) => !b.is_deleted && b.status !== "DELETED");
 
-          const totalConsignments = activeBilties.length;
+          // Deduplicate active bilties to prevent any duplicate entries / double calculations
+          const uniqueBilties = Array.from(
+            new Map(
+              activeBilties.map((b: any) => [String(b.id || b.bilty_number || b.biltyNumber || Math.random()), b])
+            ).values()
+          );
+
+          const totalConsignments = uniqueBilties.length;
           const totalCustomers = cRes.status === "fulfilled" && typeof cRes.value.count === "number" ? cRes.value.count : 0;
           const totalDrivers = dRes.status === "fulfilled" && typeof dRes.value.count === "number" ? dRes.value.count : 0;
           const totalVehicles = vRes.status === "fulfilled" && typeof vRes.value.count === "number" ? vRes.value.count : 0;
 
-          const lahoreCount = activeBilties.filter(
+          const lahoreCount = uniqueBilties.filter(
             (b: any) => (b.origin_station || b.origin || "").toLowerCase().includes("lahore")
           ).length;
-          const karachiCount = activeBilties.filter(
+          const karachiCount = uniqueBilties.filter(
             (b: any) => (b.origin_station || b.origin || "").toLowerCase().includes("karachi")
           ).length;
-          const deliveredCount = activeBilties.filter(
+          const deliveredCount = uniqueBilties.filter(
             (b: any) => (b.status || "").toUpperCase() === "DELIVERED"
           ).length;
-          const inTransitCount = activeBilties.filter((b: any) =>
+          const inTransitCount = uniqueBilties.filter((b: any) =>
             ["IN_TRANSIT", "DISPATCHED"].includes((b.status || "").toUpperCase())
           ).length;
 
-          const totalFreight = activeBilties.reduce(
+          const totalFreight = uniqueBilties.reduce(
             (acc: number, b: any) => acc + (Number(b.freight_amount ?? b.total_freight ?? 0) || 0),
             0
           );
-          const totalPaid = activeBilties.reduce(
+          const totalPaid = uniqueBilties.reduce(
             (acc: number, b: any) => acc + (Number(b.advance_paid ?? 0) || 0),
             0
           );
-          const totalRemaining = activeBilties.reduce((acc: number, b: any) => {
+          const totalRemaining = uniqueBilties.reduce((acc: number, b: any) => {
             const freight = Number(b.freight_amount ?? b.total_freight ?? 0) || 0;
             const paid = Number(b.advance_paid ?? 0) || 0;
             const rem =

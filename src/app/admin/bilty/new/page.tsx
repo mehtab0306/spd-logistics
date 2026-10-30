@@ -58,7 +58,7 @@ import {
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
-import { supabase, isSupabaseConfigured, safeUpsertCustomer } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID } from "@/lib/supabase";
 
 export interface BiltyCargoItem {
   detail: string;
@@ -390,8 +390,9 @@ export default function NewBiltyPage() {
 
     setQuickCustomerSubmitting(true);
     try {
+      const newCustId = generateUUID();
       const newCust = {
-        id: `cust-${Date.now()}`,
+        id: newCustId,
         name: quickCustomerData.name.trim(),
         companyName: quickCustomerData.name.trim(),
         phone: quickCustomerData.phone.trim() || null,
@@ -403,23 +404,25 @@ export default function NewBiltyPage() {
         createdAt: new Date().toISOString(),
       };
 
-      saveStoredCustomer(newCust);
-      setCustomers((prev) => [newCust, ...prev]);
-
-      // Supabase cloud customer upsert (only name mandatory)
+      // Supabase cloud customer insert (only name mandatory, omit ID so DB assigns UUID)
       if (isSupabaseConfigured) {
         try {
-          await safeUpsertCustomer({
-            id: newCust.id,
+          const { success, data: sbData } = await safeUpsertCustomer({
             name: newCust.name,
             phone: newCust.phone || null,
             city: newCust.city || "Karachi",
             address: newCust.address || null,
           });
+          if (success && sbData?.id) {
+            newCust.id = sbData.id;
+          }
         } catch (sbErr) {
           console.warn("Supabase customer upsert warning:", sbErr);
         }
       }
+
+      saveStoredCustomer(newCust);
+      setCustomers((prev) => [newCust, ...prev]);
 
       if (quickCustomerTarget === "sender") {
         setFormData((prev) => ({

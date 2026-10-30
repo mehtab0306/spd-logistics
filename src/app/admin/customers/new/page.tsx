@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { saveStoredCustomer, getStoredCustomers } from "@/lib/local-persistence";
-import { supabase, isSupabaseConfigured, safeUpsertCustomer } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID } from "@/lib/supabase";
 
 export default function NewCustomerPage() {
   const router = useRouter();
@@ -130,7 +130,7 @@ export default function NewCustomerPage() {
         photoUrl = await handleUploadPhoto(photoFile);
       }
 
-      const uniqueId = Date.now().toString();
+      const uniqueId = generateUUID();
       const timestamp = new Date().toISOString();
       const openBal = parseFloat(formData.openingBalance) || 0;
       const credLim = parseFloat(formData.creditLimit) || 0;
@@ -141,7 +141,7 @@ export default function NewCustomerPage() {
 
       const newCustomerRecord = {
         id: uniqueId,
-        accountId: `CUST-${uniqueId.slice(-6)}`,
+        accountId: `CUST-${uniqueId.slice(-6).toUpperCase()}`,
         name: formData.name.trim(),
         companyName: formData.companyName.trim() || null,
         phone: formData.phone.trim(),
@@ -168,12 +168,12 @@ export default function NewCustomerPage() {
           avatar: photoUrl || null,
         },
         account: {
-          id: `acc_${uniqueId}`,
+          id: `acc_${uniqueId.slice(-8)}`,
           currentBalance: openBal,
           transactions: openBal
             ? [
                 {
-                  id: `tx-open-${uniqueId}`,
+                  id: `tx-open-${uniqueId.slice(-8)}`,
                   date: timestamp,
                   description: "Opening Balance Brought Forward",
                   debit: openBal > 0 ? openBal : 0,
@@ -193,8 +193,7 @@ export default function NewCustomerPage() {
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { success, error: sbErr } = await safeUpsertCustomer({
-          id: newCustomerRecord.id,
+        const { success, data: sbData, error: sbErr } = await safeUpsertCustomer({
           name: String(newCustomerRecord.name || newCustomerRecord.companyName || "").trim(),
           phone: newCustomerRecord.phone || null,
           email: newCustomerRecord.email || null,
@@ -210,6 +209,9 @@ export default function NewCustomerPage() {
           lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
         } else {
           savedSuccessfully = true;
+          if (sbData?.id) {
+            newCustomerRecord.id = sbData.id;
+          }
           saveStoredCustomer(newCustomerRecord);
         }
 

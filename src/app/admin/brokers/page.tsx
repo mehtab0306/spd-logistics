@@ -62,7 +62,7 @@ import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import { exportToExcel } from "@/lib/export-excel";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertBroker, generateUUID } from "@/lib/supabase";
 
 export default function BrokersPage() {
   const [brokers, setBrokers] = useState<any[]>([]);
@@ -202,7 +202,7 @@ export default function BrokersPage() {
     setSavingBroker(true);
 
     try {
-      const brokerId = `brk-${Date.now()}`;
+      const brokerId = generateUUID();
       const openBal = parseFloat(brokerFormData.balance) || 0;
       const newBroker = {
         id: brokerId,
@@ -222,18 +222,18 @@ export default function BrokersPage() {
 
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("brokers").upsert([
-            {
-              id: brokerId,
-              name: newBroker.name,
-              phone: newBroker.phone || null,
-              company_name: newBroker.contactPerson,
-              city: newBroker.city,
-              balance: openBal,
-              status: "ACTIVE",
-              created_at: newBroker.createdAt,
-            },
-          ]);
+          const { success, data: sbData } = await safeUpsertBroker({
+            name: newBroker.name,
+            phone: newBroker.phone || null,
+            company_name: newBroker.contactPerson,
+            city: newBroker.city,
+            balance: openBal,
+            status: "ACTIVE",
+            created_at: newBroker.createdAt,
+          });
+          if (success && sbData?.id) {
+            newBroker.id = sbData.id;
+          }
         } catch (sbErr) {
           console.warn("Supabase quick broker save warning:", sbErr);
         }

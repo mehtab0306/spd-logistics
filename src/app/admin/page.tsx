@@ -41,7 +41,7 @@ export default function AdminDashboard() {
   const [totalRemaining, setTotalRemaining] = useState(0);
   const [trucksCount, setTrucksCount] = useState(0);
   const [driversCount, setDriversCount] = useState(0);
-  const [cashBooksCount, setCashBooksCount] = useState(2);
+  const [cashBooksCount, setCashBooksCount] = useState(0);
   const [lahoreCount, setLahoreCount] = useState(0);
   const [karachiCount, setKarachiCount] = useState(0);
   const [recentBilties, setRecentBilties] = useState<any[]>([]);
@@ -140,34 +140,44 @@ export default function AdminDashboard() {
         } catch {}
       }
 
+      // Deduplicate bilties by ID or bilty number to prevent any duplicate entries / double calculations
+      const uniqueBilties = Array.from(
+        new Map(
+          biltiesList.map((item: any) => [
+            String(item.id || item.bilty_number || item.biltyNumber || Math.random()),
+            item,
+          ])
+        ).values()
+      );
+
       // Calculate Real-Time KPIs directly from active Supabase records
-      const totalConsignments = biltiesList.length;
-      const activeInTransit = biltiesList.filter((b: any) => {
+      const totalConsignments = uniqueBilties.length;
+      const activeInTransit = uniqueBilties.filter((b: any) => {
         const st = String(b.status || b.shipmentStatus || "").toLowerCase();
         return st === "in-transit" || st === "in_transit" || st.includes("transit") || st.includes("dispatch");
       }).length;
 
-      const delivered = biltiesList.filter((b: any) => {
+      const delivered = uniqueBilties.filter((b: any) => {
         const st = String(b.status || b.shipmentStatus || "").toLowerCase();
         return st === "delivered" || st.includes("deliver");
       }).length;
 
-      const totalBiltyFreight = biltiesList.reduce((acc: number, b: any) => {
+      const totalBiltyFreight = uniqueBilties.reduce((acc: number, b: any) => {
         return acc + (Number(b.freight_amount ?? b.total_freight ?? b.totalFreight ?? b.totalAmount) || 0);
       }, 0);
 
-      const totalPaidAmount = biltiesList.reduce((acc: number, b: any) => {
+      const totalPaidAmount = uniqueBilties.reduce((acc: number, b: any) => {
         return acc + (Number(b.advance_paid ?? b.paidAmount) || 0);
       }, 0);
 
-      const outstandingBalance = biltiesList.reduce((acc: number, b: any) => {
+      const outstandingBalance = uniqueBilties.reduce((acc: number, b: any) => {
         return acc + (Number(b.remaining_balance ?? b.remainingBalance) || 0);
       }, 0);
 
       // Hub Volume Calculations
       let lhr = 0;
       let khi = 0;
-      for (const b of biltiesList) {
+      for (const b of uniqueBilties) {
         const orig = String(b.origin_station || b.origin || "").toLowerCase();
         const dest = String(b.destination_station || b.destination || "").toLowerCase();
         const wh = String(b.warehouse || "").toLowerCase();
@@ -189,7 +199,7 @@ export default function AdminDashboard() {
       setKarachiCount(khi);
 
       // Format recent bilties
-      const formattedRecent = biltiesList.slice(0, 6).map((c: any) => ({
+      const formattedRecent = uniqueBilties.slice(0, 6).map((c: any) => ({
         id: c.id || c.bilty_number || c.biltyNumber,
         biltyNumber: c.bilty_number || c.biltyNumber || c.id,
         origin: c.origin_station || c.origin || "Karachi",

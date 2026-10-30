@@ -324,7 +324,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                   />
                 ) : (
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                    {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : "AD"}
+                    {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : "SY"}
                   </span>
                 )}
               </div>

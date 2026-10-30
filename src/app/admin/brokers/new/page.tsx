@@ -22,7 +22,7 @@ import { FormSectionCard } from "@/components/shared/form-section-card";
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { saveStoredBroker } from "@/lib/local-persistence";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertBroker, generateUUID } from "@/lib/supabase";
 
 export default function NewBrokerPage() {
   const router = useRouter();
@@ -66,7 +66,7 @@ export default function NewBrokerPage() {
     setSubmitting(true);
 
     try {
-      const brokerId = `brk-${Date.now()}`;
+      const brokerId = generateUUID();
       const openBal = parseFloat(formData.openingBalance) || 0;
       const commRate = parseFloat(formData.commissionRate) || 0;
 
@@ -97,18 +97,18 @@ export default function NewBrokerPage() {
       // 1. Enforce Cloud Database Persistence
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("brokers").upsert([
-            {
-              id: brokerId,
-              name: brokerPayload.name,
-              phone: brokerPayload.phone || null,
-              company_name: brokerPayload.contactPerson || brokerPayload.name,
-              city: brokerPayload.city || "Karachi",
-              balance: openBal,
-              status: brokerPayload.status || "ACTIVE",
-              created_at: brokerPayload.createdAt,
-            },
-          ]);
+          const { success, data: sbData } = await safeUpsertBroker({
+            name: brokerPayload.name,
+            phone: brokerPayload.phone || null,
+            company_name: brokerPayload.contactPerson || brokerPayload.name,
+            city: brokerPayload.city || "Karachi",
+            balance: openBal,
+            status: brokerPayload.status || "ACTIVE",
+            created_at: brokerPayload.createdAt,
+          });
+          if (success && sbData?.id) {
+            brokerPayload.id = sbData.id;
+          }
         } catch (sbErr) {
           console.warn("Supabase broker write warning:", sbErr);
         }

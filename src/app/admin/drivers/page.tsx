@@ -54,7 +54,7 @@ import {
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
-import { supabase, isSupabaseConfigured, safeUpsertDriver } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertDriver, generateUUID } from "@/lib/supabase";
 
 export default function DriversPage() {
   const router = useRouter();
@@ -390,8 +390,9 @@ export default function DriversPage() {
       }
 
       const assignedVeh = vehicles.find((v) => v.id === formData.assignedVehicleId);
+      const clientUuid = generateUUID();
       const newDrv = {
-        id: `drv_loc_${Date.now()}`,
+        id: clientUuid,
         name: formData.name,
         phone: formData.phone,
         contact: formData.phone,
@@ -418,8 +419,7 @@ export default function DriversPage() {
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { success, error: sbErr } = await safeUpsertDriver({
-          id: newDrv.id,
+        const { success, data: sbData, error: sbErr } = await safeUpsertDriver({
           name: newDrv.name,
           phone: newDrv.phone || null,
           cnic: newDrv.cnic || null,
@@ -433,6 +433,9 @@ export default function DriversPage() {
           lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
         } else {
           savedSuccessfully = true;
+          if (sbData?.id) {
+            newDrv.id = sbData.id;
+          }
           saveLocalDriver(newDrv);
           setDrivers((prev) => [newDrv, ...prev]);
         }

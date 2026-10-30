@@ -47,7 +47,7 @@ import {
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
 import { exportToExcel } from "@/lib/export-excel";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertVehicle, generateUUID } from "@/lib/supabase";
 
 export default function VehiclesPage() {
   const router = useRouter();
@@ -312,10 +312,11 @@ export default function VehiclesPage() {
 
     try {
       const assignedDriver = drivers.find((d) => d.id === formData.driverId);
+      const clientUuid = generateUUID();
       const newVeh = {
-        id: `v_loc_${Date.now()}`,
-        vehicleNumber: formData.vehicleNumber.trim(),
-        registrationNumber: formData.registrationNumber.trim() || `REG-${formData.vehicleNumber.trim()}`,
+        id: clientUuid,
+        vehicleNumber: formData.vehicleNumber.trim().toUpperCase(),
+        registrationNumber: formData.registrationNumber.trim() || `REG-${formData.vehicleNumber.trim().toUpperCase()}`,
         vehicleType: formData.vehicleType,
         make: formData.make,
         model: formData.model,
@@ -346,17 +347,17 @@ export default function VehiclesPage() {
 
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("vehicles").upsert({
-            id: newVeh.id,
+          const { success, data: sbData } = await safeUpsertVehicle({
             vehicle_number: newVeh.vehicleNumber,
-            registration_number: newVeh.registrationNumber || newVeh.vehicleNumber,
             vehicle_type: newVeh.vehicleType || "Heavy Truck (22-Wheeler)",
-            capacity: String(newVeh.capacity),
             driver_name: assignedDriver?.name || null,
             driver_phone: assignedDriver?.phone || null,
             status: newVeh.status || "AVAILABLE",
-            created_at: new Date().toISOString(),
+            created_at: newVeh.createdAt,
           });
+          if (success && sbData?.id) {
+            newVeh.id = sbData.id;
+          }
         } catch (sbErr: any) {
           console.warn("Supabase vehicle save notice:", sbErr);
         }

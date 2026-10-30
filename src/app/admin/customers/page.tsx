@@ -59,7 +59,7 @@ import {
 import { exportToExcel } from "@/lib/export-excel";
 import { MonthlyBillStatementModal } from "@/components/customers/monthly-bill-statement-modal";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
-import { supabase, isSupabaseConfigured, safeUpsertCustomer } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID } from "@/lib/supabase";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -558,8 +558,9 @@ export default function CustomersPage() {
       } else {
         const openBal = parseFloat(customerForm.openingBalance) || 0;
         const credLim = parseFloat(customerForm.creditLimit) || 0;
+        const clientUuid = generateUUID();
         const newCust = {
-          id: `c_loc_${Date.now()}`,
+          id: clientUuid,
           name: customerForm.name.trim(),
           companyName: customerForm.companyName?.trim() || null,
           phone: customerForm.phone.trim(),
@@ -576,7 +577,7 @@ export default function CustomersPage() {
           notes: customerForm.notes?.trim() || null,
           status: "ACTIVE",
           user: { email: customerForm.email, status: "ACTIVE" },
-          account: { id: `acc_${Date.now()}`, balance: openBal, transactions: [] },
+          account: { id: `acc_${clientUuid.slice(-8)}`, balance: openBal, transactions: [] },
           _count: { consignmentsAsCustomer: 0, payments: 0 },
           createdAt: new Date().toISOString(),
         };
@@ -585,8 +586,7 @@ export default function CustomersPage() {
         let lastErrorMessage = "";
 
         if (isSupabaseConfigured) {
-          const { success, error: sbErr } = await safeUpsertCustomer({
-            id: newCust.id,
+          const { success, data: sbData, error: sbErr } = await safeUpsertCustomer({
             name: String(newCust.name || newCust.companyName || "").trim(),
             phone: newCust.phone || null,
             email: newCust.email || null,
@@ -601,6 +601,9 @@ export default function CustomersPage() {
             lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
           } else {
             savedSuccessfully = true;
+            if (sbData?.id) {
+              newCust.id = sbData.id;
+            }
           }
           fetch("/api/admin/customers", {
             method: "POST",

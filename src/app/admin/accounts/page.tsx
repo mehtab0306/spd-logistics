@@ -203,28 +203,29 @@ export default function AccountsPage() {
         const cRes = await fetch("/api/admin/customers");
         if (cRes.ok) {
           const cJson = await cRes.json();
-          if (cJson.customers) {
-            for (const c of cJson.customers) {
-              if (!custList.some((existing) => String(existing.id) === String(c.id) || existing.name === c.name)) {
-                custList.push(c);
-              }
+          const items = Array.isArray(cJson.customers) ? cJson.customers : Array.isArray(cJson.data) ? cJson.data : [];
+          for (const c of items) {
+            if (!custList.some((existing) => String(existing.id) === String(c.id) || existing.name === c.name)) {
+              custList.push(c);
             }
           }
         }
       } catch {}
 
-      // Check local customers
-      try {
-        const localCustRaw = localStorage.getItem(LOCAL_CUSTOMERS_KEY);
-        if (localCustRaw) {
-          const localCusts = JSON.parse(localCustRaw);
-          for (const lc of localCusts) {
-            if (!custList.some((c) => c.id === lc.id)) {
-              custList.push(lc);
+      if (!isSupabaseConfigured) {
+        // Check local customers only when Supabase is offline
+        try {
+          const localCustRaw = localStorage.getItem(LOCAL_CUSTOMERS_KEY);
+          if (localCustRaw) {
+            const localCusts = JSON.parse(localCustRaw);
+            for (const lc of localCusts) {
+              if (!custList.some((c) => c.id === lc.id)) {
+                custList.push(lc);
+              }
             }
           }
-        }
-      } catch {}
+        } catch {}
+      }
       setCustomers(custList);
 
       // 3. Read LocalStorage accounts (sanitize any legacy mock accounts)
@@ -297,7 +298,10 @@ export default function AccountsPage() {
             .select("*")
             .order("created_at", { ascending: false });
           if (Array.isArray(sbBilties)) {
-            for (const b of sbBilties) {
+            const activeSbBilties = sbBilties.filter(
+              (b: any) => !b.is_deleted && b.status !== "DELETED"
+            );
+            for (const b of activeSbBilties) {
               const bNum = b.manual_bilty_number || b.bilty_number || b.id;
               localBilties.push({
                 id: b.id,
@@ -316,20 +320,27 @@ export default function AccountsPage() {
         } catch (e) {
           console.warn("Supabase bilties query notice in accounts:", e);
         }
-      }
-
-      try {
-        const rawB = localStorage.getItem(LOCAL_BILTIES_KEY);
-        if (rawB) {
-          const parsed = JSON.parse(rawB);
-          for (const b of parsed) {
-            const bNum = b.biltyNumber || b.id;
-            if (!localBilties.some((lb) => String(lb.id) === String(b.id) || String(lb.biltyNumber) === String(bNum))) {
-              localBilties.push(b);
+      } else {
+        try {
+          const rawB = localStorage.getItem(LOCAL_BILTIES_KEY);
+          if (rawB) {
+            const parsed = JSON.parse(rawB);
+            for (const b of parsed) {
+              const bNum = b.biltyNumber || b.id;
+              if (!localBilties.some((lb) => String(lb.id) === String(b.id) || String(lb.biltyNumber) === String(bNum))) {
+                localBilties.push(b);
+              }
             }
           }
-        }
-      } catch {}
+        } catch {}
+      }
+
+      // Deduplicate bilties by ID or bilty number to avoid double calculations
+      const uniqueBilties = Array.from(
+        new Map(
+          localBilties.map((b: any) => [String(b.id || b.biltyNumber || Math.random()), b])
+        ).values()
+      );
 
       let localCashTxs: any[] = [];
       try {
@@ -376,7 +387,7 @@ export default function AccountsPage() {
         const custId = acc.customerId || acc.customer?.id;
 
         // A. Post newly generated and local bilties as DEBIT entries (Freight billed)
-        const matchedBilties = localBilties.filter((b: any) => {
+        const matchedBilties = uniqueBilties.filter((b: any) => {
           const bCustId = b.customerId && b.customerId === custId;
           const sMatch =
             (custNameNorm && b.senderName?.toLowerCase().includes(custNameNorm)) ||

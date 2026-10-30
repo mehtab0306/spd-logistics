@@ -25,7 +25,7 @@ import {
   saveStoredVehicle,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertVehicle, generateUUID } from "@/lib/supabase";
 
 export default function NewVehiclePage() {
   const router = useRouter();
@@ -87,7 +87,7 @@ export default function NewVehiclePage() {
 
     setSubmitting(true);
     try {
-      const uniqueId = Date.now().toString();
+      const uniqueId = generateUUID();
       const timestamp = new Date().toISOString();
       const plate = formData.vehicleNumber.trim().toUpperCase();
       const selectedDrv = drivers.find((d) => String(d.id) === String(formData.driverId));
@@ -118,17 +118,17 @@ export default function NewVehiclePage() {
       // 1. Enforce Cloud Database Persistence
       if (isSupabaseConfigured) {
         try {
-          await supabase.from("vehicles").upsert({
-            id: uniqueId,
+          const { success, data: sbData } = await safeUpsertVehicle({
             vehicle_number: plate,
-            registration_number: formData.registrationNumber.trim() || plate,
             vehicle_type: formData.vehicleType || "Heavy Truck (22-Wheeler)",
-            capacity: String(formData.capacity || "35"),
             driver_name: selectedDrv?.name || null,
             driver_phone: selectedDrv?.phone || null,
             status: formData.status || "AVAILABLE",
             created_at: timestamp,
           });
+          if (success && sbData?.id) {
+            newVehicleRecord.id = sbData.id;
+          }
         } catch (sbErr) {
           console.warn("Supabase vehicle new page save warning:", sbErr);
         }

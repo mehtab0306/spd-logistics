@@ -30,7 +30,7 @@ import {
   saveStoredDriver,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
-import { supabase, isSupabaseConfigured, safeUpsertDriver } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertDriver, generateUUID } from "@/lib/supabase";
 
 export default function NewDriverPage() {
   const router = useRouter();
@@ -159,12 +159,12 @@ export default function NewDriverPage() {
         photoUrl = await handleUploadPhoto(photoFile);
       }
 
-      const uniqueId = Date.now().toString();
+      const uniqueId = generateUUID();
       const timestamp = new Date().toISOString();
       const finalEmail = formData.email.trim() || "driver@gmail.com";
       const finalPassword = formData.password.trim() || "admin";
       const finalCnic = formData.cnic.trim() || "35202-0000000-0";
-      const finalLicense = formData.licenseNumber.trim() || `LIC-${uniqueId.slice(-6)}`;
+      const finalLicense = formData.licenseNumber.trim() || `LIC-${uniqueId.slice(-6).toUpperCase()}`;
 
       const selectedVeh = vehicles.find((v) => String(v.id) === String(formData.assignedVehicleId));
       const finalVehicleNumber =
@@ -216,8 +216,7 @@ export default function NewDriverPage() {
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { success, error: sbErr } = await safeUpsertDriver({
-          id: newDriverRecord.id,
+        const { success, data: sbData, error: sbErr } = await safeUpsertDriver({
           name: newDriverRecord.name,
           phone: newDriverRecord.phone || null,
           cnic: newDriverRecord.cnic || null,
@@ -231,6 +230,9 @@ export default function NewDriverPage() {
           lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
         } else {
           savedSuccessfully = true;
+          if (sbData?.id) {
+            newDriverRecord.id = sbData.id;
+          }
           saveStoredDriver(newDriverRecord);
         }
 
