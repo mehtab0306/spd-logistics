@@ -63,7 +63,7 @@ export default function UsersPage() {
     {
       id: "user-admin-1",
       name: "System Admin",
-      email: "admin@gmail.com",
+      email: "spd@gmail.com",
       phone: "0325 2024433",
       role: "SUPER_ADMIN",
       status: "ACTIVE",

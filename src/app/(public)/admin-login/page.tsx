@@ -36,195 +36,12 @@ export default function AdminLoginPage() {
     const submitIdentifier = (identifier.trim() || formEmail.trim()).toLowerCase();
     const submitPassword = (password || formPassword).trim();
 
-    // Strict Cloud-First User & Password Verification (Multi-Device Multi-OS)
-    let matchedUser: any = null;
-    let expectedPassword = 'admin';
-
-    try {
-      if (isSupabaseConfigured) {
-        // 1. Directly query admin_users table from Supabase
-        let { data: cloudUser } = await supabase
-          .from('admin_users')
-          .select('*')
-          .ilike('email', submitIdentifier)
-          .maybeSingle();
-
-        if (!cloudUser && (submitIdentifier === 'admin' || submitIdentifier === 'admin@gmail.com')) {
-          const { data: cloudUserAlt } = await supabase
-            .from('admin_users')
-            .select('*')
-            .or('username.ilike.admin,email.ilike.admin@gmail.com')
-            .maybeSingle();
-          if (cloudUserAlt) cloudUser = cloudUserAlt;
-        }
-
-        // 2. Fallback to users table in Supabase
-        if (!cloudUser) {
-          const { data: uUser } = await supabase
-            .from('users')
-            .select('*')
-            .or(`email.ilike.${submitIdentifier},role.eq.SUPER_ADMIN`)
-            .maybeSingle();
-          if (uUser && (uUser.email?.toLowerCase() === submitIdentifier || submitIdentifier === 'admin' || submitIdentifier === 'admin@gmail.com')) {
-            cloudUser = uUser;
-          }
-        }
-
-        // 3. Fallback to system_settings admin_password
-        if (!cloudUser && (submitIdentifier === 'admin' || submitIdentifier === 'admin@gmail.com')) {
-          const { data: settingPass } = await supabase
-            .from('system_settings')
-            .select('value')
-            .eq('key', 'admin_password')
-            .maybeSingle();
-          if (settingPass?.value) {
-            cloudUser = {
-              id: 'admin_root',
-              email: 'admin@gmail.com',
-              name: 'System Admin',
-              role: 'SUPER_ADMIN',
-              password: settingPass.value,
-            };
-          }
-        }
-
-        if (cloudUser) {
-          matchedUser = cloudUser;
-          expectedPassword = cloudUser.password || 'admin';
-        }
-      }
-
-      // If Supabase has not yet been initialized with any admin user or is not configured
-      if (!matchedUser) {
-        const rawUsers = localStorage.getItem('spd_users');
-        const usersList: any[] = rawUsers ? JSON.parse(rawUsers) : [];
-        const storedAdminPass = localStorage.getItem('spd_admin_password');
-        const storedActiveUserRaw = localStorage.getItem('spd_active_user') || localStorage.getItem('spd_user');
-        const storedActiveUser = storedActiveUserRaw ? JSON.parse(storedActiveUserRaw) : null;
-
-        matchedUser = usersList.find(
-          (u: any) =>
-            u.email?.toLowerCase() === submitIdentifier ||
-            u.username?.toLowerCase() === submitIdentifier
-        ) || (
-          storedActiveUser &&
-          (storedActiveUser.email?.toLowerCase() === submitIdentifier || storedActiveUser.username?.toLowerCase() === submitIdentifier)
-            ? storedActiveUser
-            : null
-        );
-
-        if (!matchedUser) {
-          // Fresh install / first-time login fallback
-          if (submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') {
-            expectedPassword = storedAdminPass || 'admin';
-            matchedUser = {
-              id: 'admin_root',
-              name: 'System Admin',
-              email: 'admin@gmail.com',
-              username: 'admin',
-              role: 'SUPER_ADMIN',
-              password: expectedPassword,
-            };
-
-            // Seed cloud table admin_users on first login so subsequent mobile logins find it
-            if (isSupabaseConfigured) {
-              try {
-                await supabase.from('admin_users').upsert({
-                  email: 'admin@gmail.com',
-                  username: 'admin',
-                  name: 'System Admin',
-                  role: 'SUPER_ADMIN',
-                  password: expectedPassword,
-                  updated_at: new Date().toISOString(),
-                }, { onConflict: 'email' });
-              } catch {}
-            }
-          } else {
-            setError('User not found!');
-            setStatus('ERROR');
-            return;
-          }
-        } else {
-          expectedPassword = matchedUser.password || storedAdminPass || 'admin';
-        }
-      }
-
-      // Compare password directly with cloud table
-      const isPasswordValid =
-        expectedPassword === submitPassword ||
-        (matchedUser?.password && matchedUser.password === submitPassword);
-
-      if (!isPasswordValid) {
-        setError('Incorrect password! Old password is no longer valid.');
-        setStatus('ERROR');
-        return;
-      }
-    } catch (authVerifyErr) {
-      console.warn('Auth verification error:', authVerifyErr);
-    }
-
-    if (matchedUser) {
-      const targetUser = matchedUser;
-      const adminSession = {
-        id: targetUser.id || 'admin_root',
-        name: targetUser.fullName || targetUser.name || 'System Admin',
-        email: targetUser.email || 'admin@gmail.com',
-        username: targetUser.username || 'admin',
-        role: targetUser.role || 'SUPER_ADMIN',
-        redirectUrl: '/admin',
-        token: 'spd-admin-session-token',
-      };
-
-      const getAdminRedirectUrl = () => {
-        try {
-          const params = new URLSearchParams(window.location.search);
-          const redirectParam = params.get('redirect');
-          if (redirectParam && (redirectParam === '/admin' || redirectParam.startsWith('/admin/'))) {
-            return redirectParam;
-          }
-        } catch {}
-        return '/admin';
-      };
-
-      // 1. Save session to localStorage and sessionStorage
-      try {
-        localStorage.setItem('spd_user', JSON.stringify(adminSession));
-        localStorage.setItem('spd_admin_auth', JSON.stringify(adminSession));
-        sessionStorage.setItem('spd_auth_token', adminSession.token);
-      } catch (storageErr) {
-        console.warn('Storage unavailable:', storageErr);
-      }
-
-      // 2. Set authentication cookie for Next.js middleware and server routes
-      try {
-        document.cookie = `spd-auth-token=${adminSession.token}; path=/; max-age=604800; SameSite=Lax`;
-      } catch (cookieErr) {
-        console.warn('Cookie set error:', cookieErr);
-      }
-
-      // 3. Sync to API route with real active credentials
-      try {
-        fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            identifier: targetUser.email || submitIdentifier,
-            email: targetUser.email || submitIdentifier,
-            password: submitPassword,
-            role: 'ADMIN',
-          }),
-        }).catch(() => {});
-      } catch {}
-
-      // 4. Success state and direct redirect to Admin Dashboard
-      setStatus('SUCCESS');
-      setTimeout(() => {
-        window.location.replace(getAdminRedirectUrl());
-      }, 200);
+    if (!submitIdentifier || !submitPassword) {
+      setError('Please enter both your email/username and password.');
+      setStatus('ERROR');
       return;
     }
 
-    // Try API authentication against database for other admin/staff accounts
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -233,27 +50,29 @@ export default function AdminLoginPage() {
           identifier: submitIdentifier,
           email: submitIdentifier,
           password: submitPassword,
+          role: 'ADMIN',
         }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        const userRole = data.user?.role || data.data?.role;
-        if (!['SUPER_ADMIN', 'ADMIN', 'STAFF'].includes(userRole)) {
-          setStatus('ERROR');
-          setError('Access denied: Admin privileges required to enter this portal.');
-          return;
-        }
+      const data = await res.json().catch(() => ({}));
 
-        const userSession = {
-          id: data.user?.id || data.data?.id,
-          name: data.user?.name || data.data?.name || 'Administrator',
-          email: data.user?.email || data.data?.email || submitIdentifier,
-          username: data.user?.username || data.data?.username || 'admin',
-          role: userRole,
-          redirectUrl: '/admin',
-          token: data.data?.token || 'spd-admin-session-token',
+      if (res.ok && data.success) {
+        const userObj = data.user || data.data || {
+          email: submitIdentifier,
+          name: 'System Admin',
+          role: 'SUPER_ADMIN',
         };
+
+        try {
+          localStorage.setItem('spd_user', JSON.stringify(userObj));
+          localStorage.setItem('spd_admin_auth', JSON.stringify(userObj));
+          localStorage.setItem('spd_active_user', JSON.stringify(userObj));
+          if (data.data?.token) {
+            sessionStorage.setItem('spd_auth_token', data.data.token);
+          }
+        } catch {}
+
+        setStatus('SUCCESS');
 
         const getAdminRedirectUrl = () => {
           try {
@@ -263,30 +82,21 @@ export default function AdminLoginPage() {
               return redirectParam;
             }
           } catch {}
-          return '/admin';
+          return data.redirectUrl || '/admin';
         };
 
-        try {
-          localStorage.setItem('spd_user', JSON.stringify(userSession));
-          localStorage.setItem('spd_admin_auth', JSON.stringify(userSession));
-          sessionStorage.setItem('spd_auth_token', userSession.token);
-          document.cookie = `spd-auth-token=${userSession.token}; path=/; max-age=604800; SameSite=Lax`;
-        } catch (storageErr) {
-          console.warn('Storage error:', storageErr);
-        }
-
-        setStatus('SUCCESS');
         setTimeout(() => {
           window.location.replace(getAdminRedirectUrl());
-        }, 200);
+        }, 150);
         return;
+      } else {
+        setError(data.error || 'Invalid credentials. Please verify your email and password.');
+        setStatus('ERROR');
       }
-
-      setStatus('ERROR');
-      setError(data.error || 'Invalid credentials. Please verify your email and password.');
     } catch (apiErr: any) {
+      console.error('Login request failed:', apiErr);
+      setError('Unable to connect to the authentication server. Please check your internet connection.');
       setStatus('ERROR');
-      setError(apiErr.message || 'Unable to connect to login server. Please try again.');
     }
   };
 

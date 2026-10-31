@@ -45,7 +45,7 @@ const getCurrentUser = () => {
       id: "admin_root",
       fullName: "System Admin",
       name: "System Admin",
-      email: "admin@gmail.com",
+      email: "spd@gmail.com",
       phone: "0325 2024433",
       role: "SUPER_ADMIN",
       avatar: null,
@@ -188,20 +188,28 @@ function AdminProfileContent() {
             }
           } catch {}
 
-          const { data: sbUser } = await supabase
-            .from("users")
-            .select("*")
-            .eq("role", "SUPER_ADMIN")
+          const { data: settingEmail } = await supabase
+            .from("system_settings")
+            .select("value")
+            .eq("key", "admin_email")
             .maybeSingle();
 
-          const activePic = cloudAvatar || sbUser?.avatar_url || sbUser?.avatar || null;
-          if (sbUser || activePic) {
+          const { data: sbAdmin } = await supabase
+            .from("admin_users")
+            .select("*")
+            .limit(1)
+            .maybeSingle();
+
+          const activePic = cloudAvatar || null;
+          if (sbAdmin || settingEmail || activePic) {
+            const activeEmail = settingEmail?.value || sbAdmin?.email || localUser.email || "spd@gmail.com";
+            const activeName = sbAdmin?.full_name || sbAdmin?.name || localUser.fullName || "System Admin";
             const merged = {
               ...localUser,
-              fullName: sbUser?.name || localUser.fullName || "System Admin",
-              name: sbUser?.name || localUser.name || "System Admin",
-              email: sbUser?.email || localUser.email || "admin@gmail.com",
-              phone: sbUser?.phone || localUser.phone || "0325 2024433",
+              fullName: activeName,
+              name: activeName,
+              email: activeEmail,
+              phone: localUser.phone || "0325 2024433",
               avatar: activePic,
             };
             setUser(merged);
@@ -225,7 +233,7 @@ function AdminProfileContent() {
         const merged = { ...localUser, ...data.data };
         setUser(merged);
         setName(merged.fullName || merged.name || "System Admin");
-        setEmail(merged.email || "admin@gmail.com");
+        setEmail(merged.email || "spd@gmail.com");
         setPhone(merged.phone || "0325 2024433");
         const activeAvatar = merged.avatar || null;
         setAvatar(activeAvatar);
@@ -327,7 +335,7 @@ function AdminProfileContent() {
           await supabase.from("users").upsert({
             id: user?.id || "admin_root",
             name: name || "System Admin",
-            email: email || "admin@gmail.com",
+            email: email || "spd@gmail.com",
             phone: phone || "0325 2024433",
             role: "SUPER_ADMIN",
             avatar: finalAvatarUrl,
@@ -474,27 +482,44 @@ function AdminProfileContent() {
     setFeedback(null);
 
     try {
-      const currentUser = user || getCurrentUser();
       const updatedFullName = name.trim() || "System Admin";
-      const updatedEmail = email.trim().toLowerCase() || "admin@gmail.com";
+      const updatedEmail = email.trim().toLowerCase() || "spd@gmail.com";
       const updatedPhone = phone.trim() || "0325 2024433";
 
+      // 1. Authoritative Server-side persistence first
+      const res = await fetch("/api/admin/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: updatedFullName,
+          email: updatedEmail,
+          phone: updatedPhone,
+          avatar,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to save profile changes to database.");
+      }
+
       const updatedUser = {
-        ...currentUser,
-        id: currentUser.id || "admin_root",
+        ...(user || {}),
+        id: data.data?.id || user?.id || "a42a888d-75d5-43e9-8d80-f42587510bc5",
         fullName: updatedFullName,
         name: updatedFullName,
         phone: updatedPhone,
         email: updatedEmail,
         avatar: avatar || null,
-        role: currentUser.role || "SUPER_ADMIN",
+        role: "SUPER_ADMIN",
         updatedAt: new Date().toISOString(),
       };
 
-      // 1. Update component state
+      // 2. Update component state
       setUser(updatedUser);
 
-      // 2. Save to localStorage
+      // 3. Update local caches for offline UI continuity
       try {
         localStorage.setItem("spd_active_user", JSON.stringify(updatedUser));
         localStorage.setItem("spd_user", JSON.stringify(updatedUser));
@@ -504,45 +529,9 @@ function AdminProfileContent() {
         console.warn("Storage warning:", storageErr);
       }
 
-      // 3. Sync with global users list so next login uses the new email
-      try {
-        const rawUsers = localStorage.getItem("spd_users");
-        let usersList = rawUsers ? JSON.parse(rawUsers) : [];
-        let matched = false;
-        usersList = usersList.map((u: any) => {
-          if (u.id === currentUser.id || u.email === currentUser.email || u.email === updatedEmail) {
-            matched = true;
-            return { ...u, ...updatedUser };
-          }
-          return u;
-        });
-        if (!matched) {
-          usersList.push(updatedUser);
-        }
-        localStorage.setItem("spd_users", JSON.stringify(usersList));
-      } catch (uErr) {
-        console.warn("Could not sync with spd_users:", uErr);
-      }
-
       // 4. Dispatch global profile update event so sidebar and navbar update immediately
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("spd-profile-updated", { detail: updatedUser }));
-      }
-
-      // 5. Background sync with backend
-      try {
-        await fetch("/api/admin/profile", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: updatedFullName,
-            email: updatedEmail,
-            phone: updatedPhone,
-            avatar,
-          }),
-        });
-      } catch (apiErr) {
-        console.warn("Background API profile update:", apiErr);
       }
 
       const successMsg = "Profile and login email updated successfully!";
@@ -602,150 +591,31 @@ function AdminProfileContent() {
     setChangingPassword(true);
 
     try {
-      const currentUser = getCurrentUser();
-      const currentEmail = (currentUser?.email || email || "admin@gmail.com").toLowerCase().trim();
+      const res = await fetch("/api/admin/profile/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          confirmPassword,
+        }),
+      });
 
-      // Cloud verification of current password across devices
-      let cloudAdminUser: any = null;
-      if (isSupabaseConfigured) {
-        try {
-          const { data: cUser } = await supabase
-            .from("admin_users")
-            .select("*")
-            .ilike("email", currentEmail)
-            .maybeSingle();
-          if (cUser) cloudAdminUser = cUser;
-          if (!cloudAdminUser) {
-            const { data: uUser } = await supabase
-              .from("users")
-              .select("*")
-              .ilike("email", currentEmail)
-              .maybeSingle();
-            if (uUser) cloudAdminUser = uUser;
-          }
-        } catch (sbQueryErr) {
-          console.warn("Cloud admin query notice:", sbQueryErr);
-        }
-      }
+      const data = await res.json().catch(() => ({}));
 
-      const rawUsers = localStorage.getItem("spd_users");
-      let usersList = rawUsers ? JSON.parse(rawUsers) : [];
-
-      // Determine current expected password (strictly what is currently active)
-      const currentStoredPass = localStorage.getItem("spd_admin_password");
-      let targetIndex = usersList.findIndex(
-        (u: any) => u.id === currentUser.id || u.email?.toLowerCase() === currentEmail
-      );
-
-      const activeExpectedPass =
-        cloudAdminUser?.password ||
-        currentStoredPass ||
-        (targetIndex !== -1 ? usersList[targetIndex].password : "admin");
-
-      // Verify current password strictly (zero fallback to old passwords)
-      if (activeExpectedPass && activeExpectedPass !== currentPassword) {
-        const msg = "Current password is incorrect.";
-        setPasswordFeedback({ type: "error", message: msg });
-        toast.error(msg);
-        setChangingPassword(false);
+      if (!res.ok || !data.success) {
+        const errorMsg = data.error || "Failed to change password.";
+        setPasswordFeedback({ type: "error", message: errorMsg });
+        toast.error(errorMsg);
         return;
       }
 
-      // Update cloud table admin_users directly for multi-device synchronization
-      if (isSupabaseConfigured) {
-        try {
-          const { data: updData } = await supabase
-            .from("admin_users")
-            .update({
-              password: newPassword,
-              updated_at: new Date().toISOString(),
-            })
-            .ilike("email", currentEmail)
-            .select();
-
-          if (!updData || updData.length === 0) {
-            await supabase.from("admin_users").upsert(
-              {
-                email: currentEmail,
-                name: currentUser?.fullName || name || "System Admin",
-                role: "SUPER_ADMIN",
-                password: newPassword,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "email" }
-            );
-          }
-
-          // Also update users table and system_settings for redundancy
-          try {
-            await supabase
-              .from("users")
-              .update({ password: newPassword, updated_at: new Date().toISOString() })
-              .or(`email.ilike.${currentEmail},role.eq.SUPER_ADMIN`);
-          } catch {}
-
-          try {
-            await supabase.from("system_settings").upsert({
-              key: "admin_password",
-              value: newPassword,
-            });
-          } catch {}
-        } catch (sbCloudErr) {
-          console.warn("Supabase admin_users cloud update error:", sbCloudErr);
-        }
-      }
-
-      // Strictly overwrite or append user with new password
-      if (targetIndex !== -1) {
-        usersList[targetIndex].password = newPassword;
-      } else {
-        usersList.push({
-          id: currentUser.id || "admin_root",
-          email: currentEmail,
-          username: "admin",
-          password: newPassword,
-          role: currentUser.role || "SUPER_ADMIN",
-        });
-      }
-
-      // Also wipe any duplicate/stale legacy entries with old passwords
-      usersList = usersList.map((u: any) => {
-        if (
-          u.id === currentUser.id ||
-          u.email?.toLowerCase() === currentEmail ||
-          u.email?.toLowerCase() === "admin@gmail.com"
-        ) {
-          return { ...u, password: newPassword };
-        }
-        return u;
-      });
-
-      // Strictly write new password across all storage layers
-      localStorage.setItem("spd_users", JSON.stringify(usersList));
-      localStorage.setItem("spd_admin_password", newPassword);
-
-      // Update active session with new password
-      const updatedSession = { ...currentUser, password: newPassword };
-      localStorage.setItem("spd_active_user", JSON.stringify(updatedSession));
-      localStorage.setItem("spd_user", JSON.stringify(updatedSession));
-      localStorage.setItem("spd_auth_user", JSON.stringify(updatedSession));
-
-      // Sync with server API
+      // Purge any plain text passwords from local storage
       try {
-        await fetch("/api/admin/profile/change-password", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            currentPassword,
-            newPassword,
-            confirmPassword,
-          }),
-        });
-      } catch (apiErr) {
-        console.warn("Server API password sync:", apiErr);
-      }
+        localStorage.removeItem("spd_admin_password");
+      } catch {}
 
-      const successMsg = "Password changed successfully! Please use your new password next time you login.";
+      const successMsg = "Password changed successfully! Your new password is now active across all devices.";
       setPasswordFeedback({
         type: "success",
         message: successMsg,
@@ -866,7 +736,7 @@ function AdminProfileContent() {
                     {user?.role || "SUPER_ADMIN"}
                   </Badge>
                 </div>
-                <p className="text-xs text-slate-500 font-mono">{user?.email || "admin@gmail.com"}</p>
+                <p className="text-xs text-slate-500 font-mono">{user?.email || "spd@gmail.com"}</p>
 
                 <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
                   <Button

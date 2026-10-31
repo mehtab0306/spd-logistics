@@ -49,88 +49,44 @@ export default function UnifiedLoginPage() {
     const inputPassword = password.trim();
 
     try {
-      const rawUsers = localStorage.getItem("spd_users");
-      const usersList = rawUsers ? JSON.parse(rawUsers) : [];
-      const storedAdminPass = localStorage.getItem("spd_admin_password");
-      const storedActiveUserRaw =
-        localStorage.getItem("spd_active_user") || localStorage.getItem("spd_user");
-      const storedActiveUser = storedActiveUserRaw ? JSON.parse(storedActiveUserRaw) : null;
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: inputEmail,
+          email: inputEmail,
+          password: inputPassword,
+          role: "ADMIN",
+        }),
+      });
 
-      // 1. Look up user by email strictly in spd_users (or active session)
-      let matchedUser = usersList.find(
-        (u: any) =>
-          u.email?.toLowerCase() === inputEmail ||
-          u.username?.toLowerCase() === inputEmail
-      );
+      const data = await res.json().catch(() => ({}));
 
-      if (!matchedUser && storedActiveUser) {
-        if (
-          storedActiveUser.email?.toLowerCase() === inputEmail ||
-          storedActiveUser.username?.toLowerCase() === inputEmail
-        ) {
-          matchedUser = storedActiveUser;
-        }
+      if (!res.ok || !data.success) {
+        return showError(data.error || "Authentication failed. Invalid email or password.");
       }
 
-      // Initial fresh bootstrap fallback only if 0 custom passwords exist
-      if (!matchedUser) {
-        if ((inputEmail === "admin@gmail.com" || inputEmail === "admin") && !storedAdminPass) {
-          matchedUser = {
-            id: "admin_root",
-            name: "System Admin",
-            email: "admin@gmail.com",
-            password: "admin",
-            role: "SUPER_ADMIN",
-          };
-        } else {
-          return showError("User not found!");
-        }
-      }
-
-      // 2. Strict password validation — old password is completely invalidated
-      const activePassword = matchedUser.password || storedAdminPass || "admin";
-      if (activePassword !== inputPassword) {
-        return showError("Incorrect password! Old password is no longer valid.");
-      }
-
-      // 3. Clear any lingering cached fallback password credentials
-      sessionStorage.removeItem("spd_legacy_pwd");
-
-      // 4. Set session
-      const userSession = {
-        id: matchedUser.id || "admin_root",
-        name: matchedUser.fullName || matchedUser.name || "System Admin",
-        email: matchedUser.email || inputEmail,
-        role: matchedUser.role || "SUPER_ADMIN",
-        token: "spd-admin-session-token",
+      const userSession = data.data?.user || {
+        id: "admin_root",
+        name: "System Admin",
+        email: inputEmail,
+        role: "SUPER_ADMIN",
+        token: data.data?.token || "spd-admin-session-token",
         redirectUrl: "/admin",
       };
 
       localStorage.setItem("spd_user", JSON.stringify(userSession));
       localStorage.setItem("spd_admin_auth", JSON.stringify(userSession));
+      localStorage.setItem("spd_active_user", JSON.stringify(userSession));
       sessionStorage.setItem("spd_auth_token", userSession.token);
       document.cookie = `spd-auth-token=${userSession.token}; path=/; max-age=604800; SameSite=Lax`;
-
-      // 5. Background sync
-      try {
-        fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            identifier: inputEmail,
-            email: inputEmail,
-            password: inputPassword,
-            role: "ADMIN",
-          }),
-        }).catch(() => {});
-      } catch {}
 
       setSuccess(true);
       setTimeout(() => {
         window.location.replace("/admin");
-      }, 400);
+      }, 300);
     } catch (err: any) {
-      showError(err.message || "Authentication failed.");
+      showError(err.message || "Authentication failed. Please check your network.");
     }
   };
 
@@ -186,7 +142,7 @@ export default function UnifiedLoginPage() {
                 <Input
                   required
                   type="text"
-                  placeholder="admin@gmail.com"
+                  placeholder="spd@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="rounded-xl h-11 text-xs pl-10"

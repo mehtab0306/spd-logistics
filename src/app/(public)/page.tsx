@@ -594,7 +594,7 @@ export default function HomePage() {
                   <Input
                     value={contactPhone}
                     onChange={(e) => setContactPhone(e.target.value)}
-                    placeholder="0325 2024433"
+                    placeholder="0300 1234567"
                     className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
                   />
                 </div>

@@ -70,9 +70,9 @@ function ContactPageContent() {
     whatsapp: "",
     email: "",
     operatingCity: "",
-    vehicleType: "22-Wheeler Trailer",
+    vehicleType: "",
     vehicleRegNo: "",
-    preferredRoutes: "Karachi ➔ Lahore Corridor",
+    preferredRoutes: "",
     expectedTerms: "",
     _hp_website: "", // Honeypot
   });
@@ -311,9 +311,9 @@ function ContactPageContent() {
           whatsapp: "",
           email: "",
           operatingCity: "",
-          vehicleType: "22-Wheeler Trailer",
+          vehicleType: "",
           vehicleRegNo: "",
-          preferredRoutes: "Karachi ➔ Lahore Corridor",
+          preferredRoutes: "",
           expectedTerms: "",
           _hp_website: "",
         });
@@ -695,7 +695,7 @@ function ContactPageContent() {
                             WhatsApp Phone Number
                           </label>
                           <Input
-                            placeholder="e.g. 0325 2024433"
+                            placeholder="0300 1234567"
                             value={customerForm.whatsapp}
                             onChange={(e) => setCustomerForm({ ...customerForm, whatsapp: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
@@ -876,7 +876,7 @@ function ContactPageContent() {
                             WhatsApp Number
                           </label>
                           <Input
-                            placeholder="e.g. 0300 2024433"
+                            placeholder="0300 1234567"
                             value={brokerForm.whatsapp}
                             onChange={(e) => setBrokerForm({ ...brokerForm, whatsapp: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
@@ -919,6 +919,7 @@ function ContactPageContent() {
                             onChange={(e) => setBrokerForm({ ...brokerForm, vehicleType: e.target.value })}
                             className="h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-purple-600 shadow-xs"
                           >
+                            <option value="">Select Vehicle Category...</option>
                             <option value="22-Wheeler Trailer">22-Wheeler Trailer (35-50 Tons Heavy Linehaul)</option>
                             <option value="10-Wheeler Bedford">10-Wheeler Bedford (15-20 Tons Commercial)</option>
                             <option value="6-Wheeler Mazda">6-Wheeler Mazda (5-8 Tons)</option>

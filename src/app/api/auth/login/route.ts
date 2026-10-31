@@ -32,29 +32,59 @@ export async function POST(request: Request) {
           .ilike('email', lowerIdentifier)
           .maybeSingle();
 
-        if (!sbAdmin && (lowerIdentifier === 'admin' || lowerIdentifier === 'admin@gmail.com')) {
+        if (!sbAdmin && (lowerIdentifier === 'spd' || lowerIdentifier === 'spd@gmail.com' || lowerIdentifier === 'admin')) {
           const { data: sbAdminAlt } = await supabase
             .from('admin_users')
             .select('*')
-            .or('username.ilike.admin,email.ilike.admin@gmail.com')
+            .or('email.ilike.spd@gmail.com,email.ilike.admin@gmail.com')
+            .limit(1)
             .maybeSingle();
           if (sbAdminAlt) sbAdmin = sbAdminAlt;
         }
 
         if (sbAdmin) {
-          const isPasswordValid =
-            sbAdmin.password === cleanPassword ||
-            (sbAdmin.password && sbAdmin.password.startsWith('$2') && await comparePassword(cleanPassword, sbAdmin.password));
+          let isPasswordValid = false;
+          if (sbAdmin.password) {
+            if (sbAdmin.password.startsWith('$2')) {
+              isPasswordValid = await comparePassword(cleanPassword, sbAdmin.password);
+            } else {
+              isPasswordValid = sbAdmin.password === cleanPassword;
+              // Securely migrate any legacy plaintext password to bcrypt hash
+              if (isPasswordValid) {
+                try {
+                  const newHash = await hashPassword(cleanPassword);
+                  await supabase
+                    .from('admin_users')
+                    .update({
+                      password: newHash,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', sbAdmin.id);
+                } catch {}
+              }
+            }
+          }
 
           if (isPasswordValid) {
-            const token = 'spd-admin-session-token';
+            const adminId = sbAdmin.id || 'admin-1';
+            const adminEmail = sbAdmin.email || 'spd@gmail.com';
+            const adminName = sbAdmin.full_name || sbAdmin.name || 'System Admin';
+            const adminRole = sbAdmin.role || 'SUPER_ADMIN';
+
+            // Create cryptographically signed JWT token with actual user data
+            const token = await createToken({
+              userId: adminId,
+              email: adminEmail,
+              name: adminName,
+              role: adminRole,
+            });
+
             const adminData = {
               token,
-              id: sbAdmin.id || 'admin-1',
-              email: sbAdmin.email || 'admin@gmail.com',
-              username: sbAdmin.username || 'admin',
-              name: sbAdmin.name || 'System Admin',
-              role: sbAdmin.role || 'SUPER_ADMIN',
+              id: adminId,
+              email: adminEmail,
+              name: adminName,
+              role: adminRole,
               redirectUrl: '/admin',
             };
 
@@ -74,7 +104,7 @@ export async function POST(request: Request) {
             const isHttps = !isLocalhost && (request.headers.get('x-forwarded-proto') === 'https' || request.url.startsWith('https:'));
 
             response.cookies.set('spd-auth-token', token, {
-              httpOnly: false,
+              httpOnly: true,
               secure: isHttps,
               sameSite: 'lax',
               maxAge: 60 * 60 * 24 * 7,
@@ -84,7 +114,7 @@ export async function POST(request: Request) {
             return response;
           } else {
             return NextResponse.json(
-              { success: false, error: 'Incorrect password! Old password is no longer valid.' },
+              { success: false, error: 'Incorrect password! Please verify your password.' },
               { status: 401 }
             );
           }
@@ -116,53 +146,6 @@ export async function POST(request: Request) {
       console.warn('Database user search failed (falling back):', dbFindErr);
     }
 
-    // Only allow initial fresh-install admin if 0 admins exist in database
-    if (!user && (lowerIdentifier === 'admin@gmail.com' || lowerIdentifier === 'admin')) {
-      let existingAdminCount = 0;
-      try {
-        existingAdminCount = await prisma.user.count({
-          where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
-        });
-      } catch {}
-
-      if (existingAdminCount === 0 && cleanPassword === 'admin') {
-        const token = 'spd-admin-session-token';
-        const adminData = {
-          token,
-          id: 'admin-1',
-          email: 'admin@gmail.com',
-          username: 'admin',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-          redirectUrl: '/admin',
-        };
-
-        const response = NextResponse.json({
-          success: true,
-          redirectUrl: '/admin',
-          user: {
-            id: 'admin-1',
-            email: 'admin@gmail.com',
-            name: 'System Admin',
-            role: 'SUPER_ADMIN',
-          },
-          data: adminData,
-        });
-
-        const isLocalhost = request.url.includes('localhost') || request.url.includes('127.0.0.1');
-        const isHttps = !isLocalhost && (request.headers.get('x-forwarded-proto') === 'https' || request.url.startsWith('https:'));
-
-        response.cookies.set('spd-auth-token', token, {
-          httpOnly: false,
-          secure: isHttps,
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24 * 7,
-          path: '/',
-        });
-
-        return response;
-      }
-    }
 
     // Direct hardcoded customer credentials check strictly configured to customer@gmail.com / admin
     if ((lowerIdentifier === 'customer@gmail.com' || lowerIdentifier === 'customer') && cleanPassword === 'admin') {
@@ -281,29 +264,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Production bootstrap: If database has 0 admin accounts and official credentials are used, initialize SUPER_ADMIN
-    if (!user && (lowerIdentifier === 'admin@gmail.com' || lowerIdentifier === 'admin')) {
-      const adminCount = await prisma.user.count({
-        where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
-      });
-      if (adminCount === 0) {
-        const hashedPassword = await hashPassword('admin');
-        user = await prisma.user.create({
-          data: {
-            email: 'admin@gmail.com',
-            username: 'admin',
-            name: 'System Admin',
-            role: 'SUPER_ADMIN',
-            status: 'ACTIVE',
-            password: hashedPassword,
-          },
-          include: {
-            customer: true,
-            driver: true,
-          },
-        });
-      }
-    }
 
     if (!user) {
       try {

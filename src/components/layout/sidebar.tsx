@@ -111,17 +111,26 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     const fetchUser = async () => {
       if (isSupabaseConfigured) {
         try {
-          const { data: sbUser } = await supabase
-            .from("users")
-            .select("name, email, role, avatar, avatar_url")
-            .or("role.eq.SUPER_ADMIN,role.eq.ADMIN")
+          const { data: settingEmail } = await supabase
+            .from("system_settings")
+            .select("value")
+            .eq("key", "admin_email")
             .maybeSingle();
-          if (sbUser) {
+
+          const { data: sbAdmin } = await supabase
+            .from("admin_users")
+            .select("email, full_name, name, role")
+            .limit(1)
+            .maybeSingle();
+
+          if (sbAdmin || settingEmail) {
+            const activeEmail = settingEmail?.value || sbAdmin?.email || "spd@gmail.com";
+            const activeName = sbAdmin?.full_name || sbAdmin?.name || "System Admin";
             setCurrentUser((prev: any) => ({
               ...(prev || {}),
-              name: sbUser.name || prev?.name || "System Admin",
-              email: sbUser.email || prev?.email || "admin@spd.com",
-              role: sbUser.role || "SUPER_ADMIN",
+              name: activeName,
+              email: activeEmail,
+              role: sbAdmin?.role || "SUPER_ADMIN",
             }));
           }
         } catch {}
@@ -154,7 +163,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       } else if (e.detail?.avatar !== undefined) {
         setAvatarUrl(e.detail.avatar);
       }
-      if (e.detail?.name) {
+      if (e.detail?.email || e.detail?.name) {
         setCurrentUser((prev: any) => ({ ...(prev || {}), ...e.detail }));
       } else {
         fetchUser();
@@ -331,7 +340,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
               {!collapsed && (
                 <div className="flex flex-col flex-1 min-w-0">
                   <span className="text-sm font-medium truncate">{currentUser?.name || "Admin User"}</span>
-                  <span className="text-xs text-muted-foreground truncate">{currentUser?.email || "admin@spd.com"}</span>
+                  <span className="text-xs text-muted-foreground truncate">{currentUser?.email || "spd@gmail.com"}</span>
                 </div>
               )}
             </div>

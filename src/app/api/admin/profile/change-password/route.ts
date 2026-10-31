@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const session = await getCurrentUser();
     const effectiveSession = session || {
       userId: 'admin_root',
-      email: 'admin@gmail.com',
+      email: 'spd@gmail.com',
       name: 'System Admin',
       role: 'SUPER_ADMIN',
     };
@@ -40,114 +40,122 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fetch user to verify current password if database is active
+    // 1. Fetch current admin record from Supabase admin_users table
+    let adminRecord: any = null;
+    let currentStoredPassword = '';
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data: sbAdmin } = await supabase
+          .from('admin_users')
+          .select('*')
+          .limit(1)
+          .maybeSingle();
+
+        if (sbAdmin) {
+          adminRecord = sbAdmin;
+          currentStoredPassword = sbAdmin.password || '';
+        }
+      } catch (sbErr) {
+        console.warn('Supabase admin lookup in change-password route:', sbErr);
+      }
+    }
+
+    // Fallback lookup in Prisma DB if Supabase record not found
     let user: any = null;
     try {
       if (effectiveSession.userId) {
-        user = await prisma.user.findUnique({
-          where: { id: effectiveSession.userId },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-            password: true,
-          },
+        user = await prisma.user.findFirst({
+          where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
+          select: { id: true, email: true, name: true, role: true, password: true },
         });
+        if (user && !currentStoredPassword) {
+          currentStoredPassword = user.password;
+        }
       }
     } catch (dbErr) {
-      console.warn('Prisma user lookup error, using session fallback:', dbErr);
+      console.warn('Prisma user lookup error in change-password:', dbErr);
     }
 
-    if (user && user.password) {
-      // Verify current password against stored hash strictly (zero old fallbacks)
-      const isCurrentValid = await comparePassword(currentPassword, user.password);
-      if (!isCurrentValid) {
-        return NextResponse.json(
-          { success: false, error: 'Current password is incorrect.' },
-          { status: 400 }
-        );
-      }
-
-      // Hash new password using bcrypt (12 rounds)
-      const hashedPassword = await hashPassword(newPassword);
-
-      // Persist new password to database if possible
-      try {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { password: hashedPassword },
-        });
-      } catch (updateErr) {
-        console.warn('Could not update user password in DB:', updateErr);
-      }
-    } else {
-      // If user record is not yet in Prisma DB, bootstrap with new hashed password
-      try {
-        const hashedPassword = await hashPassword(newPassword);
-        const adminEmail = effectiveSession.email || 'admin@gmail.com';
-        const existing = await prisma.user.findFirst({ where: { email: adminEmail } });
-        if (existing) {
-          await prisma.user.update({
-            where: { id: existing.id },
-            data: { password: hashedPassword },
-          });
-        } else {
-          await prisma.user.create({
-            data: {
-              email: adminEmail,
-              username: 'admin',
-              name: effectiveSession.name || 'System Admin',
-              role: 'SUPER_ADMIN',
-              status: 'ACTIVE',
-              password: hashedPassword,
-            },
-          });
-        }
-      } catch (bootstrapErr) {
-        console.warn('Could not bootstrap user password in DB:', bootstrapErr);
+    // Verify current password strictly
+    let isCurrentValid = false;
+    if (currentStoredPassword) {
+      if (currentStoredPassword.startsWith('$2')) {
+        isCurrentValid = await comparePassword(currentPassword, currentStoredPassword);
+      } else {
+        isCurrentValid = currentStoredPassword === currentPassword;
       }
     }
 
-    const targetUserId = user?.id || effectiveSession.userId || 'admin_root';
-    const targetEmail = user?.email || effectiveSession.email || 'admin@gmail.com';
-    const targetName = user?.name || effectiveSession.name || 'System Admin';
-    const targetRole = user?.role || effectiveSession.role || 'SUPER_ADMIN';
+    if (!isCurrentValid) {
+      return NextResponse.json(
+        { success: false, error: 'Current password is incorrect.' },
+        { status: 400 }
+      );
+    }
 
-    // Update cloud table admin_users in Supabase for multi-device sync
+    // 2. Hash new password server-side using bcrypt (12 rounds)
+    const hashedPassword = await hashPassword(newPassword);
+
+    const targetUserId = adminRecord?.id || user?.id || effectiveSession.userId || 'a42a888d-75d5-43e9-8d80-f42587510bc5';
+    const targetEmail = adminRecord?.email || user?.email || effectiveSession.email || 'spd@gmail.com';
+    const targetName = adminRecord?.full_name || adminRecord?.name || user?.name || effectiveSession.name || 'System Admin';
+    const targetRole = adminRecord?.role || user?.role || effectiveSession.role || 'SUPER_ADMIN';
+
+    // 3. Persist new password hash to Supabase admin_users table
     if (isSupabaseConfigured) {
       try {
-        const { data: updData } = await supabase
-          .from('admin_users')
-          .update({
-            password: newPassword,
-            updated_at: new Date().toISOString(),
-          })
-          .ilike('email', targetEmail)
-          .select();
+        if (adminRecord?.id) {
+          const { error: updErr } = await supabase
+            .from('admin_users')
+            .update({
+              password: hashedPassword,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', adminRecord.id);
 
-        if (!updData || updData.length === 0) {
+          if (updErr) throw updErr;
+        } else {
           await supabase.from('admin_users').upsert(
             {
               email: targetEmail,
-              name: targetName,
-              role: targetRole,
-              password: newPassword,
+              full_name: targetName,
+              password: hashedPassword,
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'email' }
           );
         }
 
+        // Clean up any legacy plain text password from system_settings if it existed
         try {
-          await supabase.from('system_settings').upsert({
-            key: 'admin_password',
-            value: newPassword,
-          });
+          await supabase.from('system_settings').delete().eq('key', 'admin_password');
         } catch {}
-      } catch (sbErr) {
-        console.warn('Supabase admin_users update in API route:', sbErr);
+
+        // Redundant update to users table
+        try {
+          await supabase
+            .from('users')
+            .update({ password: hashedPassword, updated_at: new Date().toISOString() })
+            .or(`email.ilike.${targetEmail},role.eq.SUPER_ADMIN`);
+        } catch {}
+      } catch (sbErr: any) {
+        console.error('Supabase password update error:', sbErr);
+        return NextResponse.json(
+          { success: false, error: 'Failed to update password in cloud database.' },
+          { status: 500 }
+        );
       }
+    }
+
+    // 4. Update Prisma database
+    try {
+      await prisma.user.updateMany({
+        where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
+        data: { password: hashedPassword },
+      });
+    } catch (updateErr) {
+      console.warn('Could not update user password in Prisma:', updateErr);
     }
 
     // Record audit log safely
