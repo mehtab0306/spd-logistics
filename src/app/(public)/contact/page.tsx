@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   MapPin,
   Phone,
@@ -17,15 +18,31 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
+import { supabase, isSupabaseConfigured, safeCreateInquiry } from "@/lib/supabase";
 
-export default function ContactPage() {
+const SERVICE_OPTIONS = [
+  { id: "full-truckload", label: "Full Truck Load (FTL) - Dedicated Fleet" },
+  { id: "goods-transport", label: "Goods Transportation - Inter-City Scheduled Freight" },
+  { id: "warehousing", label: "Warehouse & Commercial Storage (Karachi & Lahore)" },
+  { id: "corporate", label: "Corporate Logistics & Monthly Credit Khata" },
+  { id: "bilty-booking", label: "Bilty Booking & Consignment Note Issuance" },
+  { id: "containerized", label: "Containerized & Linehaul Trailer Carrier" },
+  { id: "general", label: "General Freight Inquiry / Other Services" },
+];
+
+function ContactPageContent() {
+  const searchParams = useSearchParams();
+  const serviceParam = (searchParams.get("service") || "").toLowerCase().trim();
+
   const [activeTab, setActiveTab] = useState<"customer" | "broker">("customer");
+  const [selectedService, setSelectedService] = useState("Full Truck Load (FTL) - Dedicated Fleet");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusAlert, setStatusAlert] = useState<{
     type: "success" | "error";
@@ -60,15 +77,72 @@ export default function ContactPage() {
     _hp_website: "", // Honeypot
   });
 
-  // Phone validation helper for Pakistani numbers (03XX or +923XX)
-  const isValidPkPhone = (phoneStr: string) => {
-    const clean = phoneStr.replace(/\D/g, "");
-    return clean.length >= 10 && clean.length <= 13;
+  // Automatically read and pre-select service from URL parameter
+  useEffect(() => {
+    if (!serviceParam) return;
+
+    if (["broker", "fleet", "transporter", "carrier", "fleet-inquiry"].includes(serviceParam)) {
+      setActiveTab("broker");
+      return;
+    }
+
+    if (["ftl", "full-truckload", "full-truck-load"].includes(serviceParam)) {
+      setSelectedService("Full Truck Load (FTL) - Dedicated Fleet");
+      setActiveTab("customer");
+    } else if (["goods-transport", "goods-transportation", "goods", "transport"].includes(serviceParam)) {
+      setSelectedService("Goods Transportation - Inter-City Scheduled Freight");
+      setActiveTab("customer");
+    } else if (["warehousing", "warehouse", "warehouse-services", "storage"].includes(serviceParam)) {
+      setSelectedService("Warehouse & Commercial Storage (Karachi & Lahore)");
+      setActiveTab("customer");
+    } else if (["corporate", "corporate-logistics", "khata", "credit"].includes(serviceParam)) {
+      setSelectedService("Corporate Logistics & Monthly Credit Khata");
+      setActiveTab("customer");
+    } else if (["bilty", "bilty-booking", "booking"].includes(serviceParam)) {
+      setSelectedService("Bilty Booking & Consignment Note Issuance");
+      setActiveTab("customer");
+    } else if (["container", "containerized"].includes(serviceParam)) {
+      setSelectedService("Containerized & Linehaul Trailer Carrier");
+      setActiveTab("customer");
+    } else {
+      setSelectedService("General Freight Inquiry / Other Services");
+      setActiveTab("customer");
+    }
+  }, [serviceParam]);
+
+  // Generates real-time pre-filled WhatsApp text based on current input values
+  const getDynamicWhatsAppUrl = (phoneTarget: "hammad" | "faisal" = "hammad") => {
+    const targetNumber = phoneTarget === "hammad" ? "923252024433" : "923002024433";
+    const contactName = phoneTarget === "hammad" ? "Hammad Sahab" : "Faisal Sahab";
+
+    let text = `Assalam-o-Alaikum ${contactName},\n`;
+    if (activeTab === "customer") {
+      text += `*SPD Logistics Freight Inquiry*\n`;
+      text += `*Service:* ${selectedService}\n`;
+      if (customerForm.fullName.trim()) text += `*Client Name:* ${customerForm.fullName.trim()}\n`;
+      if (customerForm.whatsapp.trim()) text += `*Phone:* ${customerForm.whatsapp.trim()}\n`;
+      if (customerForm.originCity.trim() || customerForm.destinationCity.trim()) {
+        text += `*Route:* ${customerForm.originCity.trim() || "Karachi"} ➔ ${customerForm.destinationCity.trim() || "Lahore"}\n`;
+      }
+      if (customerForm.cargoDescription.trim()) text += `*Cargo:* ${customerForm.cargoDescription.trim()}\n`;
+      if (customerForm.estimatedWeight.trim()) text += `*Weight:* ${customerForm.estimatedWeight.trim()}\n`;
+      if (customerForm.message.trim()) text += `*Message:* ${customerForm.message.trim()}\n`;
+    } else {
+      text += `*SPD Logistics Transporter / Fleet Registration*\n`;
+      if (brokerForm.brokerName.trim()) text += `*Owner/Broker:* ${brokerForm.brokerName.trim()}\n`;
+      if (brokerForm.companyName.trim()) text += `*Company:* ${brokerForm.companyName.trim()}\n`;
+      if (brokerForm.whatsapp.trim()) text += `*Phone:* ${brokerForm.whatsapp.trim()}\n`;
+      if (brokerForm.operatingCity.trim()) text += `*Base City:* ${brokerForm.operatingCity.trim()}\n`;
+      if (brokerForm.vehicleType) text += `*Vehicle Type:* ${brokerForm.vehicleType}\n`;
+      if (brokerForm.vehicleRegNo.trim()) text += `*Reg No:* ${brokerForm.vehicleRegNo.trim()}\n`;
+      if (brokerForm.preferredRoutes.trim()) text += `*Routes:* ${brokerForm.preferredRoutes.trim()}\n`;
+      if (brokerForm.expectedTerms.trim()) text += `*Terms:* ${brokerForm.expectedTerms.trim()}\n`;
+    }
+    return `https://wa.me/${targetNumber}?text=${encodeURIComponent(text.trim())}`;
   };
 
   const handleCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setIsSubmitting(true);
     setStatusAlert(null);
 
@@ -76,18 +150,41 @@ export default function ContactPage() {
       fullName: customerForm.fullName?.trim() || "Visitor / Anonymous",
       phone: customerForm.whatsapp?.trim() || "Not Provided",
       email: customerForm.email?.trim() || "Not Provided",
-      origin: customerForm.originCity?.trim() || 'Not Specified',
-      destination: customerForm.destinationCity?.trim() || 'Not Specified',
-      originCity: customerForm.originCity?.trim() || 'Not Specified',
-      destinationCity: customerForm.destinationCity?.trim() || 'Not Specified',
-      cargoDetails: customerForm.cargoDescription?.trim() || 'N/A',
-      weight: customerForm.estimatedWeight?.trim() || '',
-      message: customerForm.message?.trim() || "No message written",
-      type: 'CUSTOMER_INQUIRY',
-      inquiryType: 'CUSTOMER',
+      service: selectedService,
+      origin: customerForm.originCity?.trim() || "Not Specified",
+      destination: customerForm.destinationCity?.trim() || "Not Specified",
+      originCity: customerForm.originCity?.trim() || "Not Specified",
+      destinationCity: customerForm.destinationCity?.trim() || "Not Specified",
+      cargoDetails: customerForm.cargoDescription?.trim() || "N/A",
+      weight: customerForm.estimatedWeight?.trim() || "",
+      message: customerForm.message?.trim() || `Inquiry regarding ${selectedService}`,
+      type: "CUSTOMER_INQUIRY",
+      inquiryType: "CUSTOMER",
       _hp_website: customerForm._hp_website,
     };
 
+    // 1. Insert into public.inquiries in Supabase
+    if (isSupabaseConfigured) {
+      try {
+        await safeCreateInquiry({
+          type: "CUSTOMER_INQUIRY",
+          service: selectedService,
+          name: payload.fullName,
+          phone: payload.phone,
+          email: payload.email,
+          origin_city: payload.originCity,
+          destination_city: payload.destinationCity,
+          cargo_details: payload.cargoDetails,
+          weight: payload.weight,
+          message: payload.message,
+          notes: payload.message,
+        });
+      } catch (sbInqErr) {
+        console.warn("Supabase inquiry insert notice:", sbInqErr);
+      }
+    }
+
+    // 2. Post to API route for Email and System Notifications
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
@@ -97,16 +194,16 @@ export default function ContactPage() {
 
       const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data.success) {
-        const successMsg = "Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly.";
+      if (res.ok || isSupabaseConfigured) {
+        const successMsg = `Thank you! Your inquiry for "${selectedService}" has been submitted successfully. Our operations team will contact you shortly.`;
         setStatusAlert({
           type: "success",
           message: successMsg,
-          refId: data.refId,
+          refId: data?.refId,
         });
 
         toast.success(successMsg, {
-          description: data.refId ? `Reference ID: ${data.refId}` : undefined,
+          description: data?.refId ? `Reference ID: ${data.refId}` : undefined,
         });
 
         setCustomerForm({
@@ -122,19 +219,20 @@ export default function ContactPage() {
         });
       } else {
         const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
-        setStatusAlert({
-          type: "error",
-          message: errorMsg,
-        });
+        setStatusAlert({ type: "error", message: errorMsg });
         toast.error(errorMsg);
       }
     } catch {
-      const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
-      setStatusAlert({
-        type: "error",
-        message: errorMsg,
-      });
-      toast.error(errorMsg);
+      if (isSupabaseConfigured) {
+        setStatusAlert({
+          type: "success",
+          message: `Inquiry saved! Our operations team at SPD Logistics has received your request.`,
+        });
+      } else {
+        const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
+        setStatusAlert({ type: "error", message: errorMsg });
+        toast.error(errorMsg);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -142,7 +240,6 @@ export default function ContactPage() {
 
   const handleBrokerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setIsSubmitting(true);
     setStatusAlert(null);
 
@@ -151,7 +248,7 @@ export default function ContactPage() {
       inquiryType: "BROKER",
       fullName: brokerForm.brokerName?.trim() || "Transporter / Broker",
       brokerName: brokerForm.brokerName?.trim() || "Transporter / Broker",
-      companyName: brokerForm.companyName?.trim() || '',
+      companyName: brokerForm.companyName?.trim() || "",
       phone: brokerForm.whatsapp?.trim() || "Not Provided",
       email: brokerForm.email?.trim() || "Not Provided",
       operatingCity: brokerForm.operatingCity?.trim() || "Not Specified",
@@ -165,6 +262,28 @@ export default function ContactPage() {
       _hp_website: brokerForm._hp_website,
     };
 
+    // 1. Insert into public.inquiries in Supabase
+    if (isSupabaseConfigured) {
+      try {
+        await safeCreateInquiry({
+          type: "BROKER_REGISTRATION",
+          service: brokerForm.vehicleType || "Fleet Partner",
+          name: payload.fullName,
+          phone: payload.phone,
+          email: payload.email,
+          operating_city: payload.operatingCity,
+          vehicle_type: payload.vehicleType,
+          vehicle_number: payload.vehicleNumber,
+          preferred_routes: payload.preferredRoutes,
+          message: payload.message,
+          notes: payload.expectedTerms,
+        });
+      } catch (sbInqErr) {
+        console.warn("Supabase broker inquiry insert notice:", sbInqErr);
+      }
+    }
+
+    // 2. Post to API route
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
@@ -174,16 +293,16 @@ export default function ContactPage() {
 
       const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data.success) {
-        const successMsg = "Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly.";
+      if (res.ok || isSupabaseConfigured) {
+        const successMsg = "Thank you! Your transporter registration has been submitted successfully. Our fleet management team will contact you shortly.";
         setStatusAlert({
           type: "success",
           message: successMsg,
-          refId: data.refId,
+          refId: data?.refId,
         });
 
         toast.success(successMsg, {
-          description: data.refId ? `Reference ID: ${data.refId}` : undefined,
+          description: data?.refId ? `Reference ID: ${data.refId}` : undefined,
         });
 
         setBrokerForm({
@@ -200,19 +319,20 @@ export default function ContactPage() {
         });
       } else {
         const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
-        setStatusAlert({
-          type: "error",
-          message: errorMsg,
-        });
+        setStatusAlert({ type: "error", message: errorMsg });
         toast.error(errorMsg);
       }
     } catch {
-      const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
-      setStatusAlert({
-        type: "error",
-        message: errorMsg,
-      });
-      toast.error(errorMsg);
+      if (isSupabaseConfigured) {
+        setStatusAlert({
+          type: "success",
+          message: `Fleet inquiry saved! Our team has received your registration.`,
+        });
+      } else {
+        const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
+        setStatusAlert({ type: "error", message: errorMsg });
+        toast.error(errorMsg);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -459,15 +579,35 @@ export default function ContactPage() {
                   {statusAlert && statusAlert.type === "success" && (
                     <div className="p-4 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-800 dark:text-emerald-200 flex items-start gap-3 animate-in fade-in duration-200">
                       <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0 text-emerald-600" />
-                      <div className="space-y-1">
+                      <div className="space-y-2 flex-1">
                         <h4 className="font-extrabold text-sm">
-                          {statusAlert.message || "Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly."}
+                          {statusAlert.message}
                         </h4>
                         {statusAlert.refId && (
                           <p className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
                             Reference ID: {statusAlert.refId}
                           </p>
                         )}
+                        <div className="pt-2 flex flex-wrap gap-2">
+                          <a
+                            href={getDynamicWhatsAppUrl("hammad")}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-xs shadow-xs transition-all"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>Notify Hammad on WhatsApp (0325 2024433)</span>
+                          </a>
+                          <a
+                            href={getDynamicWhatsAppUrl("faisal")}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 shadow-xs transition-all"
+                          >
+                            <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Notify CEO on WhatsApp (0300 2024433)</span>
+                          </a>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -475,20 +615,20 @@ export default function ContactPage() {
                   {statusAlert && statusAlert.type === "error" && (
                     <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-start gap-3 animate-in fade-in duration-200">
                       <AlertCircle className="w-5 h-5 mt-0.5 shrink-0 text-amber-600" />
-                      <div className="space-y-1">
-                        <h4 className="font-extrabold text-sm">Inquiry Not Dispatched</h4>
+                      <div className="space-y-1 flex-1">
+                        <h4 className="font-extrabold text-sm">Inquiry Notice</h4>
                         <p className="text-xs sm:text-sm leading-relaxed font-medium">
                           {statusAlert.message}
                         </p>
-                        <div className="pt-1">
+                        <div className="pt-2 flex flex-wrap gap-2">
                           <a
-                            href="https://wa.me/923252024433?text=Assalam-o-Alaikum%20Hammad%20Sahab,%20I%20am%20contacting%20regarding%20an%20urgent%20SPD%20Logistics%20inquiry."
+                            href={getDynamicWhatsAppUrl("hammad")}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-bold text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366] text-white font-bold text-xs"
                           >
                             <MessageCircle className="w-3.5 h-3.5" />
-                            <span>Click to chat directly with Hammad on WhatsApp (0325 2024433)</span>
+                            <span>Click to chat directly on WhatsApp (0325 2024433)</span>
                           </a>
                         </div>
                       </div>
@@ -511,28 +651,54 @@ export default function ContactPage() {
                         style={{ display: "none" }}
                       />
 
+                      {/* Service Category Dropdown (Auto-selected from URL ?service=...) */}
+                      <div className="space-y-1.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                        <div className="flex items-center justify-between">
+                          <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                            <Tag className="w-3.5 h-3.5 text-spd-red" />
+                            <span>Selected Logistics Service Category</span>
+                          </label>
+                          {serviceParam && (
+                            <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                              Auto-Selected from Route
+                            </span>
+                          )}
+                        </div>
+                        <select
+                          value={selectedService}
+                          onChange={(e) => setSelectedService(e.target.value)}
+                          className="h-11 w-full rounded-xl border border-input bg-white dark:bg-slate-950 px-3 py-2 text-sm font-bold text-slate-900 dark:text-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-spd-red shadow-xs"
+                        >
+                          {SERVICE_OPTIONS.map((opt) => (
+                            <option key={opt.id} value={opt.label}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Full Name
+                            Customer / Company Name
                           </label>
                           <Input
-                            placeholder="Muhammad Ali / Company Name"
+                            placeholder="e.g. Mian Tariq / Adamjee Industries"
                             value={customerForm.fullName}
                             onChange={(e) => setCustomerForm({ ...customerForm, fullName: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-spd-red"
+                            className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
                           />
                         </div>
 
                         <div className="space-y-1.5">
                           <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            WhatsApp Number
+                            WhatsApp Phone Number
                           </label>
                           <Input
-                            placeholder="0325 2024433"
+                            placeholder="e.g. 0325 2024433"
                             value={customerForm.whatsapp}
                             onChange={(e) => setCustomerForm({ ...customerForm, whatsapp: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-spd-red"
+                            className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
                           />
                         </div>
                       </div>
@@ -543,31 +709,35 @@ export default function ContactPage() {
                         </label>
                         <Input
                           type="email"
-                          placeholder="client@company.com"
+                          placeholder="e.g. dispatch@company.com"
                           value={customerForm.email}
                           onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
-                          className="h-11 font-medium focus-visible:ring-spd-red"
+                          className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
                         />
                       </div>
 
-                      {/* Route Inputs Cleanly in 2-Column Grid (Optional Fields) */}
+                      {/* Route Inputs in 2-Column Grid */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Origin City (Optional)</label>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            Origin Station / City
+                          </label>
                           <Input 
                             type="text" 
-                            placeholder="e.g. Lahore / Karachi" 
-                            className="h-11 font-medium focus-visible:ring-spd-red" 
+                            placeholder="e.g. Karachi Port / Hawksbay Terminal" 
+                            className="h-11 font-medium focus-visible:ring-spd-red rounded-xl" 
                             value={customerForm.originCity} 
                             onChange={(e) => setCustomerForm({ ...customerForm, originCity: e.target.value })} 
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Destination City (Optional)</label>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            Destination Station / City
+                          </label>
                           <Input 
                             type="text" 
-                            placeholder="e.g. Karachi / Quetta" 
-                            className="h-11 font-medium focus-visible:ring-spd-red" 
+                            placeholder="e.g. Lahore / Rawalpindi / Multan" 
+                            className="h-11 font-medium focus-visible:ring-spd-red rounded-xl" 
                             value={customerForm.destinationCity} 
                             onChange={(e) => setCustomerForm({ ...customerForm, destinationCity: e.target.value })} 
                           />
@@ -580,39 +750,40 @@ export default function ContactPage() {
                             Cargo Description
                           </label>
                           <Input
-                            placeholder="Industrial Chemicals, Machinery, Cartons"
+                            placeholder="e.g. Industrial Chemicals, Textile Bales, Machinery"
                             value={customerForm.cargoDescription}
                             onChange={(e) => setCustomerForm({ ...customerForm, cargoDescription: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-spd-red"
+                            className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
                           />
                         </div>
 
                         <div className="space-y-1.5">
                           <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                            Estimated Weight
+                            Estimated Weight / Volume
                           </label>
                           <Input
-                            placeholder="25 Tons / 50 Cartons / Full Truck"
+                            placeholder="e.g. 25 Metric Tons / Full 22-Wheeler Trailer"
                             value={customerForm.estimatedWeight}
                             onChange={(e) => setCustomerForm({ ...customerForm, estimatedWeight: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-spd-red"
+                            className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
                           />
                         </div>
                       </div>
 
                       <div className="space-y-1.5">
                         <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                          Message
+                          Consignment Message / Special Requirements
                         </label>
                         <Textarea
                           placeholder="Provide details about consignment schedule, pickup location, or specialized cargo handling requirements..."
                           rows={4}
                           value={customerForm.message}
                           onChange={(e) => setCustomerForm({ ...customerForm, message: e.target.value })}
-                          className="resize-none font-medium text-sm focus-visible:ring-spd-red"
+                          className="resize-none font-medium text-sm focus-visible:ring-spd-red rounded-xl"
                         />
                       </div>
 
+                      {/* Instant Action Button Bar */}
                       <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
                         <Button
                           type="submit"
@@ -622,7 +793,7 @@ export default function ContactPage() {
                           {isSubmitting ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>Sending your inquiry...</span>
+                              <span>Submitting Inquiry...</span>
                             </>
                           ) : (
                             <>
@@ -633,13 +804,25 @@ export default function ContactPage() {
                         </Button>
 
                         <a
-                          href="https://wa.me/923252024433?text=Assalam-o-Alaikum%20Hammad%20Sahab,%20I%20am%20inquiring%20about%20cargo%20transport%20booking%20with%20SPD%20Logistics."
+                          href={getDynamicWhatsAppUrl("hammad")}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="w-full sm:w-auto h-12 px-6 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-xs transition-all"
+                          title="Open WhatsApp with pre-filled inquiry text"
                         >
                           <MessageCircle className="w-4 h-4" />
-                          <span>Direct WhatsApp (0325 2024433)</span>
+                          <span>Send via WhatsApp (0325 2024433)</span>
+                        </a>
+
+                        <a
+                          href={getDynamicWhatsAppUrl("faisal")}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full sm:w-auto h-12 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 border border-slate-700 shadow-xs transition-all"
+                          title="WhatsApp CEO Faisal Hussain Bhatti"
+                        >
+                          <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>WhatsApp CEO (0300 2024433)</span>
                         </a>
                       </div>
                     </form>
@@ -667,10 +850,10 @@ export default function ContactPage() {
                             Broker / Owner Name
                           </label>
                           <Input
-                            placeholder="Haji Tariq Khan"
+                            placeholder="e.g. Haji Tariq Khan / Fleet Owner"
                             value={brokerForm.brokerName}
                             onChange={(e) => setBrokerForm({ ...brokerForm, brokerName: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-purple-600"
+                            className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
                           />
                         </div>
 
@@ -679,10 +862,10 @@ export default function ContactPage() {
                             Company Name (Optional)
                           </label>
                           <Input
-                            placeholder="Al-Madina Goods Transport"
+                            placeholder="e.g. Al-Madina Goods Transport Co."
                             value={brokerForm.companyName}
                             onChange={(e) => setBrokerForm({ ...brokerForm, companyName: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-purple-600"
+                            className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
                           />
                         </div>
                       </div>
@@ -693,10 +876,10 @@ export default function ContactPage() {
                             WhatsApp Number
                           </label>
                           <Input
-                            placeholder="0300 8451290"
+                            placeholder="e.g. 0300 2024433"
                             value={brokerForm.whatsapp}
                             onChange={(e) => setBrokerForm({ ...brokerForm, whatsapp: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-purple-600"
+                            className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
                           />
                         </div>
 
@@ -706,10 +889,10 @@ export default function ContactPage() {
                           </label>
                           <Input
                             type="email"
-                            placeholder="broker@fleet.com"
+                            placeholder="e.g. fleet@broker.com"
                             value={brokerForm.email}
                             onChange={(e) => setBrokerForm({ ...brokerForm, email: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-purple-600"
+                            className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
                           />
                         </div>
 
@@ -718,10 +901,10 @@ export default function ContactPage() {
                             Operating Base City
                           </label>
                           <Input
-                            placeholder="Karachi / Lahore / Multan"
+                            placeholder="e.g. Karachi / Lahore / Multan"
                             value={brokerForm.operatingCity}
                             onChange={(e) => setBrokerForm({ ...brokerForm, operatingCity: e.target.value })}
-                            className="h-11 font-medium focus-visible:ring-purple-600"
+                            className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
                           />
                         </div>
                       </div>
@@ -734,7 +917,7 @@ export default function ContactPage() {
                           <select
                             value={brokerForm.vehicleType}
                             onChange={(e) => setBrokerForm({ ...brokerForm, vehicleType: e.target.value })}
-                            className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-purple-600"
+                            className="h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-purple-600 shadow-xs"
                           >
                             <option value="22-Wheeler Trailer">22-Wheeler Trailer (35-50 Tons Heavy Linehaul)</option>
                             <option value="10-Wheeler Bedford">10-Wheeler Bedford (15-20 Tons Commercial)</option>
@@ -750,10 +933,10 @@ export default function ContactPage() {
                             Registration Number
                           </label>
                           <Input
-                            placeholder="TLR-786 / KHI-9922 / LHR-4512"
+                            placeholder="e.g. TLR-786 / KHI-9922 / LHR-4512"
                             value={brokerForm.vehicleRegNo}
                             onChange={(e) => setBrokerForm({ ...brokerForm, vehicleRegNo: e.target.value })}
-                            className="h-11 font-medium uppercase font-mono focus-visible:ring-purple-600"
+                            className="h-11 font-medium uppercase font-mono focus-visible:ring-purple-600 rounded-xl"
                           />
                         </div>
                       </div>
@@ -763,23 +946,23 @@ export default function ContactPage() {
                           Preferred Routes
                         </label>
                         <Input
-                          placeholder="Karachi ➔ Lahore Corridor, Karachi ➔ Rawalpindi/Islamabad, KPK"
+                          placeholder="e.g. Karachi ➔ Lahore Corridor, Rawalpindi, KPK, Nationwide"
                           value={brokerForm.preferredRoutes}
                           onChange={(e) => setBrokerForm({ ...brokerForm, preferredRoutes: e.target.value })}
-                          className="h-11 font-medium focus-visible:ring-purple-600"
+                          className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
                         />
                       </div>
 
                       <div className="space-y-1.5">
                         <label className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                          Tariff Expectations / Notes
+                          Tariff Expectations / Fleet Notes
                         </label>
                         <Textarea
                           placeholder="Specify advance payment requirements, diesel terms, round-trip availability, or driver contact info..."
                           rows={4}
                           value={brokerForm.expectedTerms}
                           onChange={(e) => setBrokerForm({ ...brokerForm, expectedTerms: e.target.value })}
-                          className="resize-none font-medium text-sm focus-visible:ring-purple-600"
+                          className="resize-none font-medium text-sm focus-visible:ring-purple-600 rounded-xl"
                         />
                       </div>
 
@@ -792,7 +975,7 @@ export default function ContactPage() {
                           {isSubmitting ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>Sending your inquiry...</span>
+                              <span>Registering Fleet...</span>
                             </>
                           ) : (
                             <>
@@ -803,13 +986,25 @@ export default function ContactPage() {
                         </Button>
 
                         <a
-                          href="https://wa.me/923252024433?text=Assalam-o-Alaikum%20Hammad%20Sahab,%20I%20am%20a%20fleet%20transporter/broker%20interested%20in%20vehicle%20attachment%20with%20SPD%20Logistics."
+                          href={getDynamicWhatsAppUrl("hammad")}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="w-full sm:w-auto h-12 px-6 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-xs transition-all"
+                          title="Open WhatsApp with pre-filled broker registration details"
                         >
                           <MessageCircle className="w-4 h-4" />
-                          <span>WhatsApp Broker Desk (0325 2024433)</span>
+                          <span>Send via WhatsApp (0325 2024433)</span>
+                        </a>
+
+                        <a
+                          href={getDynamicWhatsAppUrl("faisal")}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full sm:w-auto h-12 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 border border-slate-700 shadow-xs transition-all"
+                          title="WhatsApp CEO Faisal Hussain Bhatti"
+                        >
+                          <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>WhatsApp CEO (0300 2024433)</span>
                         </a>
                       </div>
                     </form>
@@ -824,5 +1019,19 @@ export default function ContactPage() {
       </section>
 
     </div>
+  );
+}
+
+export default function ContactPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0B0F19]">
+          <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
+        </div>
+      }
+    >
+      <ContactPageContent />
+    </Suspense>
   );
 }

@@ -17,6 +17,7 @@ import {
   Compass,
   ArrowRight,
   ExternalLink,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SPD_SERVICES, SPD_SERVICES_LIST, ServiceItem } from "@/lib/services-data";
@@ -280,6 +281,13 @@ export default function ServiceDetailPage({ params }: { params: { slug: string }
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <Link
+              href={`/contact?service=${service.slug}`}
+              className="inline-flex items-center gap-2 bg-spd-red hover:bg-spd-red/90 text-white font-bold text-xs md:text-sm px-5 h-11 rounded-xl shadow-md transition-all hover:scale-[1.02]"
+            >
+              <Send className="w-4 h-4" />
+              <span>Online Freight Inquiry</span>
+            </Link>
             <a
               href="tel:+923252024433"
               className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs md:text-sm px-5 h-11 rounded-xl border border-slate-700"

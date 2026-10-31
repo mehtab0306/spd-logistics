@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, comparePassword, hashPassword, createToken } from '@/lib/auth';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,6 +113,42 @@ export async function POST(request: Request) {
     const targetEmail = user?.email || effectiveSession.email || 'admin@gmail.com';
     const targetName = user?.name || effectiveSession.name || 'System Admin';
     const targetRole = user?.role || effectiveSession.role || 'SUPER_ADMIN';
+
+    // Update cloud table admin_users in Supabase for multi-device sync
+    if (isSupabaseConfigured) {
+      try {
+        const { data: updData } = await supabase
+          .from('admin_users')
+          .update({
+            password: newPassword,
+            updated_at: new Date().toISOString(),
+          })
+          .ilike('email', targetEmail)
+          .select();
+
+        if (!updData || updData.length === 0) {
+          await supabase.from('admin_users').upsert(
+            {
+              email: targetEmail,
+              name: targetName,
+              role: targetRole,
+              password: newPassword,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'email' }
+          );
+        }
+
+        try {
+          await supabase.from('system_settings').upsert({
+            key: 'admin_password',
+            value: newPassword,
+          });
+        } catch {}
+      } catch (sbErr) {
+        console.warn('Supabase admin_users update in API route:', sbErr);
+      }
+    }
 
     // Record audit log safely
     try {

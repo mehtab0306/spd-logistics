@@ -603,16 +603,44 @@ function AdminProfileContent() {
 
     try {
       const currentUser = getCurrentUser();
+      const currentEmail = (currentUser?.email || email || "admin@gmail.com").toLowerCase().trim();
+
+      // Cloud verification of current password across devices
+      let cloudAdminUser: any = null;
+      if (isSupabaseConfigured) {
+        try {
+          const { data: cUser } = await supabase
+            .from("admin_users")
+            .select("*")
+            .ilike("email", currentEmail)
+            .maybeSingle();
+          if (cUser) cloudAdminUser = cUser;
+          if (!cloudAdminUser) {
+            const { data: uUser } = await supabase
+              .from("users")
+              .select("*")
+              .ilike("email", currentEmail)
+              .maybeSingle();
+            if (uUser) cloudAdminUser = uUser;
+          }
+        } catch (sbQueryErr) {
+          console.warn("Cloud admin query notice:", sbQueryErr);
+        }
+      }
+
       const rawUsers = localStorage.getItem("spd_users");
       let usersList = rawUsers ? JSON.parse(rawUsers) : [];
 
       // Determine current expected password (strictly what is currently active)
       const currentStoredPass = localStorage.getItem("spd_admin_password");
       let targetIndex = usersList.findIndex(
-        (u: any) => u.id === currentUser.id || u.email?.toLowerCase() === currentUser.email?.toLowerCase()
+        (u: any) => u.id === currentUser.id || u.email?.toLowerCase() === currentEmail
       );
 
-      const activeExpectedPass = currentStoredPass || (targetIndex !== -1 ? usersList[targetIndex].password : "admin");
+      const activeExpectedPass =
+        cloudAdminUser?.password ||
+        currentStoredPass ||
+        (targetIndex !== -1 ? usersList[targetIndex].password : "admin");
 
       // Verify current password strictly (zero fallback to old passwords)
       if (activeExpectedPass && activeExpectedPass !== currentPassword) {
@@ -623,13 +651,57 @@ function AdminProfileContent() {
         return;
       }
 
+      // Update cloud table admin_users directly for multi-device synchronization
+      if (isSupabaseConfigured) {
+        try {
+          const { data: updData } = await supabase
+            .from("admin_users")
+            .update({
+              password: newPassword,
+              updated_at: new Date().toISOString(),
+            })
+            .ilike("email", currentEmail)
+            .select();
+
+          if (!updData || updData.length === 0) {
+            await supabase.from("admin_users").upsert(
+              {
+                email: currentEmail,
+                name: currentUser?.fullName || name || "System Admin",
+                role: "SUPER_ADMIN",
+                password: newPassword,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "email" }
+            );
+          }
+
+          // Also update users table and system_settings for redundancy
+          try {
+            await supabase
+              .from("users")
+              .update({ password: newPassword, updated_at: new Date().toISOString() })
+              .or(`email.ilike.${currentEmail},role.eq.SUPER_ADMIN`);
+          } catch {}
+
+          try {
+            await supabase.from("system_settings").upsert({
+              key: "admin_password",
+              value: newPassword,
+            });
+          } catch {}
+        } catch (sbCloudErr) {
+          console.warn("Supabase admin_users cloud update error:", sbCloudErr);
+        }
+      }
+
       // Strictly overwrite or append user with new password
       if (targetIndex !== -1) {
         usersList[targetIndex].password = newPassword;
       } else {
         usersList.push({
           id: currentUser.id || "admin_root",
-          email: currentUser.email || "admin@gmail.com",
+          email: currentEmail,
           username: "admin",
           password: newPassword,
           role: currentUser.role || "SUPER_ADMIN",
@@ -638,7 +710,11 @@ function AdminProfileContent() {
 
       // Also wipe any duplicate/stale legacy entries with old passwords
       usersList = usersList.map((u: any) => {
-        if (u.id === currentUser.id || u.email?.toLowerCase() === currentUser.email?.toLowerCase() || u.email?.toLowerCase() === "admin@gmail.com") {
+        if (
+          u.id === currentUser.id ||
+          u.email?.toLowerCase() === currentEmail ||
+          u.email?.toLowerCase() === "admin@gmail.com"
+        ) {
           return { ...u, password: newPassword };
         }
         return u;

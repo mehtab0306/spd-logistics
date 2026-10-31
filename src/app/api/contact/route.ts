@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { createSystemNotification } from '@/lib/notifications';
+import { safeCreateInquiry } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -162,6 +163,23 @@ export async function POST(req: Request) {
       subject: subject,
       html: htmlEmail
     });
+
+    // Persist to Supabase inquiries table
+    try {
+      await safeCreateInquiry({
+        type: 'CUSTOMER_INQUIRY',
+        service: 'General Logistics',
+        name: fullName,
+        phone: phone,
+        email: email !== 'Not Provided' ? email : undefined,
+        origin_city: origin !== 'Direct Inquiry / General' ? origin : undefined,
+        destination_city: destination !== 'Direct Inquiry / General' ? destination : undefined,
+        cargo_details: cargoDetails !== 'Not Specified' ? cargoDetails : undefined,
+        message: message,
+      });
+    } catch (inquiryErr) {
+      console.warn('Failed to save inquiry to Supabase:', inquiryErr);
+    }
 
     // Also persist to system notifications for admin visibility
     try {

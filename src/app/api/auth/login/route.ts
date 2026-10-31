@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { comparePassword, createToken, hashPassword, setAuthCookie } from '@/lib/auth';
 import { getCentralCollection } from '@/lib/server-store';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,77 @@ export async function POST(request: Request) {
 
     const lowerIdentifier = identifier.toLowerCase();
     const cleanPassword = (password || '').trim();
+
+    // Query admin_users from Supabase cloud table first for multi-device synchronization
+    if (isSupabaseConfigured) {
+      try {
+        let { data: sbAdmin } = await supabase
+          .from('admin_users')
+          .select('*')
+          .ilike('email', lowerIdentifier)
+          .maybeSingle();
+
+        if (!sbAdmin && (lowerIdentifier === 'admin' || lowerIdentifier === 'admin@gmail.com')) {
+          const { data: sbAdminAlt } = await supabase
+            .from('admin_users')
+            .select('*')
+            .or('username.ilike.admin,email.ilike.admin@gmail.com')
+            .maybeSingle();
+          if (sbAdminAlt) sbAdmin = sbAdminAlt;
+        }
+
+        if (sbAdmin) {
+          const isPasswordValid =
+            sbAdmin.password === cleanPassword ||
+            (sbAdmin.password && sbAdmin.password.startsWith('$2') && await comparePassword(cleanPassword, sbAdmin.password));
+
+          if (isPasswordValid) {
+            const token = 'spd-admin-session-token';
+            const adminData = {
+              token,
+              id: sbAdmin.id || 'admin-1',
+              email: sbAdmin.email || 'admin@gmail.com',
+              username: sbAdmin.username || 'admin',
+              name: sbAdmin.name || 'System Admin',
+              role: sbAdmin.role || 'SUPER_ADMIN',
+              redirectUrl: '/admin',
+            };
+
+            const response = NextResponse.json({
+              success: true,
+              redirectUrl: '/admin',
+              user: {
+                id: adminData.id,
+                email: adminData.email,
+                name: adminData.name,
+                role: adminData.role,
+              },
+              data: adminData,
+            });
+
+            const isLocalhost = request.url.includes('localhost') || request.url.includes('127.0.0.1');
+            const isHttps = !isLocalhost && (request.headers.get('x-forwarded-proto') === 'https' || request.url.startsWith('https:'));
+
+            response.cookies.set('spd-auth-token', token, {
+              httpOnly: false,
+              secure: isHttps,
+              sameSite: 'lax',
+              maxAge: 60 * 60 * 24 * 7,
+              path: '/',
+            });
+
+            return response;
+          } else {
+            return NextResponse.json(
+              { success: false, error: 'Incorrect password! Old password is no longer valid.' },
+              { status: 401 }
+            );
+          }
+        }
+      } catch (sbLoginErr) {
+        console.warn('Supabase admin_users check error in login route:', sbLoginErr);
+      }
+    }
 
     // Move user database lookup first to strictly enforce updated passwords and invalidate old credentials
     let user: any = null;

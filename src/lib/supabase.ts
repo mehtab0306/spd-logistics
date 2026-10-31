@@ -321,4 +321,164 @@ export async function safeUpsertBroker(
   return { success: false, error: insError };
 }
 
+export interface InquiryPayload {
+  type?: string;
+  service?: string | null;
+  name: string;
+  phone: string;
+  email?: string | null;
+  origin_city?: string | null;
+  destination_city?: string | null;
+  cargo_details?: string | null;
+  weight?: string | null;
+  operating_city?: string | null;
+  vehicle_type?: string | null;
+  vehicle_number?: string | null;
+  preferred_routes?: string | null;
+  notes?: string | null;
+  message?: string | null;
+  status?: string;
+  created_at?: string;
+}
+
+export async function safeCreateInquiry(
+  payload: InquiryPayload
+): Promise<{ success: boolean; data?: any; error?: any }> {
+  if (!isSupabaseConfigured) return { success: false, error: new Error('Supabase not configured') };
+
+  const fullPayload: any = {
+    type: payload.type || 'CUSTOMER_INQUIRY',
+    service: payload.service || 'General Logistics',
+    name: payload.name.trim(),
+    phone: payload.phone.trim(),
+    email: payload.email ? payload.email.trim() : null,
+    origin_city: payload.origin_city ? payload.origin_city.trim() : null,
+    destination_city: payload.destination_city ? payload.destination_city.trim() : null,
+    cargo_details: payload.cargo_details ? payload.cargo_details.trim() : null,
+    weight: payload.weight ? payload.weight.trim() : null,
+    operating_city: payload.operating_city ? payload.operating_city.trim() : null,
+    vehicle_type: payload.vehicle_type || null,
+    vehicle_number: payload.vehicle_number ? payload.vehicle_number.trim() : null,
+    preferred_routes: payload.preferred_routes ? payload.preferred_routes.trim() : null,
+    message: payload.message ? payload.message.trim() : null,
+    notes: payload.notes ? payload.notes.trim() : null,
+    status: payload.status || 'NEW',
+    created_at: payload.created_at || new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase.from('inquiries').insert([fullPayload]).select().maybeSingle();
+  if (!error) return { success: true, data };
+
+  // Fallback stripping if custom columns are not yet in database
+  const errMsg = (error?.message || '').toLowerCase();
+  if (errMsg.includes('column') || errMsg.includes('schema cache')) {
+    const minimalPayload = {
+      name: fullPayload.name,
+      phone: fullPayload.phone,
+      message: `[${fullPayload.service || 'Inquiry'}] ${fullPayload.message || fullPayload.cargo_details || 'New Web Inquiry'}`,
+      status: 'NEW',
+    };
+    const { data: minData, error: minError } = await supabase.from('inquiries').insert([minimalPayload]).select().maybeSingle();
+    if (!minError) return { success: true, data: minData };
+    return { success: false, error: minError };
+  }
+
+  return { success: false, error };
+}
+
+export async function safeQueryAdminUser(
+  emailOrUsername: string
+): Promise<{ success: boolean; user?: any; error?: any }> {
+  if (!isSupabaseConfigured) return { success: false, error: new Error('Supabase not configured') };
+
+  const identifier = emailOrUsername.trim().toLowerCase();
+
+  try {
+    // 1. Direct query to admin_users table
+    let { data: user, error } = await supabase
+      .from('admin_users')
+      .select('*')
+      .ilike('email', identifier)
+      .maybeSingle();
+
+    if (!user && (identifier === 'admin' || identifier === 'admin@gmail.com')) {
+      const { data: userByUsername } = await supabase
+        .from('admin_users')
+        .select('*')
+        .or('username.ilike.admin,email.ilike.admin@gmail.com')
+        .maybeSingle();
+      if (userByUsername) user = userByUsername;
+    }
+
+    // 2. Fallback to users table
+    if (!user) {
+      const { data: uUser } = await supabase
+        .from('users')
+        .select('*')
+        .or(`email.ilike.${identifier},role.eq.SUPER_ADMIN`)
+        .maybeSingle();
+      if (uUser && (uUser.email?.toLowerCase() === identifier || identifier === 'admin' || identifier === 'admin@gmail.com')) {
+        user = uUser;
+      }
+    }
+
+    if (user) return { success: true, user };
+    return { success: false, user: null };
+  } catch (err) {
+    return { success: false, error: err };
+  }
+}
+
+export async function safeUpdateAdminPassword(
+  email: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: any }> {
+  if (!isSupabaseConfigured) return { success: false, error: new Error('Supabase not configured') };
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  try {
+    // 1. Update admin_users table
+    const { data: updated, error } = await supabase
+      .from('admin_users')
+      .update({
+        password: newPassword,
+        updated_at: new Date().toISOString(),
+      })
+      .ilike('email', cleanEmail)
+      .select();
+
+    if (!updated || updated.length === 0) {
+      // Upsert record if row doesn't exist
+      await supabase.from('admin_users').upsert({
+        email: cleanEmail,
+        name: 'System Admin',
+        role: 'SUPER_ADMIN',
+        password: newPassword,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'email' });
+    }
+
+    // 2. Also update users table for redundancy
+    try {
+      await supabase
+        .from('users')
+        .update({ password: newPassword, updated_at: new Date().toISOString() })
+        .or(`email.ilike.${cleanEmail},role.eq.SUPER_ADMIN`);
+    } catch {}
+
+    // 3. Also update system_settings
+    try {
+      await supabase.from('system_settings').upsert({
+        key: 'admin_password',
+        value: newPassword,
+      });
+    } catch {}
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err };
+  }
+}
+
 export default supabase;

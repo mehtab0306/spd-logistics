@@ -9,6 +9,7 @@ import { APP_NAME } from '@/lib/constants';
 import { Loader2, ShieldAlert, CheckCircle2, Eye, EyeOff, ShieldCheck, ArrowRight, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { Checkbox } from '@/components/ui/checkbox';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 type AuthStatus = 'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR';
 
@@ -35,52 +36,125 @@ export default function AdminLoginPage() {
     const submitIdentifier = (identifier.trim() || formEmail.trim()).toLowerCase();
     const submitPassword = (password || formPassword).trim();
 
-    // Strict User & Password Verification
+    // Strict Cloud-First User & Password Verification (Multi-Device Multi-OS)
     let matchedUser: any = null;
     let expectedPassword = 'admin';
 
     try {
-      const rawUsers = localStorage.getItem('spd_users');
-      const usersList: any[] = rawUsers ? JSON.parse(rawUsers) : [];
-      const storedAdminPass = localStorage.getItem('spd_admin_password');
-      const storedActiveUserRaw = localStorage.getItem('spd_active_user') || localStorage.getItem('spd_user');
-      const storedActiveUser = storedActiveUserRaw ? JSON.parse(storedActiveUserRaw) : null;
+      if (isSupabaseConfigured) {
+        // 1. Directly query admin_users table from Supabase
+        let { data: cloudUser } = await supabase
+          .from('admin_users')
+          .select('*')
+          .ilike('email', submitIdentifier)
+          .maybeSingle();
 
-      // Look up strictly by email or username
-      matchedUser = usersList.find(
-        (u: any) =>
-          u.email?.toLowerCase() === submitIdentifier ||
-          u.username?.toLowerCase() === submitIdentifier
-      ) || (
-        storedActiveUser &&
-        (storedActiveUser.email?.toLowerCase() === submitIdentifier || storedActiveUser.username?.toLowerCase() === submitIdentifier)
-          ? storedActiveUser
-          : null
-      );
-
-      if (!matchedUser) {
-        // Initial fresh install fallback before any custom password is saved
-        if ((submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') && !storedAdminPass) {
-          expectedPassword = 'admin';
-          matchedUser = {
-            id: 'admin_root',
-            name: 'System Admin',
-            email: 'admin@gmail.com',
-            username: 'admin',
-            role: 'SUPER_ADMIN',
-            password: 'admin',
-          };
-        } else {
-          setError('User not found!');
-          setStatus('ERROR');
-          return;
+        if (!cloudUser && (submitIdentifier === 'admin' || submitIdentifier === 'admin@gmail.com')) {
+          const { data: cloudUserAlt } = await supabase
+            .from('admin_users')
+            .select('*')
+            .or('username.ilike.admin,email.ilike.admin@gmail.com')
+            .maybeSingle();
+          if (cloudUserAlt) cloudUser = cloudUserAlt;
         }
-      } else {
-        expectedPassword = matchedUser.password || storedAdminPass || 'admin';
+
+        // 2. Fallback to users table in Supabase
+        if (!cloudUser) {
+          const { data: uUser } = await supabase
+            .from('users')
+            .select('*')
+            .or(`email.ilike.${submitIdentifier},role.eq.SUPER_ADMIN`)
+            .maybeSingle();
+          if (uUser && (uUser.email?.toLowerCase() === submitIdentifier || submitIdentifier === 'admin' || submitIdentifier === 'admin@gmail.com')) {
+            cloudUser = uUser;
+          }
+        }
+
+        // 3. Fallback to system_settings admin_password
+        if (!cloudUser && (submitIdentifier === 'admin' || submitIdentifier === 'admin@gmail.com')) {
+          const { data: settingPass } = await supabase
+            .from('system_settings')
+            .select('value')
+            .eq('key', 'admin_password')
+            .maybeSingle();
+          if (settingPass?.value) {
+            cloudUser = {
+              id: 'admin_root',
+              email: 'admin@gmail.com',
+              name: 'System Admin',
+              role: 'SUPER_ADMIN',
+              password: settingPass.value,
+            };
+          }
+        }
+
+        if (cloudUser) {
+          matchedUser = cloudUser;
+          expectedPassword = cloudUser.password || 'admin';
+        }
       }
 
-      // Strictly invalidate old password — only allow if input matches active password
-      if (expectedPassword !== submitPassword) {
+      // If Supabase has not yet been initialized with any admin user or is not configured
+      if (!matchedUser) {
+        const rawUsers = localStorage.getItem('spd_users');
+        const usersList: any[] = rawUsers ? JSON.parse(rawUsers) : [];
+        const storedAdminPass = localStorage.getItem('spd_admin_password');
+        const storedActiveUserRaw = localStorage.getItem('spd_active_user') || localStorage.getItem('spd_user');
+        const storedActiveUser = storedActiveUserRaw ? JSON.parse(storedActiveUserRaw) : null;
+
+        matchedUser = usersList.find(
+          (u: any) =>
+            u.email?.toLowerCase() === submitIdentifier ||
+            u.username?.toLowerCase() === submitIdentifier
+        ) || (
+          storedActiveUser &&
+          (storedActiveUser.email?.toLowerCase() === submitIdentifier || storedActiveUser.username?.toLowerCase() === submitIdentifier)
+            ? storedActiveUser
+            : null
+        );
+
+        if (!matchedUser) {
+          // Fresh install / first-time login fallback
+          if (submitIdentifier === 'admin@gmail.com' || submitIdentifier === 'admin') {
+            expectedPassword = storedAdminPass || 'admin';
+            matchedUser = {
+              id: 'admin_root',
+              name: 'System Admin',
+              email: 'admin@gmail.com',
+              username: 'admin',
+              role: 'SUPER_ADMIN',
+              password: expectedPassword,
+            };
+
+            // Seed cloud table admin_users on first login so subsequent mobile logins find it
+            if (isSupabaseConfigured) {
+              try {
+                await supabase.from('admin_users').upsert({
+                  email: 'admin@gmail.com',
+                  username: 'admin',
+                  name: 'System Admin',
+                  role: 'SUPER_ADMIN',
+                  password: expectedPassword,
+                  updated_at: new Date().toISOString(),
+                }, { onConflict: 'email' });
+              } catch {}
+            }
+          } else {
+            setError('User not found!');
+            setStatus('ERROR');
+            return;
+          }
+        } else {
+          expectedPassword = matchedUser.password || storedAdminPass || 'admin';
+        }
+      }
+
+      // Compare password directly with cloud table
+      const isPasswordValid =
+        expectedPassword === submitPassword ||
+        (matchedUser?.password && matchedUser.password === submitPassword);
+
+      if (!isPasswordValid) {
         setError('Incorrect password! Old password is no longer valid.');
         setStatus('ERROR');
         return;

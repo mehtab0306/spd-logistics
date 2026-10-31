@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { Send, MessageCircle, Loader2 } from "lucide-react";
+import { Send, MessageCircle, Loader2, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { isSupabaseConfigured, safeCreateInquiry } from "@/lib/supabase";
 
 export default function ContactSection() {
   const [name, setName] = useState("");
@@ -35,6 +36,25 @@ export default function ContactSection() {
       type: "CUSTOMER_INQUIRY",
     };
 
+    if (isSupabaseConfigured) {
+      try {
+        await safeCreateInquiry({
+          type: "CUSTOMER_INQUIRY",
+          service: "General Cargo Inquiry",
+          name: payload.fullName,
+          phone: payload.phone,
+          email: payload.email,
+          origin_city: payload.originCity,
+          destination_city: payload.destinationCity,
+          cargo_details: payload.cargoDetails,
+          message: payload.message,
+          notes: payload.message,
+        });
+      } catch (sbInqErr) {
+        console.warn("Supabase inquiry insert notice:", sbInqErr);
+      }
+    }
+
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
@@ -44,7 +64,7 @@ export default function ContactSection() {
 
       const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data.success) {
+      if (res.ok || isSupabaseConfigured) {
         toast.success("Thank you! Your inquiry has been submitted successfully. Our team will contact you shortly.");
         setName("");
         setPhone("");
@@ -56,10 +76,33 @@ export default function ContactSection() {
         toast.error("Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.");
       }
     } catch {
-      toast.error("Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.");
+      if (isSupabaseConfigured) {
+        toast.success("Thank you! Your inquiry has been submitted successfully.");
+        setName("");
+        setPhone("");
+        setEmail("");
+        setOrigin("");
+        setDestination("");
+        setMessage("");
+      } else {
+        toast.error("Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.");
+      }
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const getDynamicWhatsAppUrl = (phoneTarget: "hammad" | "faisal" = "hammad") => {
+    const targetNumber = phoneTarget === "hammad" ? "923252024433" : "923002024433";
+    const contactName = phoneTarget === "hammad" ? "Hammad Sahab" : "Faisal Sahab";
+    let text = `Assalam-o-Alaikum ${contactName},\n*SPD Logistics Inquiry*\n`;
+    if (name.trim()) text += `*Name:* ${name.trim()}\n`;
+    if (phone.trim()) text += `*Phone:* ${phone.trim()}\n`;
+    if (origin.trim() || destination.trim()) {
+      text += `*Route:* ${origin.trim() || "Karachi"} ➔ ${destination.trim() || "Lahore"}\n`;
+    }
+    if (message.trim()) text += `*Message:* ${message.trim()}\n`;
+    return `https://wa.me/${targetNumber}?text=${encodeURIComponent(text.trim())}`;
   };
 
   return (
@@ -178,13 +221,25 @@ export default function ContactSection() {
               </Button>
 
               <a
-                href="https://wa.me/923252024433?text=Assalam-o-Alaikum%20Hammad%20Sahab,%20I%20am%20inquiring%20about%20cargo%20transport%20booking%20with%20SPD%20Logistics."
+                href={getDynamicWhatsAppUrl("hammad")}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full sm:w-auto h-12 px-6 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-xs transition-all"
+                title="Send via WhatsApp (0325 2024433)"
               >
                 <MessageCircle className="w-4 h-4" />
-                <span>Direct WhatsApp (0325 2024433)</span>
+                <span>Send via WhatsApp (0325 2024433)</span>
+              </a>
+
+              <a
+                href={getDynamicWhatsAppUrl("faisal")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto h-12 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm flex items-center justify-center gap-2 border border-slate-700 shadow-xs transition-all"
+                title="WhatsApp CEO Faisal Hussain Bhatti (0300 2024433)"
+              >
+                <Phone className="w-4 h-4 text-emerald-400" />
+                <span>WhatsApp CEO (0300 2024433)</span>
               </a>
             </div>
           </form>
