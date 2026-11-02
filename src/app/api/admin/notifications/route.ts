@@ -1,28 +1,14 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getCurrentUser, getAuthCookie } from "@/lib/auth";
+import { validateAdminSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    let session = await getCurrentUser();
-    if (!session || !["SUPER_ADMIN", "ADMIN", "STAFF"].includes(session.role)) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal || process.env.NODE_ENV === "production" || process.env.NETLIFY) {
-        session = {
-          userId: "admin-1",
-          email: "admin@gmail.com",
-          role: "SUPER_ADMIN",
-          name: "System Admin",
-        } as any;
-      }
-    }
-
-    if (!session || !["SUPER_ADMIN", "ADMIN", "STAFF"].includes(session.role)) {
-      // Return empty list instead of 401 hard crash for smooth client fallback
-      return NextResponse.json({ success: true, data: [], unreadCount: 0 });
-    }
+    const auth = await validateAdminSession(request, ["SUPER_ADMIN", "ADMIN", "STAFF"]);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get("filter") || "all"; // all, unread, read
@@ -79,22 +65,9 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    let session = await getCurrentUser();
-    if (!session || !["SUPER_ADMIN", "ADMIN", "STAFF"].includes(session.role)) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal || process.env.NODE_ENV === "production" || process.env.NETLIFY) {
-        session = {
-          userId: "admin-1",
-          email: "admin@gmail.com",
-          role: "SUPER_ADMIN",
-          name: "System Admin",
-        } as any;
-      }
-    }
-
-    if (!session || !["SUPER_ADMIN", "ADMIN", "STAFF"].includes(session.role)) {
-      return NextResponse.json({ success: true, message: "OK (guest session)" });
-    }
+    const auth = await validateAdminSession(request, ["SUPER_ADMIN", "ADMIN", "STAFF"]);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const body = await request.json();
     const { id, markAll } = body;
@@ -132,22 +105,9 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    let session = await getCurrentUser();
-    if (!session || !["SUPER_ADMIN", "ADMIN"].includes(session.role)) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal || process.env.NODE_ENV === "production" || process.env.NETLIFY) {
-        session = {
-          userId: "admin-1",
-          email: "admin@gmail.com",
-          role: "SUPER_ADMIN",
-          name: "System Admin",
-        } as any;
-      }
-    }
-
-    if (!session || !["SUPER_ADMIN", "ADMIN"].includes(session.role)) {
-      return NextResponse.json({ success: true, message: "OK (guest session)" });
-    }
+    const auth = await validateAdminSession(request, ["SUPER_ADMIN", "ADMIN"]);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

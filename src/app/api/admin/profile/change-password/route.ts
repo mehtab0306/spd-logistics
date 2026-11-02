@@ -1,19 +1,16 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser, comparePassword, hashPassword, createToken } from '@/lib/auth';
+import { validateAdminSession, comparePassword, hashPassword, createToken } from '@/lib/auth';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const session = await getCurrentUser();
-    const effectiveSession = session || {
-      userId: 'admin_root',
-      email: 'spd@gmail.com',
-      name: 'System Admin',
-      role: 'SUPER_ADMIN',
-    };
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const session = auth.session!;
+    const effectiveSession = session;
 
     const body = await request.json();
     const { currentPassword, newPassword, confirmPassword } = body;
@@ -173,17 +170,12 @@ export async function POST(request: Request) {
     }
 
     // Issue refreshed session token
-    let token = 'spd-admin-session-token';
-    try {
-      token = await createToken({
-        userId: targetUserId,
-        email: targetEmail,
-        name: targetName,
-        role: targetRole,
-      });
-    } catch (tokenErr) {
-      console.warn('Token creation error, using fallback token:', tokenErr);
-    }
+    const token = await createToken({
+      userId: targetUserId,
+      email: targetEmail,
+      name: targetName,
+      role: targetRole,
+    });
 
     const isHttps = request.headers.get('x-forwarded-proto') === 'https' || request.url.startsWith('https:');
     const response = NextResponse.json({

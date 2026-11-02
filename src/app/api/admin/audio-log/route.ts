@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser, getAuthCookie } from '@/lib/auth';
+import { validateAdminSession } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import fs from 'fs';
 import path from 'path';
@@ -9,25 +9,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    let session = await getCurrentUser(request);
-    if (!session) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal) {
-        session = {
-          userId: 'admin-1',
-          email: 'admin@gmail.com',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-        };
-      }
-    }
-
-    if (!session || !['SUPER_ADMIN', 'ADMIN', 'STAFF'].includes(session.role)) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: Admin privileges required' },
-        { status: 403 }
-      );
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
@@ -97,25 +81,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    let session = await getCurrentUser(request);
-    if (!session) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal) {
-        session = {
-          userId: 'admin-1',
-          email: 'admin@gmail.com',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-        };
-      }
-    }
-
-    if (!session || !['SUPER_ADMIN', 'ADMIN', 'STAFF'].includes(session.role)) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: Admin privileges required' },
-        { status: 403 }
-      );
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const contentType = request.headers.get('content-type') || '';
     let title = 'Voice Dispatch Memo';
@@ -225,25 +193,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    let session = await getCurrentUser(request);
-    if (!session) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal) {
-        session = {
-          userId: 'admin-1',
-          email: 'admin@gmail.com',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-        };
-      }
-    }
-
-    if (!session || !['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: Admin privileges required' },
-        { status: 403 }
-      );
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

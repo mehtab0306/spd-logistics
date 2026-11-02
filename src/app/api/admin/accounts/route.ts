@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { validateAdminSession } from '@/lib/auth';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +9,9 @@ const DEFAULT_ACCOUNTS: any[] = [];
 
 export async function GET(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') || '').toLowerCase();
 
@@ -84,6 +88,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const body = await request.json();
     const { action } = body;
 

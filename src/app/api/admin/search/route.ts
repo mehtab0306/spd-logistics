@@ -1,21 +1,15 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser, getAuthCookie } from '@/lib/auth';
+import { validateAdminSession } from '@/lib/auth';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    let session = await getCurrentUser();
-    if (!session) {
-      session = {
-        userId: 'admin-1',
-        email: 'admin@gmail.com',
-        name: 'System Admin',
-        role: 'SUPER_ADMIN',
-      };
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get('q') || '').trim();

@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Polyfill WebSocket in Node.js server environments if needed
-if (typeof WebSocket === 'undefined') {
+if (typeof window === 'undefined' && typeof WebSocket === 'undefined') {
   try {
-    (globalThis as any).WebSocket = require('ws');
+    const wsPkg = 'ws';
+    (globalThis as any).WebSocket = eval('require')(wsPkg);
   } catch {}
 }
 
@@ -415,7 +416,7 @@ export async function safeQueryAdminUser(
       const { data: userByAlt } = await supabase
         .from('admin_users')
         .select('*')
-        .or('email.ilike.spd@gmail.com,email.ilike.admin@gmail.com')
+        .ilike('email', 'spd@gmail.com')
         .limit(1)
         .maybeSingle();
       if (userByAlt) user = userByAlt;

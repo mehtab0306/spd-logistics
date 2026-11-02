@@ -86,53 +86,14 @@ export async function middleware(request: NextRequest) {
 
   let verifiedPayload: any = null;
   for (const candidateToken of allCookieValues) {
-    // 1. Admin session tokens
-    if (
-      candidateToken === 'spd-admin-session-token' ||
-      candidateToken === 'admin-session-token' ||
-      candidateToken === 'mock-admin-token'
-    ) {
-      verifiedPayload = {
-        userId: 'a42a888d-75d5-43e9-8d80-f42587510bc5',
-        email: 'spd@gmail.com',
-        role: 'SUPER_ADMIN',
-        name: 'System Admin',
-      };
-      break;
-    }
+    if (!candidateToken || typeof candidateToken !== 'string') continue;
 
-    // 2. Customer session tokens
-    if (
-      candidateToken === 'spd-customer-session-token' ||
-      candidateToken.startsWith('spd-cust-')
-    ) {
-      verifiedPayload = {
-        userId: 'cust-user-1',
-        email: 'customer@gmail.com',
-        role: 'CUSTOMER',
-        name: 'Standard Customer',
-      };
-      break;
-    }
-
-    // 3. Driver session tokens
-    if (
-      candidateToken === 'spd-driver-session-token' ||
-      candidateToken.startsWith('spd-drv-')
-    ) {
-      verifiedPayload = {
-        userId: 'driver-1',
-        email: 'driver@spd.com',
-        role: 'DRIVER',
-        name: 'Assigned Driver',
-      };
-      break;
-    }
-
-    // 4. Cryptographic JWT verification
+    // Cryptographic JWT verification strictly
     try {
-      const { payload } = await jwtVerify(candidateToken, JWT_SECRET);
-      if (payload && payload.role) {
+      const { payload } = await jwtVerify(candidateToken, JWT_SECRET, {
+        algorithms: ['HS256'],
+      });
+      if (payload && payload.userId && payload.role) {
         verifiedPayload = payload;
         break;
       }

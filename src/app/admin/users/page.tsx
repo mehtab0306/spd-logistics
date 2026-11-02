@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,10 +16,7 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import {
   Shield,
-  ShieldAlert,
   ShieldCheck,
-  UserCheck,
-  UserCog,
   Plus,
   Search,
   KeyRound,
@@ -31,9 +28,14 @@ import {
   Lock,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import { StatusBadge } from "@/components/shared/status-badge";
+import { supabase } from "@/lib/supabase";
 
-const PROTECTED_EMAILS = ["admin.com", "admin@spdlogistics.com"];
+const PRIMARY_SUPER_ADMIN_ID = "a42a888d-75d5-43e9-8d80-f42587510bc5";
+const PROTECTED_EMAILS = [
+  "spd@gmail.com",
+  "admin@spdlogistics.com",
+  "superpakdata@gmail.com",
+];
 
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -59,91 +61,8 @@ export default function UsersPage() {
     role: "STAFF",
   });
 
-  const DEFAULT_CLIENT_USERS = [
-    {
-      id: "user-admin-1",
-      name: "System Admin",
-      email: "spd@gmail.com",
-      phone: "0325 2024433",
-      role: "SUPER_ADMIN",
-      status: "ACTIVE",
-      lastLoginAt: new Date().toISOString(),
-      createdAt: "2026-01-01T00:00:00.000Z",
-      customer: null,
-      driver: null,
-      _count: { auditLogs: 48, consignments: 125, payments: 84 },
-    },
-    {
-      id: "user-ceo-2",
-      name: "Faisal Hussain Bhatti",
-      email: "faisal@spdlogistics.com",
-      phone: "0300 8443322",
-      role: "ADMIN",
-      status: "ACTIVE",
-      lastLoginAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      createdAt: "2026-01-01T00:00:00.000Z",
-      customer: null,
-      driver: null,
-      _count: { auditLogs: 22, consignments: 80, payments: 50 },
-    },
-    {
-      id: "user-md-3",
-      name: "Hammad Faisal Bhatti",
-      email: "hammad@spdlogistics.com",
-      phone: "0325 2024433",
-      role: "ADMIN",
-      status: "ACTIVE",
-      lastLoginAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      createdAt: "2026-01-01T00:00:00.000Z",
-      customer: null,
-      driver: null,
-      _count: { auditLogs: 35, consignments: 95, payments: 60 },
-    },
-    {
-      id: "user-staff-4",
-      name: "Muhammad Tariq (Dispatch Manager)",
-      email: "tariq@spdlogistics.com",
-      phone: "0312 9988776",
-      role: "STAFF",
-      status: "ACTIVE",
-      lastLoginAt: new Date(Date.now() - 3600000 * 1).toISOString(),
-      createdAt: "2026-01-15T00:00:00.000Z",
-      customer: null,
-      driver: null,
-      _count: { auditLogs: 64, consignments: 140, payments: 45 },
-    },
-    {
-      id: "user-cust-5",
-      name: "Crescent Textile Mills (Corporate)",
-      email: "corporate@crescent.com.pk",
-      phone: "042 35789000",
-      role: "CUSTOMER",
-      status: "ACTIVE",
-      lastLoginAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-      createdAt: "2026-02-01T00:00:00.000Z",
-      customer: { id: "c-1", name: "Mian Muhammad Mansha", companyName: "Crescent Textile Mills" },
-      driver: null,
-      _count: { auditLogs: 5, consignments: 32, payments: 28 },
-    },
-    {
-      id: "user-driver-6",
-      name: "Muhammad Khan (Fleet Pilot)",
-      email: "driver.khan@spdlogistics.com",
-      phone: "0301 5566778",
-      role: "DRIVER",
-      status: "ACTIVE",
-      lastLoginAt: new Date(Date.now() - 3600000 * 8).toISOString(),
-      createdAt: "2026-02-10T00:00:00.000Z",
-      customer: null,
-      driver: { id: "d-1", name: "Muhammad Khan", vehicleNumber: "LES-8921" },
-      _count: { auditLogs: 8, consignments: 18, payments: 0 },
-    },
-  ];
-
-  const LOCAL_USERS_KEY = "spd_local_users";
-  const LOCAL_DELETED_USERS_KEY = "spd_deleted_users";
-
-  const fetchUsers = async () => {
+  // Authoritative server fetch from Supabase-backed API
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -151,111 +70,94 @@ export default function UsersPage() {
       if (roleFilter !== "ALL") params.append("role", roleFilter);
       if (statusFilter !== "ALL") params.append("status", statusFilter);
 
-      let fetchedUsers: any[] = [];
-      try {
-        const res = await fetch(`/api/admin/users?${params.toString()}`);
-        const data = await res.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          fetchedUsers = data.data;
-        } else {
-          fetchedUsers = DEFAULT_CLIENT_USERS;
-        }
-      } catch (err) {
-        console.warn("Error fetching users, using fallback:", err);
-        fetchedUsers = DEFAULT_CLIENT_USERS;
-      }
-
-      // Merge local storage users
-      let localUsers: any[] = [];
-      let deletedIds: string[] = [];
-      if (typeof window !== "undefined") {
-        try {
-          const raw = localStorage.getItem(LOCAL_USERS_KEY);
-          if (raw) localUsers = JSON.parse(raw);
-          const delRaw = localStorage.getItem(LOCAL_DELETED_USERS_KEY);
-          if (delRaw) deletedIds = JSON.parse(delRaw);
-        } catch (e) {}
-      }
-
-      const userMap = new Map<string, any>();
-      fetchedUsers.forEach((u) => {
-        if (!deletedIds.includes(u.id)) userMap.set(u.id, u);
+      const res = await fetch(`/api/admin/users?${params.toString()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
       });
-      localUsers.forEach((u) => {
-        if (!deletedIds.includes(u.id)) userMap.set(u.id, u);
-      });
-
-      let merged = Array.from(userMap.values());
-      if (search) {
-        const q = search.toLowerCase();
-        merged = merged.filter((u) =>
-          u.name?.toLowerCase().includes(q) ||
-          u.email?.toLowerCase().includes(q) ||
-          u.phone?.toLowerCase().includes(q)
-        );
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setUsers(data.data);
       }
-      if (roleFilter !== "ALL") {
-        merged = merged.filter((u) => u.role === roleFilter);
-      }
-      if (statusFilter !== "ALL") {
-        merged = merged.filter((u) => u.status === statusFilter);
-      }
-
-      setUsers(merged);
     } catch (err) {
-      console.warn("Error processing users:", err);
-      setUsers(DEFAULT_CLIENT_USERS);
+      console.error("Error fetching authoritative users:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, roleFilter, statusFilter]);
 
+  // Real-time synchronization & auto-refresh across devices
   useEffect(() => {
     fetchUsers();
-  }, [search, roleFilter, statusFilter]);
+
+    // Supabase Realtime Channel
+    const channel = supabase
+      .channel("realtime-admin-users-mgmt")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "admin_users" },
+        () => {
+          fetchUsers();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "customers" },
+        () => {
+          fetchUsers();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "drivers" },
+        () => {
+          fetchUsers();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "system_settings" },
+        () => {
+          fetchUsers();
+        }
+      )
+      .subscribe();
+
+    // Browser focus & online listeners for instant reconnect refresh (mobile / laptop)
+    const handleRevalidate = () => fetchUsers();
+    window.addEventListener("focus", handleRevalidate);
+    window.addEventListener("online", handleRevalidate);
+
+    return () => {
+      channel.unsubscribe();
+      window.removeEventListener("focus", handleRevalidate);
+      window.removeEventListener("online", handleRevalidate);
+    };
+  }, [fetchUsers]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
     setFormError("");
+    setSubmitting(true);
 
     try {
-      const newUser = {
-        id: `user_loc_${Date.now()}`,
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone || "0300 0000000",
-        role: formData.role,
-        status: "ACTIVE",
-        lastLoginAt: null,
-        createdAt: new Date().toISOString(),
-        customer: null,
-        driver: null,
-        _count: { auditLogs: 0, consignments: 0, payments: 0 },
-      };
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
 
-      if (typeof window !== "undefined") {
-        try {
-          const raw = localStorage.getItem(LOCAL_USERS_KEY);
-          const current: any[] = raw ? JSON.parse(raw) : [];
-          current.unshift(newUser);
-          localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(current));
-        } catch (e) {}
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setFormError(data.error || "Failed to create user account.");
+        return;
       }
 
       setAddModalOpen(false);
       setFormData({ name: "", email: "", phone: "", password: "", role: "STAFF" });
-      setActionFeedback({ type: "success", text: "User created successfully." });
+      setActionFeedback({ type: "success", text: `User account "${data.data?.name || formData.name}" registered successfully.` });
       fetchUsers();
-
-      // Background API call
-      fetch("/api/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      }).catch((e) => console.warn("Background user creation warning:", e));
     } catch (err: any) {
-      setFormError("Failed to create user.");
+      setFormError(err.message || "Network error. Failed to create user.");
     } finally {
       setSubmitting(false);
       setTimeout(() => setActionFeedback(null), 5000);
@@ -263,35 +165,33 @@ export default function UsersPage() {
   };
 
   const handleToggleStatus = async (user: any) => {
-    if (PROTECTED_EMAILS.includes(user.email.toLowerCase())) {
-      setActionFeedback({ type: "error", text: "Cannot deactivate primary administrator account." });
+    if (isProtectedUser(user.email) || user.id === PRIMARY_SUPER_ADMIN_ID) {
+      setActionFeedback({ type: "error", text: "Cannot deactivate the primary Super Administrator account." });
       setTimeout(() => setActionFeedback(null), 5000);
       return;
     }
 
     const nextStatus = user.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-    if (typeof window !== "undefined") {
-      try {
-        const raw = localStorage.getItem(LOCAL_USERS_KEY);
-        let current: any[] = raw ? JSON.parse(raw) : [];
-        const idx = current.findIndex((u) => u.id === user.id);
-        if (idx >= 0) {
-          current[idx] = { ...current[idx], status: nextStatus };
-        } else {
-          current.push({ ...user, status: nextStatus });
-        }
-        localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(current));
-      } catch (e) {}
-    }
-    setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)));
-    setActionFeedback({ type: "success", text: `User status changed to ${nextStatus}.` });
-    setTimeout(() => setActionFeedback(null), 5000);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id, status: nextStatus }),
+      });
+      const data = await res.json();
 
-    fetch("/api/admin/users", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: user.id, status: nextStatus }),
-    }).catch(() => {});
+      if (res.ok && data.success) {
+        setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)));
+        setActionFeedback({ type: "success", text: `User status updated to ${nextStatus}.` });
+        fetchUsers();
+      } else {
+        setActionFeedback({ type: "error", text: data.error || "Failed to update user status in the database." });
+      }
+    } catch {
+      setActionFeedback({ type: "error", text: "Network error. Failed to update status." });
+    } finally {
+      setTimeout(() => setActionFeedback(null), 5000);
+    }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -300,17 +200,22 @@ export default function UsersPage() {
 
     setSubmitting(true);
     try {
-      setResetPasswordUser(null);
-      setNewPassword("");
-      setActionFeedback({ type: "success", text: "User password reset successfully!" });
-
-      fetch("/api/admin/users", {
+      const res = await fetch("/api/admin/users", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: resetPasswordUser.id, password: newPassword }),
-      }).catch(() => {});
-    } catch (err) {
-      setActionFeedback({ type: "error", text: "Failed to reset user password." });
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setResetPasswordUser(null);
+        setNewPassword("");
+        setActionFeedback({ type: "success", text: `Password for "${resetPasswordUser.name}" reset successfully.` });
+      } else {
+        setActionFeedback({ type: "error", text: data.error || "Failed to reset password." });
+      }
+    } catch {
+      setActionFeedback({ type: "error", text: "Network error. Failed to reset user password." });
     } finally {
       setSubmitting(false);
       setTimeout(() => setActionFeedback(null), 5000);
@@ -319,50 +224,52 @@ export default function UsersPage() {
 
   const handleDeleteUser = async () => {
     if (!deleteUser) return;
+
+    if (isProtectedUser(deleteUser.email) || deleteUser.id === PRIMARY_SUPER_ADMIN_ID) {
+      setActionFeedback({ type: "error", text: "Cannot delete the primary Super Administrator account." });
+      setTimeout(() => setActionFeedback(null), 5000);
+      setDeleteUser(null);
+      return;
+    }
+
     setDeleting(true);
     try {
-      if (typeof window !== "undefined") {
-        try {
-          const delRaw = localStorage.getItem(LOCAL_DELETED_USERS_KEY);
-          const deletedIds: string[] = delRaw ? JSON.parse(delRaw) : [];
-          if (!deletedIds.includes(deleteUser.id)) {
-            deletedIds.push(deleteUser.id);
-            localStorage.setItem(LOCAL_DELETED_USERS_KEY, JSON.stringify(deletedIds));
-          }
-          const raw = localStorage.getItem(LOCAL_USERS_KEY);
-          if (raw) {
-            const current: any[] = JSON.parse(raw);
-            localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(current.filter((u) => u.id !== deleteUser.id)));
-          }
-        } catch (e) {}
-      }
-
-      setUsers((prev) => prev.filter((u) => u.id !== deleteUser.id));
-      setDeleteUser(null);
-      setActionFeedback({ type: "success", text: "User removed successfully." });
-
-      fetch(`/api/admin/users?id=${deleteUser.id}`, {
+      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(deleteUser.id)}`, {
         method: "DELETE",
-      }).catch(() => {});
-    } catch (err) {
-      setActionFeedback({ type: "error", text: "Unable to delete user. Please try again." });
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        setUsers((prev) => prev.filter((u) => u.id !== deleteUser.id));
+        setActionFeedback({ type: "success", text: data.message || `User "${deleteUser.name}" removed successfully.` });
+        setDeleteUser(null);
+        fetchUsers();
+      } else {
+        // Safe deletion rule: If database request fails, retain record in UI and show clear error
+        setActionFeedback({ type: "error", text: data.error || "Failed to delete user in the database." });
+      }
+    } catch (err: any) {
+      setActionFeedback({ type: "error", text: err.message || "Network error. User deletion aborted." });
     } finally {
       setDeleting(false);
       setTimeout(() => setActionFeedback(null), 5000);
     }
   };
 
-  const isProtectedUser = (email: string) => PROTECTED_EMAILS.includes(email.toLowerCase());
+  const isProtectedUser = (email?: string) => {
+    if (!email) return false;
+    return PROTECTED_EMAILS.includes(email.toLowerCase().trim());
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-            User Management & Authorization
+            User Management &amp; Authorization
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Manage authorized system accounts, assign roles (Admin, Customer, Driver, Staff), control access, and reset passwords.
+            Authoritative cloud database directory: manage Super Admins, System Staff, Customers, and Fleet Pilots with real-time multi-device sync.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
@@ -444,7 +351,6 @@ export default function UsersPage() {
             <option value="ALL">All Statuses</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
-            <option value="BLOCKED">Blocked</option>
           </select>
         </div>
       </div>
@@ -452,7 +358,7 @@ export default function UsersPage() {
       {loading ? (
         <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
           <Loader2 className="w-8 h-8 animate-spin text-spd-red" />
-          <p className="text-xs text-slate-500 font-medium">Loading user accounts...</p>
+          <p className="text-xs text-slate-500 font-medium">Loading authoritative user accounts from Supabase...</p>
         </div>
       ) : users.length === 0 ? (
         <EmptyState
@@ -465,19 +371,18 @@ export default function UsersPage() {
           <Table className="min-w-[850px]">
             <TableHeader className="bg-slate-50/80 dark:bg-slate-800/50">
               <TableRow>
-                <TableHead className="font-bold text-xs">Name & Identity</TableHead>
-                <TableHead className="font-bold text-xs">Email / Username</TableHead>
+                <TableHead className="font-bold text-xs">Name &amp; Identity</TableHead>
+                <TableHead className="font-bold text-xs">Email / Login</TableHead>
                 <TableHead className="font-bold text-xs">Phone</TableHead>
                 <TableHead className="font-bold text-xs">System Role</TableHead>
                 <TableHead className="font-bold text-xs">Access Status</TableHead>
-                <TableHead className="font-bold text-xs">Created Date</TableHead>
-                <TableHead className="font-bold text-xs">Last Login</TableHead>
+                <TableHead className="font-bold text-xs">Registered Date</TableHead>
                 <TableHead className="font-bold text-xs text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((u) => {
-                const isOwner = isProtectedUser(u.email);
+                const isOwner = isProtectedUser(u.email) || u.id === PRIMARY_SUPER_ADMIN_ID;
                 return (
                   <TableRow key={u.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                     <TableCell>
@@ -491,17 +396,17 @@ export default function UsersPage() {
                           </span>
                           {isOwner && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-200 dark:border-amber-800">
-                              <Lock className="w-2.5 h-2.5" /> Primary Owner
+                              <Lock className="w-2.5 h-2.5" /> Primary Super Admin
                             </span>
                           )}
                           {u.customer && (
                             <span className="text-[10px] text-slate-400 block truncate max-w-[150px]">
-                              Co: {u.customer.companyName || u.customer.name}
+                              Customer: {u.customer.companyName || u.customer.name}
                             </span>
                           )}
                           {u.driver && (
                             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block">
-                              Truck: {u.driver.vehicleNumber || "Fleet"}
+                              Fleet Pilot {u.driver.vehicleNumber ? `(${u.driver.vehicleNumber})` : ""}
                             </span>
                           )}
                         </div>
@@ -541,8 +446,6 @@ export default function UsersPage() {
                         }${
                           u.status === "ACTIVE"
                             ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
-                            : u.status === "DELETED"
-                            ? "bg-red-100 dark:bg-red-950/60 text-red-600"
                             : "bg-slate-100 dark:bg-slate-800 text-slate-500"
                         }`}
                         title={isOwner ? "Primary account status cannot be changed" : "Click to toggle status"}
@@ -551,10 +454,7 @@ export default function UsersPage() {
                       </button>
                     </TableCell>
                     <TableCell className="text-xs text-slate-500">
-                      {formatDate(u.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500">
-                      {u.lastLoginAt ? formatDate(u.lastLoginAt) : "Never"}
+                      {u.createdAt ? formatDate(u.createdAt) : "—"}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1.5">
@@ -574,7 +474,7 @@ export default function UsersPage() {
                         {isOwner ? (
                           <span
                             className="h-8 w-8 flex items-center justify-center text-slate-300 dark:text-slate-600"
-                            title="Primary system administrator account cannot be deleted"
+                            title="Primary system administrator account is protected and cannot be deleted"
                           >
                             <Lock className="w-4 h-4" />
                           </span>
@@ -608,7 +508,7 @@ export default function UsersPage() {
               Register New System User
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Create an administrative or staff operator account with portal credentials.
+              Create an administrative operator, staff, customer, or driver account with cloud credentials.
             </DialogDescription>
           </DialogHeader>
 
@@ -625,7 +525,7 @@ export default function UsersPage() {
               </Label>
               <Input
                 required
-                placeholder="e.g. Humayun Administrator"
+                placeholder="e.g. Humayun Operations Manager"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="rounded-xl h-10 text-xs"
@@ -638,6 +538,7 @@ export default function UsersPage() {
               </Label>
               <Input
                 required
+                type="email"
                 placeholder="e.g. operator@spdlogistics.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -650,7 +551,7 @@ export default function UsersPage() {
                 Contact Phone
               </Label>
               <Input
-                placeholder="03211234567"
+                placeholder="0300 1234567"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className="rounded-xl h-10 text-xs"
@@ -668,7 +569,8 @@ export default function UsersPage() {
               >
                 <option value="STAFF">Staff Operator</option>
                 <option value="ADMIN">System Administrator</option>
-                <option value="SUPER_ADMIN">Super Administrator</option>
+                <option value="CUSTOMER">Customer Account</option>
+                <option value="DRIVER">Fleet Pilot / Driver</option>
               </select>
             </div>
 
@@ -776,7 +678,7 @@ export default function UsersPage() {
                 <p><strong>Status:</strong> {deleteUser?.status}</p>
               </div>
               <span className="text-[11px] text-slate-500 block leading-relaxed">
-                Deleting this account will immediately revoke all authentication access. Any associated business records or activity logs will be safely archived.
+                Deleting this account will immediately revoke all authentication access across all devices in real-time.
               </span>
             </DialogDescription>
           </DialogHeader>

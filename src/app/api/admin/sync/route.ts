@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getCentralStore, mergeCentralStore } from '@/lib/server-store';
 import prisma from '@/lib/prisma';
+import { validateAdminSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const store = getCentralStore();
 
     // Also attempt querying Prisma if available and merge
@@ -50,6 +54,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const body = await request.json();
     const { updates } = body;
 

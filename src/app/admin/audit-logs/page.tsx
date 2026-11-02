@@ -29,7 +29,7 @@ export default async function AuditLogsPage() {
         user: { name: "System Admin" },
         action: "LOGIN",
         module: "AUTH",
-        details: "Admin authenticated successfully (admin@gmail.com)",
+        details: "Admin authenticated successfully (spd@gmail.com)",
       },
       {
         id: "log-2",

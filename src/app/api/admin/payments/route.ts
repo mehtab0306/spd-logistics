@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { validateAdminSession } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { sendEventEmail } from '@/lib/mailer';
 
@@ -9,6 +10,9 @@ const DEFAULT_PAYMENTS: any[] = [];
 
 export async function GET(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
     const consignmentId = searchParams.get('consignmentId');
@@ -47,6 +51,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const body = await request.json();
     const {
       customerId,

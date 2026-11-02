@@ -36,7 +36,7 @@ export async function POST(request: Request) {
           const { data: sbAdminAlt } = await supabase
             .from('admin_users')
             .select('*')
-            .or('email.ilike.spd@gmail.com,email.ilike.admin@gmail.com')
+            .ilike('email', 'spd@gmail.com')
             .limit(1)
             .maybeSingle();
           if (sbAdminAlt) sbAdmin = sbAdminAlt;

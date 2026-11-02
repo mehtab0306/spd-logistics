@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashPassword } from '@/lib/auth';
+import { hashPassword, validateAdminSession } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { saveCentralRecord, getCentralCollection, deleteCentralRecord } from '@/lib/server-store';
 import { supabase, isSupabaseConfigured, safeUpsertCustomer } from '@/lib/supabase';
@@ -11,6 +11,9 @@ const DEFAULT_CUSTOMERS: any[] = [];
 
 export async function GET(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') || '').toLowerCase();
     const status = searchParams.get('status') || '';
@@ -124,6 +127,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const body = await request.json();
     const {
       name,
@@ -339,6 +345,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const body = await request.json();
     const { id, password, ...updateData } = body;
 
@@ -401,6 +410,9 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     let id = searchParams.get('id');
     if (!id) {

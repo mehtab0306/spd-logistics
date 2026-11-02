@@ -112,7 +112,7 @@ export default function SettingsPage() {
           if (idx !== -1) {
             usersList[idx].password = newPassword;
           } else {
-            usersList.push({ id: "admin_root", email: "admin@gmail.com", password: newPassword, role: "SUPER_ADMIN" });
+            usersList.push({ id: "a42a888d-75d5-43e9-8d80-f42587510bc5", email: "spd@gmail.com", password: newPassword, role: "SUPER_ADMIN" });
           }
           localStorage.setItem("spd_users", JSON.stringify(usersList));
           const activeUserRaw = localStorage.getItem("spd_active_user") || localStorage.getItem("spd_user");

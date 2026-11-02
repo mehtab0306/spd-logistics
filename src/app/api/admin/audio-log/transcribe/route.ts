@@ -1,29 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser, getAuthCookie } from '@/lib/auth';
+import { validateAdminSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    let session = await getCurrentUser(request);
-    if (!session) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal) {
-        session = {
-          userId: 'admin-1',
-          email: 'admin@gmail.com',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-        };
-      }
-    }
-
-    if (!session || !['SUPER_ADMIN', 'ADMIN', 'STAFF'].includes(session.role)) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: Admin privileges required' },
-        { status: 403 }
-      );
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, validateAdminSession } from '@/lib/auth';
 import {
   getCentralCollection,
   saveCentralRecord,
@@ -16,6 +16,9 @@ const DEFAULT_CASH_BOOKS = INITIAL_CASH_BOOKS;
 
 export async function GET(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const cashBookId = searchParams.get('cashBookId');
     const search = (searchParams.get('search') || '').trim().toLowerCase();
@@ -250,7 +253,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getCurrentUser();
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
+    const session = auth.user;
     const body = await request.json();
     const { action } = body;
 
@@ -634,6 +640,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const txId = searchParams.get('txId') || searchParams.get('id');
     const cashBookId = searchParams.get('cashBookId');

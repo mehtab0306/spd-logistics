@@ -1,19 +1,16 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser, createToken } from '@/lib/auth';
+import { validateAdminSession, createToken } from '@/lib/auth';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getCurrentUser();
-    const effectiveSession = session || {
-      userId: 'a42a888d-75d5-43e9-8d80-f42587510bc5',
-      email: 'spd@gmail.com',
-      name: 'System Admin',
-      role: 'SUPER_ADMIN',
-    };
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const session = auth.session!;
+    const effectiveSession = session;
 
     let user: any = null;
     if (isSupabaseConfigured) {
@@ -128,13 +125,10 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const session = await getCurrentUser();
-    const effectiveSession = session || {
-      userId: 'a42a888d-75d5-43e9-8d80-f42587510bc5',
-      email: 'spd@gmail.com',
-      name: 'System Admin',
-      role: 'SUPER_ADMIN',
-    };
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const session = auth.session!;
+    const effectiveSession = session;
 
     const body = await request.json();
     const { name, email, phone, avatar, username } = body;

@@ -42,7 +42,7 @@ function ContactPageContent() {
   const serviceParam = (searchParams.get("service") || "").toLowerCase().trim();
 
   const [activeTab, setActiveTab] = useState<"customer" | "broker">("customer");
-  const [selectedService, setSelectedService] = useState("Full Truck Load (FTL) - Dedicated Fleet");
+  const [selectedService, setSelectedService] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusAlert, setStatusAlert] = useState<{
     type: "success" | "error";
@@ -217,6 +217,7 @@ function ContactPageContent() {
           message: "",
           _hp_website: "",
         });
+        if (!serviceParam) setSelectedService("");
       } else {
         const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
         setStatusAlert({ type: "error", message: errorMsg });
@@ -669,6 +670,7 @@ function ContactPageContent() {
                           onChange={(e) => setSelectedService(e.target.value)}
                           className="h-11 w-full rounded-xl border border-input bg-white dark:bg-slate-950 px-3 py-2 text-sm font-bold text-slate-900 dark:text-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-spd-red shadow-xs"
                         >
+                          <option value="">Select Service / Inquiry Type...</option>
                           {SERVICE_OPTIONS.map((opt) => (
                             <option key={opt.id} value={opt.label}>
                               {opt.label}

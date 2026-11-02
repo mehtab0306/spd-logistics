@@ -66,20 +66,25 @@ export default function UnifiedLoginPage() {
         return showError(data.error || "Authentication failed. Invalid email or password.");
       }
 
+      const authToken = data.data?.token || data.token;
+      if (!authToken) {
+        return showError("Login failed: Authentication token was not issued by the server.");
+      }
+
       const userSession = data.data?.user || {
-        id: "admin_root",
-        name: "System Admin",
+        id: data.data?.id || "a42a888d-75d5-43e9-8d80-f42587510bc5",
+        name: data.data?.name || "System Admin",
         email: inputEmail,
-        role: "SUPER_ADMIN",
-        token: data.data?.token || "spd-admin-session-token",
+        role: data.data?.role || "SUPER_ADMIN",
+        token: authToken,
         redirectUrl: "/admin",
       };
 
       localStorage.setItem("spd_user", JSON.stringify(userSession));
       localStorage.setItem("spd_admin_auth", JSON.stringify(userSession));
       localStorage.setItem("spd_active_user", JSON.stringify(userSession));
-      sessionStorage.setItem("spd_auth_token", userSession.token);
-      document.cookie = `spd-auth-token=${userSession.token}; path=/; max-age=604800; SameSite=Lax`;
+      sessionStorage.setItem("spd_auth_token", authToken);
+      document.cookie = `spd-auth-token=${authToken}; path=/; max-age=604800; SameSite=Lax`;
 
       setSuccess(true);
       setTimeout(() => {

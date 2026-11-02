@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser, getAuthCookie } from '@/lib/auth';
+import { validateAdminSession } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { saveCentralRecord, getCentralCollection, updateCentralRecord, deleteCentralRecord } from '@/lib/server-store';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -33,21 +33,9 @@ async function generateChallanNumber(): Promise<string> {
 
 export async function GET(request: Request) {
   try {
-    let session = await getCurrentUser();
-    if (!session) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal || process.env.NODE_ENV === 'production') {
-        session = {
-          userId: 'admin-1',
-          email: 'admin@gmail.com',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-        };
-      }
-    }
-    if (!session || !['SUPER_ADMIN', 'ADMIN', 'STAFF'].includes(session.role)) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -185,21 +173,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    let session = await getCurrentUser();
-    if (!session) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal || process.env.NODE_ENV === 'production') {
-        session = {
-          userId: 'admin-1',
-          email: 'admin@gmail.com',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-        };
-      }
-    }
-    if (!session || !['SUPER_ADMIN', 'ADMIN', 'STAFF'].includes(session.role)) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const body = await request.json();
     const {
@@ -392,6 +368,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const body = await request.json();
     const {
       id,
@@ -476,6 +455,9 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 

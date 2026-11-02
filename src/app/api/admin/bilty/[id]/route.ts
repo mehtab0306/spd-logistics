@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser, getAuthCookie } from '@/lib/auth';
+import { validateAdminSession } from '@/lib/auth';
 import { getCentralCollection, saveCentralRecord, deleteCentralRecord } from '@/lib/server-store';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -18,6 +18,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { id: rawId } = await resolveParams(params);
     const id = decodeURIComponent(rawId || '').trim();
 
@@ -157,6 +160,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { id: rawId } = await resolveParams(params);
     const id = decodeURIComponent(rawId || '').trim();
     const body = await request.json();
@@ -212,6 +218,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { id: rawId } = await resolveParams(params);
     const id = decodeURIComponent(rawId || '').trim();
 

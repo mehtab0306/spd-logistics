@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser, getAuthCookie } from '@/lib/auth';
+import { validateAdminSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -209,18 +209,9 @@ const DEFAULT_SETTINGS: Record<
 
 export async function GET(request: Request) {
   try {
-    let session = await getCurrentUser(request);
-    if (!session) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal) {
-        session = {
-          userId: 'admin-1',
-          email: 'admin@gmail.com',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-        };
-      }
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     // Retrieve saved settings from database
     let dbSettings: any[] = [];
@@ -261,24 +252,9 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    let session = await getCurrentUser(request);
-    if (!session) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal) {
-        session = {
-          userId: 'admin-1',
-          email: 'admin@gmail.com',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-        };
-      }
-    }
-    if (!session || !['ADMIN', 'SUPER_ADMIN', 'STAFF'].includes(session.role)) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: Admin privileges required' },
-        { status: 403 }
-      );
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const body = await request.json();
     const { settings, category = 'GENERAL' } = body;
@@ -340,24 +316,9 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    let session = await getCurrentUser(request);
-    if (!session) {
-      const cookieVal = await getAuthCookie();
-      if (cookieVal) {
-        session = {
-          userId: 'admin-1',
-          email: 'admin@gmail.com',
-          name: 'System Admin',
-          role: 'SUPER_ADMIN',
-        };
-      }
-    }
-    if (!session || !['ADMIN', 'SUPER_ADMIN', 'STAFF'].includes(session.role)) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: Admin privileges required' },
-        { status: 403 }
-      );
-    }
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
