@@ -195,11 +195,16 @@ export default function HomePage() {
           
           {/* Tracking Search Form */}
           <div className="w-full max-w-md mt-8 space-y-4 animate-hero-btn-1" id="tracking-section">
-            <form action="/tracking" method="GET" className="flex flex-col sm:flex-row gap-2">
+            <form action="/tracking" method="GET" autoComplete="off" className="flex flex-col sm:flex-row gap-2">
               <Input
                 name="id"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
                 className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 text-sm font-medium shadow-sm"
-                placeholder="Enter Bilty # or Tracking ID"
+                placeholder=""
                 required
               />
               <Button type="submit" size="lg" className="bg-spd-red hover:bg-spd-redHover text-white font-bold h-12 px-6 shadow-md hover-lift">
@@ -578,23 +583,37 @@ export default function HomePage() {
           </div>
 
           <div className="reveal-init reveal-blur bg-white dark:bg-[#111827] p-6 sm:p-10 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl card-hover-lift">
-            <form onSubmit={handleContactSubmit} className="space-y-5">
+            <form onSubmit={handleContactSubmit} autoComplete="off" className="space-y-5">
               <div className="grid sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Full Name</label>
                   <Input
+                    name="fullName"
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
-                    placeholder="Enter your name"
+                    placeholder=""
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-form-type="other"
                     className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Phone / WhatsApp</label>
                   <Input
+                    name="phone"
                     value={contactPhone}
                     onChange={(e) => setContactPhone(e.target.value)}
-                    placeholder="0300 1234567"
+                    placeholder=""
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-form-type="other"
                     className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
                   />
                 </div>
@@ -603,10 +622,17 @@ export default function HomePage() {
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Email Address (Optional)</label>
                 <Input
+                  name="email"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                   type="email"
-                  placeholder="your.email@example.com"
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-form-type="other"
                   className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
                 />
               </div>
@@ -617,7 +643,14 @@ export default function HomePage() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Origin City (Optional)</label>
                   <Input 
                     type="text" 
-                    placeholder="e.g. Lahore / Karachi" 
+                    name="originCity"
+                    placeholder="" 
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-form-type="other"
                     className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm" 
                     value={contactOrigin} 
                     onChange={(e) => setContactOrigin(e.target.value)} 
@@ -627,7 +660,14 @@ export default function HomePage() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Destination City (Optional)</label>
                   <Input 
                     type="text" 
-                    placeholder="e.g. Karachi / Quetta" 
+                    name="destinationCity"
+                    placeholder="" 
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-form-type="other"
                     className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm" 
                     value={contactDestination} 
                     onChange={(e) => setContactDestination(e.target.value)} 
@@ -638,9 +678,16 @@ export default function HomePage() {
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Message</label>
                 <Textarea
+                  name="message"
                   value={contactMsg}
                   onChange={(e) => setContactMsg(e.target.value)}
-                  placeholder="Enter details regarding your cargo consignment, goods type, bilty requirements, origin, and destination..."
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-form-type="other"
                   className="min-h-[140px] bg-slate-50 dark:bg-slate-900 font-medium text-sm resize-none"
                 />
               </div>

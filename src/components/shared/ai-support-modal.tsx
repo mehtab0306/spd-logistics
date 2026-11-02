@@ -337,13 +337,19 @@ export function AiSupportModal() {
                 e.preventDefault();
                 handleSendMessage();
               }}
+              autoComplete="off"
               className="flex items-center gap-2"
             >
               <input
                 type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask about bilty, rates, warehouses..."
+                placeholder=""
                 className="flex-1 bg-white dark:bg-[#111827] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-spd-blue"
               />
               <Button

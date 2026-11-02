@@ -995,13 +995,19 @@ export default function BrokersPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSaveBroker} className="space-y-4 pt-2">
+          <form onSubmit={handleSaveBroker} autoComplete="off" className="space-y-4 pt-2">
             <div className="space-y-1">
               <label className="font-bold uppercase text-[11px] text-slate-500">
                 Broker / Agency Name *
               </label>
               <Input
-                placeholder="e.g. Al-Madina Goods Karachi"
+                name="brokerName"
+                placeholder=""
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
                 value={brokerFormData.name}
                 onChange={(e) => setBrokerFormData({ ...brokerFormData, name: e.target.value })}
                 className="rounded-xl h-10 text-xs font-semibold"
@@ -1015,7 +1021,13 @@ export default function BrokersPage() {
                   Phone (Optional)
                 </label>
                 <Input
-                  placeholder="0300-1234567"
+                  name="phone"
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
                   value={brokerFormData.phone}
                   onChange={(e) => setBrokerFormData({ ...brokerFormData, phone: e.target.value })}
                   className="rounded-xl h-10 text-xs"
@@ -1027,7 +1039,13 @@ export default function BrokersPage() {
                   Contact Person
                 </label>
                 <Input
-                  placeholder="e.g. Haji Aslam"
+                  name="contactPerson"
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
                   value={brokerFormData.companyName}
                   onChange={(e) => setBrokerFormData({ ...brokerFormData, companyName: e.target.value })}
                   className="rounded-xl h-10 text-xs"
@@ -1059,7 +1077,13 @@ export default function BrokersPage() {
                 </label>
                 <Input
                   type="number"
-                  placeholder="0"
+                  name="openingBalance"
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
                   value={brokerFormData.balance}
                   onChange={(e) => setBrokerFormData({ ...brokerFormData, balance: e.target.value })}
                   className="rounded-xl h-10 text-xs font-mono font-bold"

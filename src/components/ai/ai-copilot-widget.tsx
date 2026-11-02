@@ -771,6 +771,7 @@ export function AiCopilotWidget() {
               e.preventDefault();
               handleSend();
             }}
+            autoComplete="off"
             className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0 flex items-center gap-2"
           >
             {/* Microphone Button */}
@@ -794,7 +795,12 @@ export function AiCopilotWidget() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Yahan likhein ya mic se bolein..."
+              placeholder=""
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
               disabled={loading}
               className="h-10 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 font-medium"
             />

@@ -121,16 +121,23 @@ export default function ContactSection() {
         </div>
 
         <div className="bg-white dark:bg-[#111827] p-6 sm:p-10 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} autoComplete="off" className="space-y-5">
             <div className="grid sm:grid-cols-2 gap-5">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
                   Full Name
                 </label>
                 <Input
+                  name="fullName"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-form-type="other"
                   className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
                 />
               </div>
@@ -139,9 +146,16 @@ export default function ContactSection() {
                   Phone / WhatsApp
                 </label>
                 <Input
+                  name="phone"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="0300 1234567"
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-form-type="other"
                   className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
                 />
               </div>
@@ -152,10 +166,17 @@ export default function ContactSection() {
                 Email Address (Optional)
               </label>
               <Input
+                name="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 type="email"
-                placeholder="your.email@example.com"
+                placeholder=""
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
                 className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
               />
             </div>
@@ -168,7 +189,14 @@ export default function ContactSection() {
                 </label>
                 <Input
                   type="text"
-                  placeholder="e.g. Lahore / Karachi"
+                  name="originCity"
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-form-type="other"
                   className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
                   value={origin}
                   onChange={(e) => setOrigin(e.target.value)}
@@ -180,7 +208,14 @@ export default function ContactSection() {
                 </label>
                 <Input
                   type="text"
-                  placeholder="e.g. Karachi / Quetta"
+                  name="destinationCity"
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-form-type="other"
                   className="h-12 bg-slate-50 dark:bg-slate-900 font-medium text-sm"
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
@@ -193,9 +228,16 @@ export default function ContactSection() {
                 Message
               </label>
               <Textarea
+                name="message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Enter details regarding your cargo consignment, goods type, bilty requirements, origin, and destination..."
+                placeholder=""
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
                 className="min-h-[140px] bg-slate-50 dark:bg-slate-900 font-medium text-sm resize-none"
               />
             </div>

@@ -217,7 +217,7 @@ function ContactPageContent() {
           message: "",
           _hp_website: "",
         });
-        if (!serviceParam) setSelectedService("");
+        setSelectedService("");
       } else {
         const errorMsg = "Unable to send your inquiry right now. Please reach out to us directly via WhatsApp.";
         setStatusAlert({ type: "error", message: errorMsg });
@@ -638,7 +638,7 @@ function ContactPageContent() {
 
                   {/* TAB A: Customer Cargo Inquiry Form */}
                   {activeTab === "customer" && (
-                    <form onSubmit={handleCustomerSubmit} className="space-y-4 animate-in fade-in duration-150">
+                    <form onSubmit={handleCustomerSubmit} autoComplete="off" className="space-y-4 animate-in fade-in duration-150">
                       
                       {/* Honeypot field (hidden from real users) */}
                       <input
@@ -685,7 +685,14 @@ function ContactPageContent() {
                             Customer / Company Name
                           </label>
                           <Input
-                            placeholder="e.g. Mian Tariq / Adamjee Industries"
+                            name="fullName"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={customerForm.fullName}
                             onChange={(e) => setCustomerForm({ ...customerForm, fullName: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
@@ -697,7 +704,14 @@ function ContactPageContent() {
                             WhatsApp Phone Number
                           </label>
                           <Input
-                            placeholder="0300 1234567"
+                            name="whatsapp"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={customerForm.whatsapp}
                             onChange={(e) => setCustomerForm({ ...customerForm, whatsapp: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
@@ -710,8 +724,15 @@ function ContactPageContent() {
                           Email Address (Optional)
                         </label>
                         <Input
+                          name="email"
                           type="email"
-                          placeholder="e.g. dispatch@company.com"
+                          placeholder=""
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-form-type="other"
                           value={customerForm.email}
                           onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
                           className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
@@ -726,7 +747,14 @@ function ContactPageContent() {
                           </label>
                           <Input 
                             type="text" 
-                            placeholder="e.g. Karachi Port / Hawksbay Terminal" 
+                            name="originCity"
+                            placeholder="" 
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             className="h-11 font-medium focus-visible:ring-spd-red rounded-xl" 
                             value={customerForm.originCity} 
                             onChange={(e) => setCustomerForm({ ...customerForm, originCity: e.target.value })} 
@@ -738,7 +766,14 @@ function ContactPageContent() {
                           </label>
                           <Input 
                             type="text" 
-                            placeholder="e.g. Lahore / Rawalpindi / Multan" 
+                            name="destinationCity"
+                            placeholder="" 
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             className="h-11 font-medium focus-visible:ring-spd-red rounded-xl" 
                             value={customerForm.destinationCity} 
                             onChange={(e) => setCustomerForm({ ...customerForm, destinationCity: e.target.value })} 
@@ -752,7 +787,14 @@ function ContactPageContent() {
                             Cargo Description
                           </label>
                           <Input
-                            placeholder="e.g. Industrial Chemicals, Textile Bales, Machinery"
+                            name="cargoDescription"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={customerForm.cargoDescription}
                             onChange={(e) => setCustomerForm({ ...customerForm, cargoDescription: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
@@ -764,7 +806,14 @@ function ContactPageContent() {
                             Estimated Weight / Volume
                           </label>
                           <Input
-                            placeholder="e.g. 25 Metric Tons / Full 22-Wheeler Trailer"
+                            name="estimatedWeight"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={customerForm.estimatedWeight}
                             onChange={(e) => setCustomerForm({ ...customerForm, estimatedWeight: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-spd-red rounded-xl"
@@ -777,7 +826,14 @@ function ContactPageContent() {
                           Consignment Message / Special Requirements
                         </label>
                         <Textarea
-                          placeholder="Provide details about consignment schedule, pickup location, or specialized cargo handling requirements..."
+                          name="message"
+                          placeholder=""
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-form-type="other"
                           rows={4}
                           value={customerForm.message}
                           onChange={(e) => setCustomerForm({ ...customerForm, message: e.target.value })}
@@ -832,7 +888,7 @@ function ContactPageContent() {
 
                   {/* TAB B: Transporter & Broker Registration Form */}
                   {activeTab === "broker" && (
-                    <form onSubmit={handleBrokerSubmit} className="space-y-4 animate-in fade-in duration-150">
+                    <form onSubmit={handleBrokerSubmit} autoComplete="off" className="space-y-4 animate-in fade-in duration-150">
                       
                       {/* Honeypot field (hidden from real users) */}
                       <input
@@ -852,7 +908,14 @@ function ContactPageContent() {
                             Broker / Owner Name
                           </label>
                           <Input
-                            placeholder="e.g. Haji Tariq Khan / Fleet Owner"
+                            name="brokerName"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={brokerForm.brokerName}
                             onChange={(e) => setBrokerForm({ ...brokerForm, brokerName: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
@@ -864,7 +927,14 @@ function ContactPageContent() {
                             Company Name (Optional)
                           </label>
                           <Input
-                            placeholder="e.g. Al-Madina Goods Transport Co."
+                            name="companyName"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={brokerForm.companyName}
                             onChange={(e) => setBrokerForm({ ...brokerForm, companyName: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
@@ -878,7 +948,14 @@ function ContactPageContent() {
                             WhatsApp Number
                           </label>
                           <Input
-                            placeholder="0300 1234567"
+                            name="whatsapp"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={brokerForm.whatsapp}
                             onChange={(e) => setBrokerForm({ ...brokerForm, whatsapp: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
@@ -890,8 +967,15 @@ function ContactPageContent() {
                             Email (Optional)
                           </label>
                           <Input
+                            name="email"
                             type="email"
-                            placeholder="e.g. fleet@broker.com"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={brokerForm.email}
                             onChange={(e) => setBrokerForm({ ...brokerForm, email: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
@@ -903,7 +987,14 @@ function ContactPageContent() {
                             Operating Base City
                           </label>
                           <Input
-                            placeholder="e.g. Karachi / Lahore / Multan"
+                            name="operatingCity"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={brokerForm.operatingCity}
                             onChange={(e) => setBrokerForm({ ...brokerForm, operatingCity: e.target.value })}
                             className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
@@ -936,7 +1027,14 @@ function ContactPageContent() {
                             Registration Number
                           </label>
                           <Input
-                            placeholder="e.g. TLR-786 / KHI-9922 / LHR-4512"
+                            name="vehicleRegNo"
+                            placeholder=""
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            data-lpignore="true"
+                            data-form-type="other"
                             value={brokerForm.vehicleRegNo}
                             onChange={(e) => setBrokerForm({ ...brokerForm, vehicleRegNo: e.target.value })}
                             className="h-11 font-medium uppercase font-mono focus-visible:ring-purple-600 rounded-xl"
@@ -949,7 +1047,14 @@ function ContactPageContent() {
                           Preferred Routes
                         </label>
                         <Input
-                          placeholder="e.g. Karachi ➔ Lahore Corridor, Rawalpindi, KPK, Nationwide"
+                          name="preferredRoutes"
+                          placeholder=""
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-form-type="other"
                           value={brokerForm.preferredRoutes}
                           onChange={(e) => setBrokerForm({ ...brokerForm, preferredRoutes: e.target.value })}
                           className="h-11 font-medium focus-visible:ring-purple-600 rounded-xl"
@@ -961,7 +1066,14 @@ function ContactPageContent() {
                           Tariff Expectations / Fleet Notes
                         </label>
                         <Textarea
-                          placeholder="Specify advance payment requirements, diesel terms, round-trip availability, or driver contact info..."
+                          name="expectedTerms"
+                          placeholder=""
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-form-type="other"
                           rows={4}
                           value={brokerForm.expectedTerms}
                           onChange={(e) => setBrokerForm({ ...brokerForm, expectedTerms: e.target.value })}

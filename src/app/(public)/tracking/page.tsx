@@ -381,13 +381,19 @@ function TrackingContent() {
 
       <Card className="shadow-md border-border mb-8">
         <CardContent className="p-6">
-          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
+          <form onSubmit={handleSearch} autoComplete="off" className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
               <Input
+                name="query"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Tracking ID or Bilty Number"
+                placeholder=""
                 className="pl-10 h-12 text-lg"
                 required
               />
