@@ -134,9 +134,8 @@ export default function NewCustomerPage() {
       const timestamp = new Date().toISOString();
       const openBal = parseFloat(formData.openingBalance) || 0;
       const credLim = parseFloat(formData.creditLimit) || 0;
-      const finalEmail =
-        formData.email.trim() ||
-        `${formData.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "") || "cust"}${uniqueId.slice(-4)}@spdcustomer.com`;
+      const enteredEmail = formData.email.trim();
+      const finalEmail = enteredEmail || null;
       const finalPassword = formData.password.trim() || "admin";
 
       const newCustomerRecord = {
@@ -144,8 +143,8 @@ export default function NewCustomerPage() {
         accountId: `CUST-${uniqueId.slice(-6).toUpperCase()}`,
         name: formData.name.trim(),
         companyName: formData.companyName.trim() || null,
-        phone: formData.phone.trim(),
-        whatsapp: formData.whatsapp.trim() || formData.phone.trim(),
+        phone: formData.phone.trim() || null,
+        whatsapp: formData.whatsapp.trim() || formData.phone.trim() || null,
         email: finalEmail,
         loginPassword: finalPassword,
         cnic: formData.cnic.trim() || null,
@@ -161,7 +160,7 @@ export default function NewCustomerPage() {
         isLocal: true,
         user: {
           id: `usr_${uniqueId}`,
-          email: finalEmail,
+          email: finalEmail || `${formData.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "") || "cust"}${uniqueId.slice(-4)}@spdcustomer.com`,
           name: formData.name.trim(),
           role: "CUSTOMER",
           status: "ACTIVE",
@@ -196,7 +195,7 @@ export default function NewCustomerPage() {
         const { success, data: sbData, error: sbErr } = await safeUpsertCustomer({
           name: String(newCustomerRecord.name || newCustomerRecord.companyName || "").trim(),
           phone: newCustomerRecord.phone || null,
-          email: newCustomerRecord.email || null,
+          email: enteredEmail || null,
           address: newCustomerRecord.address || null,
           city: newCustomerRecord.city || "Karachi",
           opening_balance: openBal,
@@ -265,16 +264,18 @@ export default function NewCustomerPage() {
       try {
         const credsRaw = localStorage.getItem("spd_customer_credentials");
         const creds = credsRaw ? JSON.parse(credsRaw) : [];
-        creds.unshift({
-          id: uniqueId,
-          email: finalEmail.toLowerCase(),
-          password: finalPassword,
-          name: newCustomerRecord.name,
-          companyName: newCustomerRecord.companyName || "Registered Dealer",
-          phone: newCustomerRecord.phone,
-        });
-        localStorage.setItem("spd_customer_credentials", JSON.stringify(creds));
-        localStorage.setItem("spd_customers_auth", JSON.stringify(creds));
+        if (finalEmail) {
+          creds.unshift({
+            id: uniqueId,
+            email: finalEmail.toLowerCase(),
+            password: finalPassword,
+            name: newCustomerRecord.name,
+            companyName: newCustomerRecord.companyName || "Registered Dealer",
+            phone: newCustomerRecord.phone,
+          });
+          localStorage.setItem("spd_customer_credentials", JSON.stringify(creds));
+          localStorage.setItem("spd_customers_auth", JSON.stringify(creds));
+        }
       } catch (credErr) {
         console.warn("Could not save customer credentials:", credErr);
       }

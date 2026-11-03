@@ -94,26 +94,39 @@ export async function safeUpsertCustomer(
 
   const validId = isValidUUID(payload.id) ? payload.id!.trim() : undefined;
 
-  // Schema-sanitized payload: name, phone (optional), city, address, current_balance, avatar_url
-  const fullPayload: any = {
+  // Schema-sanitized payload: only required field is name.
+  // Optional fields are added only if they contain non-empty values.
+  const fullPayload: Record<string, any> = {
     name: payload.name.trim(),
-    phone: payload.phone ? payload.phone.trim() : null,
-    email: payload.email ? payload.email.trim() : null,
-    address: payload.address ? payload.address.trim() : null,
-    city: payload.city ? payload.city.trim() : 'Karachi',
-    opening_balance: payload.opening_balance ?? 0,
-    current_balance: payload.current_balance ?? payload.opening_balance ?? 0,
-    avatar_url: payload.avatar_url || null,
   };
+  if (payload.phone?.trim()) fullPayload.phone = payload.phone.trim();
+  if (payload.email?.trim()) fullPayload.email = payload.email.trim();
+  if (payload.address?.trim()) fullPayload.address = payload.address.trim();
+  if (payload.city?.trim()) fullPayload.city = payload.city.trim();
+  if (payload.opening_balance !== undefined && payload.opening_balance !== null) {
+    fullPayload.opening_balance = payload.opening_balance;
+  }
+  if (payload.current_balance !== undefined && payload.current_balance !== null) {
+    fullPayload.current_balance = payload.current_balance;
+  }
+  if (payload.avatar_url?.trim()) fullPayload.avatar_url = payload.avatar_url.trim();
   if (payload.created_at) fullPayload.created_at = payload.created_at;
 
   // Attempt 1: If valid UUID provided, attempt upsert/update
   if (validId) {
     fullPayload.id = validId;
-    const { data, error } = await supabase.from('customers').upsert([fullPayload]).select().maybeSingle();
-    if (!error) return { success: true, data };
-    if (!error.message?.includes('uuid') && !error.message?.includes('schema cache') && !error.message?.includes('column')) {
-      return { success: false, error };
+    const { data: upData, error: upError } = await supabase.from('customers').upsert([fullPayload]).select().maybeSingle();
+    if (!upError) return { success: true, data: upData };
+
+    // If upsert failed due to schema cache / column issue (e.g. 'email'), retry upsert without email
+    const upMsg = upError.message || '';
+    if (upMsg.includes('schema cache') || upMsg.includes('column') || upMsg.includes('email')) {
+      if (fullPayload.email) {
+        const noEmailUpsert = { ...fullPayload };
+        delete noEmailUpsert.email;
+        const { data: noEmailData, error: noEmailError } = await supabase.from('customers').upsert([noEmailUpsert]).select().maybeSingle();
+        if (!noEmailError) return { success: true, data: noEmailData };
+      }
     }
   }
 
@@ -129,28 +142,48 @@ export async function safeUpsertCustomer(
 
   if (!insError) return { success: true, data: insData };
 
-  // Attempt 3: Schema cache mismatch fallback - strip optional balance / avatar columns
-  const errMsg = insError.message || '';
-  if (errMsg.includes('current_balance') || errMsg.includes('opening_balance') || errMsg.includes('avatar_url') || errMsg.includes('column')) {
-    const corePayload: any = {
-      name: payload.name.trim(),
-      phone: payload.phone ? payload.phone.trim() : null,
-      city: payload.city ? payload.city.trim() : 'Karachi',
-      address: payload.address ? payload.address.trim() : null,
-    };
-    if (payload.email) corePayload.email = payload.email.trim();
-
-    const { data: coreData, error: coreError } = await supabase
+  // Attempt 3: Schema cache mismatch recovery
+  // 3a: If error relates to email (or schema cache), retry omitting email
+  if (payloadNoId.email) {
+    const noEmailPayload = { ...payloadNoId };
+    delete noEmailPayload.email;
+    const { data: noEmailData, error: noEmailError } = await supabase
       .from('customers')
-      .insert([corePayload])
+      .insert([noEmailPayload])
       .select()
       .maybeSingle();
-
-    if (!coreError) return { success: true, data: coreData };
-    return { success: false, error: coreError };
+    if (!noEmailError) return { success: true, data: noEmailData };
   }
 
-  return { success: false, error: insError };
+  // 3b: Fallback to core columns (name, phone, city, address) - omit email, balances, avatar_url
+  const corePayload: Record<string, any> = {
+    name: payload.name.trim(),
+  };
+  if (payload.phone?.trim()) corePayload.phone = payload.phone.trim();
+  if (payload.city?.trim()) corePayload.city = payload.city.trim();
+  if (payload.address?.trim()) corePayload.address = payload.address.trim();
+
+  const { data: coreData, error: coreError } = await supabase
+    .from('customers')
+    .insert([corePayload])
+    .select()
+    .maybeSingle();
+
+  if (!coreError) return { success: true, data: coreData };
+
+  // 3c: Strictly required fallback - only name
+  const minimalPayload: Record<string, any> = {
+    name: payload.name.trim(),
+  };
+  const { data: minData, error: minError } = await supabase
+    .from('customers')
+    .insert([minimalPayload])
+    .select()
+    .maybeSingle();
+
+  if (!minError) return { success: true, data: minData };
+
+  return { success: false, error: minError || coreError || insError };
 }
 
 export interface DriverPayload {
@@ -172,29 +205,25 @@ export async function safeUpsertDriver(
 
   const validId = isValidUUID(payload.id) ? payload.id!.trim() : undefined;
 
-  // Schema-sanitized payload: name, phone (optional), cnic, license_number, vehicle_number, avatar_url, status
-  const fullPayload: any = {
+  const fullPayload: Record<string, any> = {
     name: payload.name.trim(),
-    phone: payload.phone ? payload.phone.trim() : null,
-    cnic: payload.cnic ? payload.cnic.trim() : null,
-    license_number: payload.license_number ? payload.license_number.trim() : null,
-    vehicle_number: payload.vehicle_number ? payload.vehicle_number.trim() : null,
-    status: payload.status || 'Active',
-    avatar_url: payload.avatar_url || null,
   };
+  if (payload.phone?.trim()) fullPayload.phone = payload.phone.trim();
+  if (payload.cnic?.trim()) fullPayload.cnic = payload.cnic.trim();
+  if (payload.license_number?.trim()) fullPayload.license_number = payload.license_number.trim();
+  if (payload.vehicle_number?.trim()) fullPayload.vehicle_number = payload.vehicle_number.trim();
+  if (payload.status) fullPayload.status = payload.status;
+  if (payload.avatar_url?.trim()) fullPayload.avatar_url = payload.avatar_url.trim();
   if (payload.created_at) fullPayload.created_at = payload.created_at;
 
-  // Attempt 1: If valid UUID provided, attempt upsert
+  // Attempt 1: Upsert with valid UUID
   if (validId) {
     fullPayload.id = validId;
     const { data, error } = await supabase.from('drivers').upsert([fullPayload]).select().maybeSingle();
     if (!error) return { success: true, data };
-    if (!error.message?.includes('uuid') && !error.message?.includes('schema cache') && !error.message?.includes('column')) {
-      return { success: false, error };
-    }
   }
 
-  // Attempt 2: Insert without ID so Supabase defaults to gen_random_uuid()
+  // Attempt 2: Insert without ID
   const payloadNoId = { ...fullPayload };
   delete payloadNoId.id;
 
@@ -206,28 +235,36 @@ export async function safeUpsertDriver(
 
   if (!insError) return { success: true, data: insData };
 
-  // Attempt 3: Schema fallback for core columns
-  const errMsg = insError.message || '';
-  if (errMsg.includes('avatar_url') || errMsg.includes('vehicle_number') || errMsg.includes('column')) {
-    const corePayload: any = {
-      name: payload.name.trim(),
-      phone: payload.phone ? payload.phone.trim() : null,
-      cnic: payload.cnic ? payload.cnic.trim() : null,
-      license_number: payload.license_number ? payload.license_number.trim() : null,
-      status: payload.status || 'Active',
-    };
+  // Attempt 3: Fallback omitting optional avatar_url and vehicle_number
+  const corePayload: Record<string, any> = {
+    name: payload.name.trim(),
+    status: payload.status || 'Active',
+  };
+  if (payload.phone?.trim()) corePayload.phone = payload.phone.trim();
+  if (payload.cnic?.trim()) corePayload.cnic = payload.cnic.trim();
+  if (payload.license_number?.trim()) corePayload.license_number = payload.license_number.trim();
 
-    const { data: coreData, error: coreError } = await supabase
-      .from('drivers')
-      .insert([corePayload])
-      .select()
-      .maybeSingle();
+  const { data: coreData, error: coreError } = await supabase
+    .from('drivers')
+    .insert([corePayload])
+    .select()
+    .maybeSingle();
 
-    if (!coreError) return { success: true, data: coreData };
-    return { success: false, error: coreError };
-  }
+  if (!coreError) return { success: true, data: coreData };
 
-  return { success: false, error: insError };
+  // Attempt 4: Minimal fallback - name only
+  const minimalPayload: Record<string, any> = {
+    name: payload.name.trim(),
+  };
+  const { data: minData, error: minError } = await supabase
+    .from('drivers')
+    .insert([minimalPayload])
+    .select()
+    .maybeSingle();
+
+  if (!minError) return { success: true, data: minData };
+
+  return { success: false, error: minError || coreError || insError };
 }
 
 export interface VehiclePayload {
@@ -247,23 +284,19 @@ export async function safeUpsertVehicle(
 
   const validId = isValidUUID(payload.id) ? payload.id!.trim() : undefined;
 
-  // Schema-sanitized payload: vehicle_number, vehicle_type, driver_name, driver_phone, status
-  const fullPayload: any = {
+  const fullPayload: Record<string, any> = {
     vehicle_number: payload.vehicle_number.trim().toUpperCase(),
-    vehicle_type: payload.vehicle_type || 'Heavy Truck (22-Wheeler)',
-    driver_name: payload.driver_name ? payload.driver_name.trim() : null,
-    driver_phone: payload.driver_phone ? payload.driver_phone.trim() : null,
-    status: payload.status || 'AVAILABLE',
   };
+  if (payload.vehicle_type) fullPayload.vehicle_type = payload.vehicle_type;
+  if (payload.driver_name?.trim()) fullPayload.driver_name = payload.driver_name.trim();
+  if (payload.driver_phone?.trim()) fullPayload.driver_phone = payload.driver_phone.trim();
+  if (payload.status) fullPayload.status = payload.status;
   if (payload.created_at) fullPayload.created_at = payload.created_at;
 
   if (validId) {
     fullPayload.id = validId;
     const { data, error } = await supabase.from('vehicles').upsert([fullPayload]).select().maybeSingle();
     if (!error) return { success: true, data };
-    if (!error.message?.includes('uuid') && !error.message?.includes('schema cache')) {
-      return { success: false, error };
-    }
   }
 
   const payloadNoId = { ...fullPayload };
@@ -276,7 +309,35 @@ export async function safeUpsertVehicle(
     .maybeSingle();
 
   if (!insError) return { success: true, data: insData };
-  return { success: false, error: insError };
+
+  // Fallback: core vehicle columns
+  const corePayload: Record<string, any> = {
+    vehicle_number: payload.vehicle_number.trim().toUpperCase(),
+    status: payload.status || 'AVAILABLE',
+  };
+  if (payload.vehicle_type) corePayload.vehicle_type = payload.vehicle_type;
+
+  const { data: coreData, error: coreError } = await supabase
+    .from('vehicles')
+    .insert([corePayload])
+    .select()
+    .maybeSingle();
+
+  if (!coreError) return { success: true, data: coreData };
+
+  // Minimal fallback: vehicle_number only
+  const minimalPayload = {
+    vehicle_number: payload.vehicle_number.trim().toUpperCase(),
+  };
+  const { data: minData, error: minError } = await supabase
+    .from('vehicles')
+    .insert([minimalPayload])
+    .select()
+    .maybeSingle();
+
+  if (!minError) return { success: true, data: minData };
+
+  return { success: false, error: minError || coreError || insError };
 }
 
 export interface BrokerPayload {
@@ -298,25 +359,21 @@ export async function safeUpsertBroker(
 
   const validId = isValidUUID(payload.id) ? payload.id!.trim() : undefined;
 
-  // Schema-sanitized payload: name, phone (optional), company_name, city, balance, avatar_url
-  const fullPayload: any = {
+  const fullPayload: Record<string, any> = {
     name: payload.name.trim(),
-    phone: payload.phone ? payload.phone.trim() : null,
-    company_name: payload.company_name ? payload.company_name.trim() : payload.name.trim(),
-    city: payload.city ? payload.city.trim() : 'Karachi',
-    balance: payload.balance ?? 0,
-    avatar_url: payload.avatar_url || null,
-    status: payload.status || 'ACTIVE',
   };
+  if (payload.phone?.trim()) fullPayload.phone = payload.phone.trim();
+  if (payload.company_name?.trim()) fullPayload.company_name = payload.company_name.trim();
+  if (payload.city?.trim()) fullPayload.city = payload.city.trim();
+  if (payload.balance !== undefined && payload.balance !== null) fullPayload.balance = payload.balance;
+  if (payload.avatar_url?.trim()) fullPayload.avatar_url = payload.avatar_url.trim();
+  if (payload.status) fullPayload.status = payload.status;
   if (payload.created_at) fullPayload.created_at = payload.created_at;
 
   if (validId) {
     fullPayload.id = validId;
     const { data, error } = await supabase.from('brokers').upsert([fullPayload]).select().maybeSingle();
     if (!error) return { success: true, data };
-    if (!error.message?.includes('uuid') && !error.message?.includes('schema cache')) {
-      return { success: false, error };
-    }
   }
 
   const payloadNoId = { ...fullPayload };
@@ -329,7 +386,36 @@ export async function safeUpsertBroker(
     .maybeSingle();
 
   if (!insError) return { success: true, data: insData };
-  return { success: false, error: insError };
+
+  // Fallback: core broker columns (name, phone, company_name, city)
+  const corePayload: Record<string, any> = {
+    name: payload.name.trim(),
+  };
+  if (payload.phone?.trim()) corePayload.phone = payload.phone.trim();
+  if (payload.company_name?.trim()) corePayload.company_name = payload.company_name.trim();
+  if (payload.city?.trim()) corePayload.city = payload.city.trim();
+
+  const { data: coreData, error: coreError } = await supabase
+    .from('brokers')
+    .insert([corePayload])
+    .select()
+    .maybeSingle();
+
+  if (!coreError) return { success: true, data: coreData };
+
+  // Minimal fallback: name only
+  const minimalPayload = {
+    name: payload.name.trim(),
+  };
+  const { data: minData, error: minError } = await supabase
+    .from('brokers')
+    .insert([minimalPayload])
+    .select()
+    .maybeSingle();
+
+  if (!minError) return { success: true, data: minData };
+
+  return { success: false, error: minError || coreError || insError };
 }
 
 export interface InquiryPayload {

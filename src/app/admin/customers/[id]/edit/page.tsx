@@ -193,10 +193,10 @@ export default function EditCustomerPage() {
           await safeUpsertCustomer({
             id: customerId,
             name: String(payload.name || payload.companyName || "").trim(),
-            phone: payload.phone || null,
-            email: payload.email || null,
-            address: payload.address || null,
-            city: payload.city || "Karachi",
+            phone: payload.phone ? payload.phone.trim() : null,
+            email: payload.email?.trim() || null,
+            address: payload.address ? payload.address.trim() : null,
+            city: payload.city ? payload.city.trim() : "Karachi",
             avatar_url: finalPhotoUrl || null,
           });
         } catch (sbErr) {

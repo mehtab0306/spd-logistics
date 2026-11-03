@@ -512,10 +512,10 @@ export default function CustomersPage() {
           const { success, error: sbErr } = await safeUpsertCustomer({
             id: updated.id,
             name: updated.name || updated.companyName,
-            phone: updated.phone || null,
-            email: updated.email || null,
-            address: updated.address || null,
-            city: updated.city || "Karachi",
+            phone: updated.phone?.trim() || null,
+            email: updated.email?.trim() || null,
+            address: updated.address?.trim() || null,
+            city: updated.city?.trim() || "Karachi",
             avatar_url: finalPhotoUrl || null,
           });
           if (!success && sbErr) {
@@ -559,13 +559,14 @@ export default function CustomersPage() {
         const openBal = parseFloat(customerForm.openingBalance) || 0;
         const credLim = parseFloat(customerForm.creditLimit) || 0;
         const clientUuid = generateUUID();
+        const enteredCustEmail = customerForm.email?.trim() || null;
         const newCust = {
           id: clientUuid,
           name: customerForm.name.trim(),
           companyName: customerForm.companyName?.trim() || null,
-          phone: customerForm.phone.trim(),
-          whatsapp: customerForm.whatsapp?.trim() || customerForm.phone.trim(),
-          email: customerForm.email?.trim() || `${customerForm.name.trim().toLowerCase().replace(/\s+/g, "")}@spdcustomer.com`,
+          phone: customerForm.phone.trim() || null,
+          whatsapp: customerForm.whatsapp?.trim() || customerForm.phone.trim() || null,
+          email: enteredCustEmail,
           cnic: customerForm.cnic?.trim() || null,
           businessRef: customerForm.businessRef?.trim() || null,
           address: customerForm.address?.trim() || null,
@@ -576,7 +577,7 @@ export default function CustomersPage() {
           photo: finalPhotoUrl || null,
           notes: customerForm.notes?.trim() || null,
           status: "ACTIVE",
-          user: { email: customerForm.email, status: "ACTIVE" },
+          user: { email: enteredCustEmail || "", status: "ACTIVE" },
           account: { id: `acc_${clientUuid.slice(-8)}`, balance: openBal, transactions: [] },
           _count: { consignmentsAsCustomer: 0, payments: 0 },
           createdAt: new Date().toISOString(),
@@ -589,7 +590,7 @@ export default function CustomersPage() {
           const { success, data: sbData, error: sbErr } = await safeUpsertCustomer({
             name: String(newCust.name || newCust.companyName || "").trim(),
             phone: newCust.phone || null,
-            email: newCust.email || null,
+            email: enteredCustEmail || null,
             address: newCust.address || null,
             city: newCust.city || "Karachi",
             opening_balance: openBal,

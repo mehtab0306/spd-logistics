@@ -47,7 +47,7 @@ import { PAKISTAN_CITIES } from "@/lib/constants";
 import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
 import { toast } from "sonner";
-import { supabase, isSupabaseConfigured, safeUpsertCustomer } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID } from "@/lib/supabase";
 
 export interface BiltyCargoItem {
   detail: string;
@@ -384,52 +384,55 @@ export default function EditBiltyPage() {
 
     setQuickCustomerSubmitting(true);
     try {
+      const newCustId = generateUUID();
       const newCust = {
-        id: `cust-${Date.now()}`,
+        id: newCustId,
         name: quickCustomerData.name.trim(),
         companyName: quickCustomerData.name.trim(),
-        phone: quickCustomerData.phone.trim() || "0300-0000000",
+        phone: quickCustomerData.phone.trim() || null,
         city: quickCustomerData.city || "Pakistan",
-        address: quickCustomerData.address.trim() || `${quickCustomerData.city}, Pakistan`,
+        address: quickCustomerData.address.trim() || `${quickCustomerData.city || "Pakistan"}, Pakistan`,
         ntn: quickCustomerData.ntn.trim() || null,
         strn: quickCustomerData.strn.trim() || null,
         balance: 0,
         createdAt: new Date().toISOString(),
       };
 
-      saveStoredCustomer(newCust);
-      setCustomers((prev) => [newCust, ...prev]);
-
-      // Supabase cloud customer upsert (only name mandatory)
+      // Supabase cloud customer upsert (only name mandatory, omit custom ID so DB assigns UUID)
       if (isSupabaseConfigured) {
         try {
-          await safeUpsertCustomer({
-            id: newCust.id,
+          const { success, data: sbData } = await safeUpsertCustomer({
             name: newCust.name,
             phone: newCust.phone || null,
             city: newCust.city || "Karachi",
             address: newCust.address || null,
           });
+          if (success && sbData?.id) {
+            newCust.id = sbData.id;
+          }
         } catch (sbErr) {
           console.warn("Supabase customer upsert warning:", sbErr);
         }
       }
+
+      saveStoredCustomer(newCust);
+      setCustomers((prev) => [newCust, ...prev]);
 
       if (quickCustomerTarget === "sender") {
         setFormData((prev) => ({
           ...prev,
           customerId: newCust.id,
           senderName: newCust.name,
-          senderPhone: newCust.phone,
-          senderAddress: newCust.address,
+          senderPhone: newCust.phone || "",
+          senderAddress: newCust.address || "",
           senderNtn: newCust.ntn || "",
         }));
       } else {
         setFormData((prev) => ({
           ...prev,
           receiverName: newCust.name,
-          receiverPhone: newCust.phone,
-          receiverAddress: newCust.address,
+          receiverPhone: newCust.phone || "",
+          receiverAddress: newCust.address || "",
           receiverNtn: newCust.ntn || "",
         }));
       }

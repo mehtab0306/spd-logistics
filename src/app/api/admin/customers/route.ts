@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { hashPassword, validateAdminSession } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { saveCentralRecord, getCentralCollection, deleteCentralRecord } from '@/lib/server-store';
-import { supabase, isSupabaseConfigured, safeUpsertCustomer } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -279,10 +279,10 @@ export async function POST(request: Request) {
 
     if (!result) {
       const mockCustomer = {
-        id: `c_loc_${Date.now()}`,
+        id: generateUUID(),
         name,
         companyName: companyName || null,
-        email: userEmail,
+        email: email?.trim() || null,
         phone: phone || null,
         whatsapp: whatsapp || phone || null,
         cnic: cnic || null,
@@ -293,8 +293,8 @@ export async function POST(request: Request) {
         address: address || null,
         status: 'ACTIVE',
         notes: notes || null,
-        user: { id: `u_${Date.now()}`, email: userEmail, status: 'ACTIVE' },
-        account: { id: `acc_${Date.now()}`, balance: parseFloat(openingBalance) || 0, transactions: [] },
+        user: { id: generateUUID(), email: email?.trim() || '', status: 'ACTIVE' },
+        account: { id: generateUUID(), balance: parseFloat(openingBalance) || 0, transactions: [] },
         _count: { consignmentsAsCustomer: 0, payments: 0 },
         createdAt: new Date().toISOString(),
       };
@@ -313,7 +313,7 @@ export async function POST(request: Request) {
             id: String(result.customer.id),
             name: result.customer.name || result.customer.companyName,
             phone: result.customer.phone || null,
-            email: result.customer.email || null,
+            email: email?.trim() || null,
             address: result.customer.address || null,
             city: result.customer.city || 'Karachi',
             opening_balance: Number(result.customer.openingBalance) || 0,
@@ -333,7 +333,7 @@ export async function POST(request: Request) {
       success: true,
       data: {
         customer: {
-          id: `c_loc_${Date.now()}`,
+          id: generateUUID(),
           name: 'New Customer',
           phone: '03000000000',
           status: 'ACTIVE',
