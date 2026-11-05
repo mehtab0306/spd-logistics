@@ -133,25 +133,22 @@ export default function NewDriverPage() {
     meta: v,
   }));
 
+  const isSubmittingRef = React.useRef(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
-    setSubmitting(true);
-    setFormError("");
-    setSuccessMessage("");
+    if (isSubmittingRef.current || submitting) return;
 
     if (!formData.name.trim()) {
       console.log("[NewDriver] Validation warning: Driver name is missing");
       setFormError("Driver Full Name is required.");
-      setSubmitting(false);
       return;
     }
-    if (!formData.phone.trim()) {
-      console.log("[NewDriver] Validation warning: Contact phone is missing");
-      setFormError("Contact phone number is required.");
-      setSubmitting(false);
-      return;
-    }
+
+    isSubmittingRef.current = true;
+    setSubmitting(true);
+    setFormError("");
+    setSuccessMessage("");
 
     try {
       let photoUrl = "";
@@ -161,35 +158,36 @@ export default function NewDriverPage() {
 
       const uniqueId = generateUUID();
       const timestamp = new Date().toISOString();
-      const finalEmail = formData.email.trim() || "driver@gmail.com";
+      const cleanPhone = formData.phone.trim() || null;
+      const cleanEmail = formData.email.trim() || null;
+      const cleanCnic = formData.cnic.trim() || null;
+      const cleanLicense = formData.licenseNumber.trim() || null;
       const finalPassword = formData.password.trim() || "admin";
-      const finalCnic = formData.cnic.trim() || "35202-0000000-0";
-      const finalLicense = formData.licenseNumber.trim() || `LIC-${uniqueId.slice(-6).toUpperCase()}`;
 
       const selectedVeh = vehicles.find((v) => String(v.id) === String(formData.assignedVehicleId));
       const finalVehicleNumber =
-        formData.vehicleNumber || selectedVeh?.vehicleNumber || selectedVeh?.registrationNumber || "";
+        formData.vehicleNumber?.trim() || selectedVeh?.vehicleNumber || selectedVeh?.registrationNumber || null;
 
       const newDriverRecord = {
         id: uniqueId,
         name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        email: finalEmail,
+        phone: cleanPhone,
+        email: cleanEmail,
         loginPassword: finalPassword,
-        cnic: finalCnic,
-        licenseNumber: finalLicense,
+        cnic: cleanCnic,
+        licenseNumber: cleanLicense,
         licenseExpiry: formData.licenseExpiry || null,
         address: formData.address.trim() || null,
         emergencyContact: formData.emergencyContact.trim() || null,
         assignedVehicleId: formData.assignedVehicleId || null,
-        vehicleNumber: finalVehicleNumber || null,
+        vehicleNumber: finalVehicleNumber,
         status: formData.status || "AVAILABLE",
         photo: photoUrl || null,
         notes: formData.notes.trim() || null,
         isLocal: true,
         user: {
           id: `usr_${uniqueId}`,
-          email: finalEmail,
+          email: cleanEmail || `driver.${cleanPhone || uniqueId.slice(-6)}@spdlogistics.com`,
           name: formData.name.trim(),
           role: "DRIVER",
           status: "ACTIVE",
@@ -236,16 +234,17 @@ export default function NewDriverPage() {
           saveStoredDriver(newDriverRecord);
         }
 
-        // Notify API in background
+        // Notify API in background with matching persistent ID
         fetch("/api/admin/drivers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            id: newDriverRecord.id,
             ...formData,
-            email: finalEmail,
-            password: finalPassword,
-            cnic: finalCnic,
-            licenseNumber: finalLicense,
+            phone: cleanPhone,
+            email: cleanEmail,
+            cnic: cleanCnic,
+            licenseNumber: cleanLicense,
             vehicleNumber: finalVehicleNumber,
             photo: photoUrl || null,
           }),
@@ -256,11 +255,13 @@ export default function NewDriverPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              id: newDriverRecord.id,
               ...formData,
-              email: finalEmail,
+              phone: cleanPhone,
+              email: cleanEmail,
               password: finalPassword,
-              cnic: finalCnic,
-              licenseNumber: finalLicense,
+              cnic: cleanCnic,
+              licenseNumber: cleanLicense,
               vehicleNumber: finalVehicleNumber,
               photo: photoUrl || null,
             }),
@@ -292,6 +293,7 @@ export default function NewDriverPage() {
       console.error("[NewDriver] Error:", err);
       setFormError(err.message || "Failed to register driver.");
     } finally {
+      isSubmittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -440,10 +442,9 @@ export default function NewDriverPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
-                Contact Phone Number *
+                Contact Phone Number (Optional)
               </Label>
               <Input
-                required
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className="rounded-xl h-10 text-xs"
@@ -452,10 +453,9 @@ export default function NewDriverPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
-                CNIC Number *
+                CNIC Number (Optional)
               </Label>
               <Input
-                required
                 value={formData.cnic}
                 onChange={(e) => setFormData({ ...formData, cnic: e.target.value })}
                 className="rounded-xl h-10 text-xs"
@@ -491,10 +491,9 @@ export default function NewDriverPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
-                Driving License Number *
+                Driving License Number (Optional)
               </Label>
               <Input
-                required
                 value={formData.licenseNumber}
                 onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
                 className="rounded-xl h-10 text-xs"
@@ -596,11 +595,11 @@ export default function NewDriverPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-spd-blue">
-                Driver Login Email *
+                Driver Login Email (Optional)
               </Label>
               <Input
-                required
                 type="email"
+                placeholder="Optional login email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="rounded-xl h-10 text-xs border-blue-200 dark:border-blue-900"
@@ -609,11 +608,11 @@ export default function NewDriverPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-spd-blue">
-                Driver Portal Password *
+                Driver Portal Password (Optional)
               </Label>
               <Input
-                required
                 type="password"
+                placeholder="Defaults to admin"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className="rounded-xl h-10 text-xs border-blue-200 dark:border-blue-900"

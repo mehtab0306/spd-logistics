@@ -49,6 +49,7 @@ export default function NewCustomerPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const isSubmittingRef = React.useRef(false);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -96,30 +97,29 @@ export default function NewCustomerPage() {
     e.stopPropagation();
 
     // Prevent concurrent / double execution
-    if (submitting) return;
+    if (submitting || isSubmittingRef.current) return;
 
     if (!formData.name.trim()) {
       console.log("[NewCustomer] Validation warning: Customer name is missing");
       setFormError("Customer / Dealer Name is required.");
       return;
     }
-    // Client-side deduplication check before proceeding
+    // Client-side phone deduplication check before proceeding (only if phone is provided)
     const normPhone = formData.phone.trim().replace(/[^0-9]/g, "");
-    const normName = formData.name.trim().toLowerCase();
-    const existingCust = getStoredCustomers().find((c: any) => {
-      if (!c || c.status === "DELETED") return false;
-      const cPhone = (c.phone || "").replace(/[^0-9]/g, "");
-      const cName = (c.name || "").trim().toLowerCase();
-      const phoneMatch = normPhone.length >= 7 && cPhone.length >= 7 && normPhone === cPhone;
-      const nameMatch = normName.length > 1 && normName === cName;
-      return (normPhone.length >= 7 && phoneMatch) || nameMatch;
-    });
+    if (normPhone.length >= 7) {
+      const existingCust = getStoredCustomers().find((c: any) => {
+        if (!c || c.status === "DELETED") return false;
+        const cPhone = (c.phone || "").replace(/[^0-9]/g, "");
+        return cPhone.length >= 7 && normPhone === cPhone;
+      });
 
-    if (existingCust) {
-      setFormError(`Customer already exists with this name or phone number (${existingCust.name} - ${existingCust.phone || "N/A"}).`);
-      return;
+      if (existingCust) {
+        setFormError(`Customer already exists with this phone number (${existingCust.name} - ${existingCust.phone || "N/A"}).`);
+        return;
+      }
     }
 
+    isSubmittingRef.current = true;
     setSubmitting(true);
     setFormError("");
     setSuccessMessage("");
@@ -193,6 +193,7 @@ export default function NewCustomerPage() {
 
       if (isSupabaseConfigured) {
         const { success, data: sbData, error: sbErr } = await safeUpsertCustomer({
+          id: uniqueId,
           name: String(newCustomerRecord.name || newCustomerRecord.companyName || "").trim(),
           phone: newCustomerRecord.phone || null,
           email: enteredEmail || null,
@@ -214,11 +215,12 @@ export default function NewCustomerPage() {
           saveStoredCustomer(newCustomerRecord);
         }
 
-        // Notify API in background
+        // Notify API in background with persistent ID
         fetch("/api/admin/customers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            id: newCustomerRecord.id,
             ...formData,
             email: finalEmail,
             password: finalPassword,
@@ -233,6 +235,7 @@ export default function NewCustomerPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              id: newCustomerRecord.id,
               ...formData,
               email: finalEmail,
               password: finalPassword,
@@ -288,9 +291,8 @@ export default function NewCustomerPage() {
       console.error("[NewCustomer] Error:", err);
       setFormError(err.message || "Failed to create customer record.");
     } finally {
-      setTimeout(() => {
-        setSubmitting(false);
-      }, 800);
+      isSubmittingRef.current = false;
+      setSubmitting(false);
     }
   };
 

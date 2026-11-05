@@ -75,6 +75,7 @@ export default function DriversPage() {
   const [newPassword, setNewPassword] = useState("");
   const [viewDriver, setViewDriver] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
+  const isSubmittingRef = React.useRef(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -228,11 +229,10 @@ export default function DriversPage() {
       const deletedIds = getDeletedDriverIds();
       let list = mergeLocalWithApi(localList, apiList, deletedIds);
 
-      // Strict deduplication safeguard across merged drivers list
+      // Strict deduplication safeguard across merged drivers list (by ID and valid phone)
       const dedupedList: any[] = [];
       const seenIds = new Set<string>();
       const seenPhones = new Set<string>();
-      const seenNames = new Set<string>();
 
       for (const item of list) {
         if (!item || !item.id) continue;
@@ -240,14 +240,11 @@ export default function DriversPage() {
         if (seenIds.has(id)) continue;
 
         const normPhone = item.phone ? String(item.phone).replace(/[^0-9]/g, "") : "";
-        const normName = item.name ? String(item.name).trim().toLowerCase() : "";
 
         if (normPhone.length >= 7 && seenPhones.has(normPhone)) continue;
-        if (normName.length > 1 && seenNames.has(normName)) continue;
 
         seenIds.add(id);
         if (normPhone.length >= 7) seenPhones.add(normPhone);
-        if (normName.length > 1) seenNames.add(normName);
         dedupedList.push(item);
       }
       list = dedupedList;
@@ -379,6 +376,8 @@ export default function DriversPage() {
 
   const handleCreateDriver = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || submitting) return;
+    isSubmittingRef.current = true;
     setSubmitting(true);
     setFormError("");
 
@@ -394,20 +393,20 @@ export default function DriversPage() {
       const newDrv = {
         id: clientUuid,
         name: formData.name,
-        phone: formData.phone,
-        contact: formData.phone,
-        email: formData.email,
-        cnic: formData.cnic,
-        licenseNumber: formData.licenseNumber,
-        licenseExpiry: formData.licenseExpiry,
-        address: formData.address,
-        emergencyContact: formData.emergencyContact,
-        assignedVehicleId: formData.assignedVehicleId,
-        vehicleNumber: assignedVeh ? assignedVeh.vehicleNumber : formData.vehicleNumber,
-        status: formData.status,
+        phone: formData.phone || null,
+        contact: formData.phone || null,
+        email: formData.email || null,
+        cnic: formData.cnic || null,
+        licenseNumber: formData.licenseNumber || null,
+        licenseExpiry: formData.licenseExpiry || null,
+        address: formData.address || null,
+        emergencyContact: formData.emergencyContact || null,
+        assignedVehicleId: formData.assignedVehicleId || null,
+        vehicleNumber: assignedVeh ? assignedVeh.vehicleNumber : formData.vehicleNumber || null,
+        status: formData.status || "AVAILABLE",
         photo: photoUrl || null,
-        notes: formData.notes,
-        user: { email: formData.email || `driver.${formData.phone}@spdlogistics.com`, status: "ACTIVE" },
+        notes: formData.notes || null,
+        user: { email: formData.email || `driver.${formData.phone || clientUuid.slice(-6)}@spdlogistics.com`, status: "ACTIVE" },
         vehicles: assignedVeh ? [{ id: assignedVeh.id, vehicleNumber: assignedVeh.vehicleNumber }] : [],
         consignments: [],
         _count: { consignments: 0 },
@@ -440,18 +439,18 @@ export default function DriversPage() {
           setDrivers((prev) => [newDrv, ...prev]);
         }
 
-        // Fire background API call
+        // Fire background API call with persistent ID
         fetch("/api/admin/drivers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...formData, photo: photoUrl || null }),
+          body: JSON.stringify({ id: newDrv.id, ...formData, photo: photoUrl || null }),
         }).catch(() => {});
       } else {
         try {
           const apiRes = await fetch("/api/admin/drivers", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...formData, photo: photoUrl || null }),
+            body: JSON.stringify({ id: newDrv.id, ...formData, photo: photoUrl || null }),
           });
           const apiJson = await apiRes.json().catch(() => null);
           if (apiRes.ok && apiJson?.success) {
@@ -495,6 +494,7 @@ export default function DriversPage() {
     } catch (err: any) {
       setFormError(err.message || "Failed to create driver");
     } finally {
+      isSubmittingRef.current = false;
       setUploadingPhoto(false);
       setSubmitting(false);
     }

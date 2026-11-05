@@ -73,6 +73,7 @@ export interface BiltyCargoItem {
 export default function NewBiltyPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const isSubmittingRef = React.useRef(false);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [savedBilty, setSavedBilty] = useState<any>(null);
@@ -684,7 +685,7 @@ export default function NewBiltyPage() {
   };
 
   const handleSaveAction = async (mode: "save_only" | "save_and_print" = "save_only") => {
-    if (submitting) return;
+    if (submitting || isSubmittingRef.current) return;
     setFormError("");
     setSuccessMessage("");
 
@@ -714,6 +715,7 @@ export default function NewBiltyPage() {
       return;
     }
 
+    isSubmittingRef.current = true;
     setSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
@@ -758,8 +760,9 @@ export default function NewBiltyPage() {
       const selectedDrv = drivers.find((d) => String(d.id) === String(formData.driverId));
       const selectedVeh = vehicles.find((v) => String(v.id) === String(formData.vehicleId));
 
+      const biltyUuid = generateUUID();
       const newBiltyRecord = {
-        id: finalBiltyNumber,
+        id: biltyUuid,
         biltyNumber: finalBiltyNumber,
         manualBiltyNumber: manualBiltyNumberToSave,
         trackingId: finalTrackingId,
@@ -888,6 +891,7 @@ export default function NewBiltyPage() {
 
       if (isSupabaseConfigured) {
         const biltyPayload: Record<string, any> = {
+          id: biltyUuid,
           bilty_number: finalBiltyNumber || `SPD-${Date.now()}`,
           manual_bilty_number: manualBiltyNumberToSave,
           sender_name: (newBiltyRecord.senderName || "Walk-in Shipper").trim(),
@@ -901,36 +905,47 @@ export default function NewBiltyPage() {
           payment_mode: newBiltyRecord.paymentMode || "TO-PAY",
         };
 
-        // Try clean insert matching target columns
-        let { error: sbErr } = await supabase.from("bilties").insert([biltyPayload]);
+        // Check if bilty with same bilty_number or ID already exists in Supabase
+        const { data: existingBilty } = await supabase
+          .from("bilties")
+          .select("id")
+          .or(`id.eq.${biltyUuid},bilty_number.eq.${finalBiltyNumber}`)
+          .maybeSingle();
 
-        // If table doesn't have manual_bilty_number column yet, retry without it
-        if (sbErr && sbErr.message?.toLowerCase().includes("manual_bilty_number")) {
-          const { manual_bilty_number: _, ...withoutManual } = biltyPayload;
-          const retryRes = await supabase.from("bilties").insert([withoutManual]);
-          sbErr = retryRes.error;
-        }
-
-        // If table requires id column without default, retry providing id
-        if (sbErr && sbErr.message?.toLowerCase().includes("id")) {
-          const withId = { ...biltyPayload, id: String(newBiltyRecord.id || finalBiltyNumber) };
-          const res = await supabase.from("bilties").insert([withId]);
-          sbErr = res.error;
-        }
-
-        // If duplicate key exists, update instead
-        if (sbErr && (sbErr.code === "23505" || sbErr.message?.toLowerCase().includes("duplicate key"))) {
+        let sbErr: any = null;
+        if (existingBilty) {
+          const { id: _, ...updatePayload } = biltyPayload;
           const updateRes = await supabase
             .from("bilties")
-            .update(biltyPayload)
-            .eq("bilty_number", finalBiltyNumber);
+            .update(updatePayload)
+            .eq("id", existingBilty.id);
           sbErr = updateRes.error;
+        } else {
+          // Try clean insert matching target columns
+          const insRes = await supabase.from("bilties").insert([biltyPayload]);
+          sbErr = insRes.error;
+
+          // If table doesn't have manual_bilty_number column yet, retry without it
+          if (sbErr && sbErr.message?.toLowerCase().includes("manual_bilty_number")) {
+            const { manual_bilty_number: _, ...withoutManual } = biltyPayload;
+            const retryRes = await supabase.from("bilties").insert([withoutManual]);
+            sbErr = retryRes.error;
+          }
+
+          // If duplicate key exists, update instead
+          if (sbErr && (sbErr.code === "23505" || sbErr.message?.toLowerCase().includes("duplicate key"))) {
+            const updateRes = await supabase
+              .from("bilties")
+              .update(biltyPayload)
+              .eq("bilty_number", finalBiltyNumber);
+            sbErr = updateRes.error;
+          }
         }
 
         // Safe fallback for legacy column names if present
         if (sbErr && sbErr.message?.toLowerCase().includes("origin_station")) {
           const legacyPayload = {
-            id: String(newBiltyRecord.id || finalBiltyNumber),
+            id: biltyUuid,
             bilty_number: biltyPayload.bilty_number,
             sender_name: biltyPayload.sender_name,
             receiver_name: biltyPayload.receiver_name,
@@ -1016,13 +1031,14 @@ export default function NewBiltyPage() {
       setFormError(msg);
       toast.error(msg);
     } finally {
+      isSubmittingRef.current = false;
       setSubmitting(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || isSubmittingRef.current) return;
     await handleSaveAction("save_only");
   };
 

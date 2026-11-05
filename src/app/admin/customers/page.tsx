@@ -81,6 +81,7 @@ export default function CustomersPage() {
   const [actionFeedback, setActionFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const isSubmittingRef = React.useRef(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -272,7 +273,6 @@ export default function CustomersPage() {
       const dedupedList: any[] = [];
       const seenIds = new Set<string>();
       const seenPhones = new Set<string>();
-      const seenNames = new Set<string>();
 
       for (const item of list) {
         if (!item || !item.id) continue;
@@ -280,14 +280,11 @@ export default function CustomersPage() {
         if (seenIds.has(id)) continue;
 
         const normPhone = item.phone ? String(item.phone).replace(/[^0-9]/g, "") : "";
-        const normName = item.name ? String(item.name).trim().toLowerCase() : "";
 
         if (normPhone.length >= 7 && seenPhones.has(normPhone)) continue;
-        if (normName.length > 1 && seenNames.has(normName)) continue;
 
         seenIds.add(id);
         if (normPhone.length >= 7) seenPhones.add(normPhone);
-        if (normName.length > 1) seenNames.add(normName);
         dedupedList.push(item);
       }
       list = dedupedList;
@@ -460,32 +457,31 @@ export default function CustomersPage() {
     e.preventDefault();
     e.stopPropagation();
 
-    if (submitting) return;
+    if (submitting || isSubmittingRef.current) return;
 
     if (!customerForm.name.trim()) {
       setFormError("Customer name is required.");
       return;
     }
 
-    // Deduplication check for newly added customers
+    // Deduplication check for newly added customers (only by phone if provided and >= 7 digits)
     if (!editingCustomer) {
       const normPhone = (customerForm.phone || "").replace(/[^0-9]/g, "");
-      const normName = (customerForm.name || "").trim().toLowerCase();
-      const alreadyExists = customers.some((c) => {
-        if (!c || c.status === "DELETED") return false;
-        const cPhone = (c.phone || "").replace(/[^0-9]/g, "");
-        const cName = (c.name || "").trim().toLowerCase();
-        const phoneMatch = normPhone.length >= 7 && cPhone.length >= 7 && normPhone === cPhone;
-        const nameMatch = normName.length > 1 && normName === cName;
-        return (normPhone.length >= 7 && phoneMatch) || nameMatch;
-      });
+      if (normPhone.length >= 7) {
+        const alreadyExists = customers.some((c) => {
+          if (!c || c.status === "DELETED") return false;
+          const cPhone = (c.phone || "").replace(/[^0-9]/g, "");
+          return cPhone.length >= 7 && normPhone === cPhone;
+        });
 
-      if (alreadyExists) {
-        setFormError("Customer with this name or phone number already exists.");
-        return;
+        if (alreadyExists) {
+          setFormError("Customer with this phone number already exists.");
+          return;
+        }
       }
     }
 
+    isSubmittingRef.current = true;
     setSubmitting(true);
     setFormError("");
 
@@ -588,6 +584,7 @@ export default function CustomersPage() {
 
         if (isSupabaseConfigured) {
           const { success, data: sbData, error: sbErr } = await safeUpsertCustomer({
+            id: clientUuid,
             name: String(newCust.name || newCust.companyName || "").trim(),
             phone: newCust.phone || null,
             email: enteredCustEmail || null,
@@ -609,14 +606,14 @@ export default function CustomersPage() {
           fetch("/api/admin/customers", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...customerForm, photo: finalPhotoUrl || null }),
+            body: JSON.stringify({ ...customerForm, id: newCust.id, photo: finalPhotoUrl || null }),
           }).catch(() => {});
         } else {
           try {
             const apiRes = await fetch("/api/admin/customers", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...customerForm, photo: finalPhotoUrl || null }),
+              body: JSON.stringify({ ...customerForm, id: newCust.id, photo: finalPhotoUrl || null }),
             });
             const apiJson = await apiRes.json().catch(() => null);
             if (apiRes.ok && apiJson?.success) {
@@ -642,10 +639,9 @@ export default function CustomersPage() {
     } catch (err: any) {
       setFormError(err.message || "Failed to save customer");
     } finally {
+      isSubmittingRef.current = false;
       setUploadingPhoto(false);
-      setTimeout(() => {
-        setSubmitting(false);
-      }, 800);
+      setSubmitting(false);
     }
   };
 

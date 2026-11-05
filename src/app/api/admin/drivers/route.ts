@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashPassword, validateAdminSession } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
-import { supabase, isSupabaseConfigured, safeUpsertDriver } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, safeUpsertDriver, generateUUID, isValidUUID } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -146,14 +146,17 @@ export async function POST(request: Request) {
       notes,
     } = body;
 
-    if (!name || !phone) {
+    if (!name || !String(name).trim()) {
       return NextResponse.json(
-        { success: false, error: 'Driver name and phone are required' },
+        { success: false, error: 'Driver name is required' },
         { status: 400 }
       );
     }
 
-    const driverEmail = (email || `driver.${phone.replace(/[^0-9]/g, '')}@spdlogistics.com`).toLowerCase();
+    const cleanPhone = phone ? String(phone).trim() : null;
+    const cleanPhoneDigits = cleanPhone ? cleanPhone.replace(/[^0-9]/g, '') : '';
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const driverEmail = (email?.trim() || (cleanPhoneDigits ? `driver.${cleanPhoneDigits}@spdlogistics.com` : `driver.${Date.now().toString().slice(-6)}${randomSuffix}@spdlogistics.com`)).toLowerCase();
 
     let result: any = null;
     try {
@@ -212,20 +215,22 @@ export async function POST(request: Request) {
       console.warn('DB error creating driver (using virtual return):', dbErr);
     }
 
+    const targetDrvId = (body.id && isValidUUID(body.id)) ? body.id : generateUUID();
+
     if (!result) {
       const mockDriver = {
-        id: `drv_loc_${Date.now()}`,
-        name,
-        phone,
-        contact: phone,
-        cnic: cnic || null,
-        licenseNumber: licenseNumber || 'LHR-DL-001',
-        vehicleNumber: vehicleNumber || null,
-        status,
-        address: address || 'Pakistan',
-        notes: notes || null,
-        user: { id: `u_loc_${Date.now()}`, email: driverEmail, status: 'ACTIVE' },
-        vehicles: vehicleNumber ? [{ id: `v_${Date.now()}`, vehicleNumber }] : [],
+        id: targetDrvId,
+        name: String(name).trim(),
+        phone: cleanPhone,
+        contact: cleanPhone,
+        cnic: cnic?.trim() || null,
+        licenseNumber: licenseNumber?.trim() || null,
+        vehicleNumber: vehicleNumber?.trim() || null,
+        status: status || 'AVAILABLE',
+        address: address?.trim() || null,
+        notes: notes?.trim() || null,
+        user: { id: generateUUID(), email: driverEmail, status: 'ACTIVE' },
+        vehicles: vehicleNumber ? [{ id: generateUUID(), vehicleNumber: String(vehicleNumber).trim() }] : [],
         consignments: [],
         _count: { consignments: 0 },
         createdAt: new Date().toISOString(),
@@ -235,16 +240,35 @@ export async function POST(request: Request) {
 
     if (isSupabaseConfigured && result?.driver) {
       try {
-        await safeUpsertDriver({
-          id: String(result.driver.id),
-          name: result.driver.name,
-          phone: result.driver.phone || result.driver.contact || null,
-          cnic: result.driver.cnic || null,
-          license_number: result.driver.licenseNumber || null,
-          vehicle_number: result.driver.vehicleNumber || null,
-          status: result.driver.status || 'Active',
-          avatar_url: result.driver.photo || null,
-        });
+        const syncId = (body.id && isValidUUID(body.id))
+          ? body.id
+          : (result?.driver?.id && isValidUUID(result.driver.id))
+          ? String(result.driver.id)
+          : targetDrvId;
+
+        const { data: existingDrv } = await supabase
+          .from('drivers')
+          .select('id, name')
+          .eq('id', syncId)
+          .maybeSingle();
+
+        const driverPayload = {
+          id: syncId,
+          name: String(result.driver.name || name).trim(),
+          phone: cleanPhone,
+          cnic: cnic?.trim() || null,
+          license_number: licenseNumber?.trim() || null,
+          vehicle_number: vehicleNumber?.trim() || null,
+          status: status || result.driver.status || 'Active',
+          avatar_url: photo || result.driver.photo || null,
+        };
+
+        if (existingDrv) {
+          const { id: _, ...updateFields } = driverPayload;
+          await supabase.from('drivers').update(updateFields).eq('id', existingDrv.id);
+        } else {
+          await safeUpsertDriver(driverPayload);
+        }
       } catch (sbErr) {
         console.warn('Supabase driver upsert notice:', sbErr);
       }

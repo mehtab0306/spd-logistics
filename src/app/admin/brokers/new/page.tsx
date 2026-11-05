@@ -47,9 +47,11 @@ export default function NewBrokerPage() {
     status: "ACTIVE" as "ACTIVE" | "INACTIVE",
   });
 
+  const isSubmittingRef = React.useRef(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (isSubmittingRef.current || submitting) return;
     setFormError("");
     setFormSuccess("");
 
@@ -58,11 +60,7 @@ export default function NewBrokerPage() {
       return;
     }
 
-    if (!formData.phone.trim()) {
-      setFormError("Mobile contact number is required.");
-      return;
-    }
-
+    isSubmittingRef.current = true;
     setSubmitting(true);
 
     try {
@@ -73,18 +71,18 @@ export default function NewBrokerPage() {
       const brokerPayload = {
         id: brokerId,
         name: formData.name.trim(),
-        contactPerson: formData.contactPerson.trim() || formData.name.trim(),
-        phone: formData.phone.trim(),
-        whatsapp: formData.whatsapp.trim() || formData.phone.trim(),
-        cnic: formData.cnic.trim(),
-        ntn: formData.ntn.trim(),
-        city: formData.city,
+        contactPerson: formData.contactPerson.trim() || null,
+        phone: formData.phone.trim() || null,
+        whatsapp: formData.whatsapp.trim() || formData.phone.trim() || null,
+        cnic: formData.cnic.trim() || null,
+        ntn: formData.ntn.trim() || null,
+        city: formData.city || "Karachi",
         commissionType: formData.commissionType,
         commissionRate: commRate,
         openingBalance: openBal,
         netPayableBalance: openBal,
-        bankDetails: formData.bankDetails.trim(),
-        notes: formData.notes.trim(),
+        bankDetails: formData.bankDetails.trim() || null,
+        notes: formData.notes.trim() || null,
         status: formData.status,
         totalTrips: 0,
         totalFreightAgreed: 0,
@@ -117,7 +115,7 @@ export default function NewBrokerPage() {
       // 2. Immediately save to local dual-persistence store
       saveStoredBroker(brokerPayload);
 
-      // 2. Sync to centralized server store in background
+      // 3. Sync to centralized server store in background
       try {
         await fetch("/api/admin/brokers", {
           method: "POST",
@@ -130,11 +128,12 @@ export default function NewBrokerPage() {
 
       setFormSuccess("Record created successfully!");
       setTimeout(() => {
-        router.push(`/admin/brokers?highlight=${brokerId}`);
+        router.push(`/admin/brokers?highlight=${brokerPayload.id || brokerId}`);
       }, 600);
     } catch (err: any) {
       setFormError(err.message || "Failed to register broker.");
     } finally {
+      isSubmittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -229,10 +228,9 @@ export default function NewBrokerPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Contact Person *
+              Contact Person (Optional)
             </Label>
             <Input
-              required
               placeholder=""
               value={formData.contactPerson}
               onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
@@ -242,7 +240,7 @@ export default function NewBrokerPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Station / City *
+              Station / City
             </Label>
             <select
               value={formData.city}
@@ -259,7 +257,7 @@ export default function NewBrokerPage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300 flex items-center justify-between">
-              <span>Mobile Phone Number *</span>
+              <span>Mobile Phone Number (Optional)</span>
               {whatsappLink && (
                 <a
                   href={whatsappLink}
@@ -273,7 +271,6 @@ export default function NewBrokerPage() {
               )}
             </Label>
             <Input
-              required
               placeholder=""
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}

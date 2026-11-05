@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { hashPassword, validateAdminSession } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { saveCentralRecord, getCentralCollection, deleteCentralRecord } from '@/lib/server-store';
-import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID, isValidUUID } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -277,9 +277,11 @@ export async function POST(request: Request) {
       console.warn('DB write failed for customer (using virtual fallback):', dbErr);
     }
 
+    const targetCustId = (body.id && isValidUUID(body.id)) ? body.id : generateUUID();
+
     if (!result) {
       const mockCustomer = {
-        id: generateUUID(),
+        id: targetCustId,
         name,
         companyName: companyName || null,
         email: email?.trim() || null,
@@ -309,17 +311,36 @@ export async function POST(request: Request) {
 
       if (isSupabaseConfigured) {
         try {
-          await safeUpsertCustomer({
-            id: String(result.customer.id),
-            name: result.customer.name || result.customer.companyName,
-            phone: result.customer.phone || null,
+          const syncId = (body.id && isValidUUID(body.id))
+            ? body.id
+            : (result?.customer?.id && isValidUUID(result.customer.id))
+            ? String(result.customer.id)
+            : targetCustId;
+
+          const { data: existingCust } = await supabase
+            .from('customers')
+            .select('id, name')
+            .eq('id', syncId)
+            .maybeSingle();
+
+          const custPayload = {
+            id: syncId,
+            name: (result.customer.name || result.customer.companyName || name).trim(),
+            phone: cleanPhone || null,
             email: email?.trim() || null,
-            address: result.customer.address || null,
-            city: result.customer.city || 'Karachi',
-            opening_balance: Number(result.customer.openingBalance) || 0,
-            current_balance: Number(result.customer.openingBalance) || 0,
-            avatar_url: result.customer.photo || result.customer.avatar_url || null,
-          });
+            address: address?.trim() || null,
+            city: city || 'Karachi',
+            opening_balance: parseFloat(openingBalance) || 0,
+            current_balance: parseFloat(openingBalance) || 0,
+            avatar_url: photo || result.customer.photo || result.customer.avatar_url || null,
+          };
+
+          if (existingCust) {
+            const { id: _, ...updateFields } = custPayload;
+            await supabase.from('customers').update(updateFields).eq('id', existingCust.id);
+          } else {
+            await safeUpsertCustomer(custPayload);
+          }
         } catch (sbErr) {
           console.warn('Supabase customer upsert notice:', sbErr);
         }

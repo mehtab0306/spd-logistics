@@ -4,7 +4,7 @@ import { validateAdminSession } from '@/lib/auth';
 import { createSystemNotification } from '@/lib/notifications';
 import { sendEventEmail } from '@/lib/mailer';
 import { saveCentralRecord, getCentralCollection, deleteCentralRecord } from '@/lib/server-store';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, generateUUID, isValidUUID } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -787,12 +787,16 @@ export async function POST(request: Request) {
 
     if (isSupabaseConfigured) {
       try {
+        const targetBiltyNum = consignment.biltyNumber || biltyNumber;
+        const targetId = (consignment.id && isValidUUID(consignment.id)) ? consignment.id : (body.id && isValidUUID(body.id)) ? body.id : generateUUID();
+
         const biltyPayload: Record<string, any> = {
-          bilty_number: consignment.biltyNumber || biltyNumber,
+          bilty_number: targetBiltyNum,
+          manual_bilty_number: consignment.manualBiltyNumber || body.manualBiltyNumber || targetBiltyNum,
           sender_name: (consignment.senderName || 'Walk-in Shipper').trim(),
           receiver_name: (consignment.receiverName || 'Consignee').trim(),
-          origin_station: (consignment.origin || 'Lahore').trim(),
-          destination_station: (consignment.destination || 'Karachi').trim(),
+          origin_station: (consignment.origin || 'Karachi').trim(),
+          destination_station: (consignment.destination || 'Lahore').trim(),
           freight_amount: Number(consignment.totalAmount || consignment.freightAmount || consignment.freight) || 0,
           advance_paid: Number(consignment.paidAmount) || 0,
           remaining_balance: Math.max(0, (Number(consignment.totalAmount || consignment.freightAmount || consignment.freight) || 0) - (Number(consignment.paidAmount) || 0)),
@@ -800,16 +804,53 @@ export async function POST(request: Request) {
           payment_mode: consignment.paymentMode || 'TO-PAY',
         };
 
-        let { error: sbErr } = await supabase.from('bilties').insert([biltyPayload]);
-
-        if (sbErr && sbErr.message?.toLowerCase().includes('id')) {
-          const withId = { ...biltyPayload, id: String(consignment.id || biltyNumber) };
-          const res = await supabase.from('bilties').insert([withId]);
-          sbErr = res.error;
+        // Check if bilty already exists in Supabase by the exact client ID (idempotent submission)
+        let existingBilty: any = null;
+        if (targetId) {
+          const { data: byId } = await supabase
+            .from('bilties')
+            .select('id, bilty_number, sender_name, created_at')
+            .eq('id', targetId)
+            .maybeSingle();
+          if (byId) existingBilty = byId;
         }
 
-        if (sbErr && (sbErr.code === '23505' || sbErr.message?.toLowerCase().includes('duplicate key'))) {
-          await supabase.from('bilties').update(biltyPayload).eq('bilty_number', consignment.biltyNumber || biltyNumber);
+        // If not found by ID, check if a bilty with the same bilty_number was just created for the same consignment
+        if (!existingBilty && targetBiltyNum) {
+          const { data: byNum } = await supabase
+            .from('bilties')
+            .select('id, bilty_number, sender_name, origin_station, created_at')
+            .eq('bilty_number', targetBiltyNum)
+            .maybeSingle();
+
+          if (byNum) {
+            // Verify this is demonstrably the same logical consignment before updating:
+            // either same sender name or created in the last 15 minutes (double-write window)
+            const isSameSender = byNum.sender_name?.trim().toLowerCase() === biltyPayload.sender_name?.trim().toLowerCase();
+            const createdAtMs = byNum.created_at ? new Date(byNum.created_at).getTime() : 0;
+            const isRecent = createdAtMs > 0 && (Date.now() - createdAtMs < 15 * 60 * 1000);
+
+            if (isSameSender || isRecent) {
+              existingBilty = byNum;
+            } else {
+              // Bilty number collision with an unrelated historical bilty! Do NOT overwrite existing business record!
+              console.warn(`[Bilty Safety] Bilty #${targetBiltyNum} already belongs to an existing record (${byNum.id}). Preserving original record.`);
+              return NextResponse.json({
+                success: false,
+                error: `Bilty number "${targetBiltyNum}" is already registered to another consignment. Please specify a unique bilty number.`
+              }, { status: 409 });
+            }
+          }
+        }
+
+        if (existingBilty) {
+          await supabase.from('bilties').update(biltyPayload).eq('id', existingBilty.id);
+        } else {
+          let { error: sbErr } = await supabase.from('bilties').insert([{ ...biltyPayload, id: targetId }]);
+          if (sbErr && sbErr.message?.toLowerCase().includes('manual_bilty_number')) {
+            const { manual_bilty_number: _, ...withoutManual } = biltyPayload;
+            await supabase.from('bilties').insert([{ ...withoutManual, id: targetId }]);
+          }
         }
       } catch (sbErr) {
         console.warn('Supabase bilty upsert in route notice:', sbErr);

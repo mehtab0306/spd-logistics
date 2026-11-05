@@ -91,7 +91,7 @@ export default function AdminDashboard() {
               .or("is_deleted.is.null,is_deleted.eq.false")
               .neq("status", "DELETED")
               .order("created_at", { ascending: false }),
-            supabase.from("customers").select("*", { count: "exact", head: true }),
+            supabase.from("customers").select("id, name, phone, email, created_at"),
             supabase.from("drivers").select("*"),
             supabase.from("vehicles").select("*"),
             supabase.from("challans").select("*"),
@@ -102,8 +102,28 @@ export default function AdminDashboard() {
           if (bRes.status === "fulfilled" && Array.isArray(bRes.value.data)) {
             biltiesList = bRes.value.data.filter((b: any) => !b.is_deleted && b.status !== "DELETED");
           }
-          if (cRes.status === "fulfilled" && typeof cRes.value.count === "number") {
-            custCount = cRes.value.count;
+          if (cRes.status === "fulfilled" && Array.isArray(cRes.value.data)) {
+            const custList = cRes.value.data;
+            const uniqueCustMap = new Map<string, any>();
+            for (const c of custList) {
+              if (!c) continue;
+              const normPhone = (c.phone || "").replace(/[^0-9]/g, "");
+              const normEmail = (c.email || "").trim().toLowerCase();
+              const normName = (c.name || "").trim().toLowerCase();
+              const key = normPhone.length >= 7
+                ? `phone:${normPhone}`
+                : normEmail && !normEmail.includes("spdcustomer.com")
+                ? `email:${normEmail}`
+                : normName && c.created_at
+                ? `name:${normName}`
+                : String(c.id || "");
+              if (!uniqueCustMap.has(key)) {
+                uniqueCustMap.set(key, c);
+              }
+            }
+            custCount = uniqueCustMap.size;
+          } else if (cRes.status === "fulfilled" && typeof (cRes.value as any).count === "number") {
+            custCount = (cRes.value as any).count;
           }
           if (dRes.status === "fulfilled" && Array.isArray(dRes.value.data)) {
             drvList = dRes.value.data;
@@ -140,15 +160,39 @@ export default function AdminDashboard() {
         } catch {}
       }
 
-      // Deduplicate bilties by ID or bilty number to prevent any duplicate entries / double calculations
-      const uniqueBilties = Array.from(
-        new Map(
-          biltiesList.map((item: any) => [
-            String(item.id || item.bilty_number || item.biltyNumber || Math.random()),
-            item,
-          ])
-        ).values()
-      );
+      // Deduplicate bilties by normalized bilty number if present; fallback to unique ID if bilty number is missing
+      const uniqueBiltiesMap = new Map<string, any>();
+      for (const item of biltiesList) {
+        if (!item) continue;
+        const rawBiltyNo = (item.bilty_number || item.biltyNumber || "").trim().toUpperCase();
+        // If a valid bilty number exists, use it as stable business key; otherwise fallback to item.id
+        const key = rawBiltyNo || String(item.id || "");
+        if (!key) continue;
+
+        if (!uniqueBiltiesMap.has(key)) {
+          uniqueBiltiesMap.set(key, item);
+        } else {
+          // If a duplicate row exists for the same bilty number, prefer the one with manual_bilty_number or more complete data
+          const existing = uniqueBiltiesMap.get(key);
+          if (!existing.manual_bilty_number && item.manual_bilty_number) {
+            uniqueBiltiesMap.set(key, item);
+          }
+        }
+      }
+      const uniqueBilties = Array.from(uniqueBiltiesMap.values());
+
+      // Deduplicate drivers by phone or name to avoid counting duplicate rows created in quick succession
+      const uniqueDrvMap = new Map<string, any>();
+      for (const d of drvList) {
+        if (!d) continue;
+        const normPhone = (d.phone || "").replace(/[^0-9]/g, "");
+        const normName = (d.name || "").trim().toLowerCase();
+        const key = normPhone.length >= 7 ? `phone:${normPhone}` : normName ? `name:${normName}` : String(d.id || "");
+        if (!uniqueDrvMap.has(key)) {
+          uniqueDrvMap.set(key, d);
+        }
+      }
+      const uniqueDrivers = Array.from(uniqueDrvMap.values());
 
       // Calculate Real-Time KPIs directly from active Supabase records
       const totalConsignments = uniqueBilties.length;
@@ -193,7 +237,7 @@ export default function AdminDashboard() {
       setTotalPaid(totalPaidAmount);
       setTotalRemaining(outstandingBalance);
       setTrucksCount(vehList.length > 0 ? vehList.length : chList.length);
-      setDriversCount(drvList.length);
+      setDriversCount(uniqueDrivers.length);
       setCashBooksCount(cbCount);
       setLahoreCount(lhr);
       setKarachiCount(khi);

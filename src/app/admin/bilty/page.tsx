@@ -71,7 +71,7 @@ import {
 } from "@/lib/whatsapp";
 import { useSmartHighlight } from "@/hooks/use-smart-highlight";
 import { PrintHeader, PrintFooter } from "@/components/shared/print-letterhead";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, generateUUID } from "@/lib/supabase";
 
 export default function BiltyPage() {
   const router = useRouter();
@@ -101,6 +101,7 @@ export default function BiltyPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
+  const isSubmittingRef = React.useRef(false);
   const [formError, setFormError] = useState("");
   const [editFormError, setEditFormError] = useState("");
   const [actionFeedback, setActionFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -986,7 +987,8 @@ export default function BiltyPage() {
 
   const handleCreateBilty = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setSubmitting(true);
     setFormError("");
 
@@ -1009,9 +1011,11 @@ export default function BiltyPage() {
       const pkgCount = Number(formData.quantity) || 1;
       const grossWeight = Number(formData.weight) || 0;
 
+      const biltyUuid = generateUUID();
       const createdBilty = {
-        id: finalBiltyNumber,
+        id: biltyUuid,
         biltyNumber: finalBiltyNumber,
+        manualBiltyNumber: manualBiltyNo || finalBiltyNumber,
         trackingId: formData.trackingId?.trim() || `SPD-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
         date: formData.date ? new Date(formData.date).toISOString() : new Date().toISOString(),
         bookingDate,
@@ -1090,7 +1094,9 @@ export default function BiltyPage() {
       if (isSupabaseConfigured) {
         try {
           const biltyPayload: Record<string, any> = {
+            id: biltyUuid,
             bilty_number: finalBiltyNumber || `SPD-${Date.now()}`,
+            manual_bilty_number: manualBiltyNo || finalBiltyNumber,
             sender_name: (createdBilty.senderName || "Walk-in Shipper").trim(),
             receiver_name: (createdBilty.receiverName || "Consignee").trim(),
             origin_station: (createdBilty.origin || "Karachi").trim(),
@@ -1102,20 +1108,37 @@ export default function BiltyPage() {
             payment_mode: createdBilty.paymentMode || "TO-PAY",
           };
 
-          let { error: sbErr } = await supabase.from("bilties").insert([biltyPayload]);
+          const { data: existingBilty } = await supabase
+            .from("bilties")
+            .select("id")
+            .or(`id.eq.${biltyUuid},bilty_number.eq.${finalBiltyNumber}`)
+            .maybeSingle();
 
-          if (sbErr && sbErr.message?.toLowerCase().includes("id")) {
-            const withId = { ...biltyPayload, id: String(createdBilty.id || finalBiltyNumber) };
-            const res = await supabase.from("bilties").insert([withId]);
-            sbErr = res.error;
-          }
-
-          if (sbErr && (sbErr.code === "23505" || sbErr.message?.toLowerCase().includes("duplicate key"))) {
+          let sbErr: any = null;
+          if (existingBilty) {
+            const { id: _, ...updatePayload } = biltyPayload;
             const updateRes = await supabase
               .from("bilties")
-              .update(biltyPayload)
-              .eq("bilty_number", finalBiltyNumber);
+              .update(updatePayload)
+              .eq("id", existingBilty.id);
             sbErr = updateRes.error;
+          } else {
+            const insRes = await supabase.from("bilties").insert([biltyPayload]);
+            sbErr = insRes.error;
+
+            if (sbErr && sbErr.message?.toLowerCase().includes("manual_bilty_number")) {
+              const { manual_bilty_number: _, ...withoutManual } = biltyPayload;
+              const retryRes = await supabase.from("bilties").insert([withoutManual]);
+              sbErr = retryRes.error;
+            }
+
+            if (sbErr && (sbErr.code === "23505" || sbErr.message?.toLowerCase().includes("duplicate key"))) {
+              const updateRes = await supabase
+                .from("bilties")
+                .update(biltyPayload)
+                .eq("bilty_number", finalBiltyNumber);
+              sbErr = updateRes.error;
+            }
           }
 
           if (sbErr) {
@@ -1141,6 +1164,7 @@ export default function BiltyPage() {
     } catch (err: any) {
       setFormError(err.message || "Failed to create consignment bilty");
     } finally {
+      isSubmittingRef.current = false;
       setSubmitting(false);
     }
   };
