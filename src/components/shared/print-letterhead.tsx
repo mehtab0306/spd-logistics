@@ -13,7 +13,7 @@ interface PrintHeaderProps {
 
 export function PrintHeader({
   title,
-  subtitle = "Nationwide Cargo, Container & Fleet Logistics • Est. 1996",
+  subtitle = "Container & Fleet Logistics • Est. 1996",
   documentNumber,
   date,
   station = "Head Office Station (Lahore)",

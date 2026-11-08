@@ -189,7 +189,7 @@ export function BiltySheetViewer({
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>All 4 Sheets (Full Dossier)</span>
+            <span>All Sheets (Complete Print)</span>
           </button>
         </div>
       </div>

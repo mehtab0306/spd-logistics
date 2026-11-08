@@ -43,7 +43,7 @@ export function BiltyTransportHeader({
               SUPER PAK DATA WALE GOODS TRANSPORT CO.®
             </h1>
             <p className="text-[10px] font-bold text-slate-800 uppercase tracking-wider mt-0.5">
-              Nationwide Cargo, Container & Fleet Logistics • NTN: 1692873-3 • STRN: 17-00-1692-873-3
+              Container & Fleet Logistics • NTN: 1692873-3 • STRN: 17-00-1692-873-3
             </p>
 
             {/* Branch Contacts matching Official Excel System */}
@@ -56,7 +56,7 @@ export function BiltyTransportHeader({
               <div>
                 <span className="font-bold text-black">Lahore Branch:</span> Saggian Bypass, Hazrat Ali Rd, Near IGG House.
                 <br />
-                <span className="font-mono text-slate-900">Ph: 0346-2024433, 0301-8264433 | FSD: 0300-3391733</span>
+                <span className="font-mono text-slate-900">Ph: 0325-2024433, 0301-8264433 | FSD: 0300-3391733</span>
               </div>
             </div>
           </div>

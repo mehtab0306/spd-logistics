@@ -580,7 +580,8 @@ export async function POST(request: Request) {
       });
 
       // Update customer ledger if linked customer has an account (avoid duplicate financial entries)
-      const targetCustId = resolvedCustomerId || resolvedSenderId;
+      const isBillToReceiver = body.billTo && String(body.billTo).toLowerCase() === 'receiver';
+      const targetCustId = isBillToReceiver ? (resolvedReceiverId || customerId) : (resolvedCustomerId || resolvedSenderId);
       if (targetCustId) {
         const customerAccount = await tx.account.findFirst({
           where: { customerId: targetCustId },

@@ -294,6 +294,21 @@ export const PAKISTAN_CITIES = [
   'Gujrat',
 ] as const;
 
+export const CARGO_DESCRIPTION_OPTIONS: string[] = [
+  "General Commercial Merchandise",
+  "Small",
+  "Large",
+  "Bundle",
+  "Crate",
+  "Drum",
+  "Sack / Bag",
+  "Roll",
+  "Pallet",
+  "Carton / Box",
+  "Wooden Case",
+  "Other / Custom",
+];
+
 export function cleanCityName(raw: string | null | undefined): string {
   if (!raw) return '';
   return raw

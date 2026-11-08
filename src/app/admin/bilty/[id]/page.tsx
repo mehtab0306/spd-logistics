@@ -187,7 +187,7 @@ export default function BiltyDetailPage() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center">
-        <LogisticsLoader subtitle="Loading 4-Sheet Transport Dossier..." />
+        <LogisticsLoader subtitle="Loading Transport Sheets..." />
       </div>
     );
   }

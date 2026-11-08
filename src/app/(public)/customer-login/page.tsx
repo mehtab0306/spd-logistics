@@ -32,7 +32,10 @@ export default function CustomerLoginPage() {
     const cleanPass = password.trim();
     const cleanPhone = identifier.trim().replace(/[\s\-\(\)]/g, '');
 
-    // 1. Check local & stored customer credentials (from newly registered or updated customers)
+    setStatus('LOADING');
+    setError('');
+
+    // Check local customer credentials in case network fails
     let matchedLocalCust: any = null;
     try {
       const storedCustomers = getStoredCustomers();
@@ -40,97 +43,15 @@ export default function CustomerLoginPage() {
         const cEmail = (c.email || c.user?.email || '').toLowerCase().trim();
         const cPhone = (c.phone || c.whatsapp || '').replace(/[\s\-\(\)]/g, '');
         const cName = (c.name || '').toLowerCase().trim();
-        const cAcc = (c.accountId || '').toLowerCase().trim();
-
         const idMatches =
           (cEmail && cEmail === cleanId) ||
           (cleanPhone && cPhone && (cPhone === cleanPhone || cPhone.endsWith(cleanPhone) || cleanPhone.endsWith(cPhone))) ||
-          (cName && cName === cleanId) ||
-          (cAcc && cAcc === cleanId);
-
+          (cName && cName === cleanId);
         if (!idMatches) return false;
-
         const custPass = c.loginPassword || c.password;
-        return (
-          !custPass ||
-          custPass === cleanPass ||
-          cleanPass === 'admin' ||
-          cleanPass === 'spd12345'
-        );
+        return custPass && custPass === cleanPass;
       });
-
-      if (!matchedLocalCust) {
-        const rawAuth = localStorage.getItem('spd_customers_auth') || localStorage.getItem('spd_customer_credentials');
-        if (rawAuth) {
-          const authList = JSON.parse(rawAuth);
-          if (Array.isArray(authList)) {
-            matchedLocalCust = authList.find((c: any) => {
-              const cEmail = (c.email || '').toLowerCase().trim();
-              const cPhone = (c.phone || '').replace(/[\s\-\(\)]/g, '');
-              const cName = (c.name || '').toLowerCase().trim();
-
-              const idMatches =
-                (cEmail && cEmail === cleanId) ||
-                (cleanPhone && cPhone && (cPhone === cleanPhone || cPhone.endsWith(cleanPhone) || cleanPhone.endsWith(cPhone))) ||
-                (cName && cName === cleanId);
-
-              if (!idMatches) return false;
-              return !c.password || c.password === cleanPass || cleanPass === 'admin' || cleanPass === 'spd12345';
-            });
-          }
-        }
-      }
     } catch {}
-
-    // 2. Client-side authentication guarantee for local customers OR standard customer account
-    if (matchedLocalCust || ((cleanId === 'customer@gmail.com' || cleanId === 'customer') && cleanPass === 'admin')) {
-      setStatus('SUCCESS');
-      const custObj = matchedLocalCust || {
-        id: 'c-customer-1',
-        name: 'Standard Customer',
-        email: 'customer@gmail.com',
-        companyName: 'Prime Logistics & Trade',
-        phone: '0300 1234567',
-      };
-      const customerSession = {
-        token: `spd-cust-${custObj.id || Date.now()}`,
-        id: `cust-user-${custObj.id}`,
-        email: custObj.email || (cleanId.includes('@') ? cleanId : `${cleanId}@customer.com`),
-        username: custObj.email || cleanId,
-        name: custObj.name || 'Valued Customer',
-        role: 'CUSTOMER',
-        redirectUrl: '/customer/dashboard',
-        customer: {
-          id: custObj.id,
-          name: custObj.name,
-          email: custObj.email,
-          companyName: custObj.companyName || 'Registered Client',
-          phone: custObj.phone || cleanPhone,
-        },
-      };
-
-      try {
-        document.cookie = `spd-auth-token=${customerSession.token}; path=/; max-age=604800; SameSite=Lax`;
-        localStorage.setItem('spd_user', JSON.stringify(customerSession));
-        sessionStorage.setItem('spd_auth_token', customerSession.token);
-      } catch (storageErr) {
-        console.warn('Storage unavailable:', storageErr);
-      }
-
-      fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: cleanId, password: cleanPass, role: 'CUSTOMER' }),
-      }).catch(() => {});
-
-      setTimeout(() => {
-        window.location.replace('/customer/dashboard');
-      }, 350);
-      return;
-    }
-
-    setStatus('LOADING');
-    setError('');
 
     // Cancel any previous in-flight request
     if (abortControllerRef.current) {
@@ -183,6 +104,27 @@ export default function CustomerLoginPage() {
       }, 350);
     } catch (err: any) {
       clearTimeout(timeoutId);
+      if (matchedLocalCust) {
+        setStatus('SUCCESS');
+        const customerSession = {
+          token: `spd-cust-${matchedLocalCust.id}`,
+          id: matchedLocalCust.id,
+          email: matchedLocalCust.email || `${cleanId}@customer.com`,
+          name: matchedLocalCust.name || 'Valued Customer',
+          role: 'CUSTOMER',
+          redirectUrl: '/customer/dashboard',
+          customer: matchedLocalCust,
+        };
+        try {
+          document.cookie = `spd-auth-token=${customerSession.token}; path=/; max-age=604800; SameSite=Lax`;
+          localStorage.setItem('spd_user', JSON.stringify(customerSession));
+          sessionStorage.setItem('spd_auth_token', customerSession.token);
+        } catch {}
+        setTimeout(() => {
+          window.location.replace('/customer/dashboard');
+        }, 350);
+        return;
+      }
       setStatus('ERROR');
       if (err.name === 'AbortError') {
         setError('Authentication service is unavailable. Please check your connection.');

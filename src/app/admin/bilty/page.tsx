@@ -1453,7 +1453,7 @@ export default function BiltyPage() {
                       <Link
                         href={`/admin/bilty/${encodeURIComponent(c.id || c.biltyNumber)}`}
                         className="font-black text-sm text-spd-blue hover:text-spd-red hover:underline block font-mono"
-                        title="View / Print 4-Sheet Dossier"
+                        title="View / Print All Sheets"
                       >
                         {c.biltyNumber || c.id || "-"}
                       </Link>
@@ -1594,7 +1594,7 @@ export default function BiltyPage() {
                         variant="ghost"
                         className="h-8 w-8 rounded-lg text-spd-blue"
                         onClick={() => setPrintBilty(c)}
-                        title="4-Sheet Dossier & Print"
+                        title="Print All Sheets"
                       >
                         <Printer className="w-3.5 h-3.5" />
                       </Button>
@@ -1679,7 +1679,7 @@ export default function BiltyPage() {
                             <Link
                               href={`/admin/bilty/${encodeURIComponent(c.id || c.biltyNumber)}`}
                               className="font-black text-xs text-spd-blue hover:text-spd-red hover:underline block font-mono"
-                              title="Click to view / print 4-Sheet Dossier"
+                              title="Click to view / print All Sheets"
                             >
                               {c.biltyNumber || c.id || "-"}
                             </Link>
@@ -1831,7 +1831,7 @@ export default function BiltyPage() {
                               size="icon"
                               variant="ghost"
                               className="h-8 w-8 rounded-lg text-spd-blue hover:bg-blue-50 dark:hover:bg-blue-950/50"
-                              title="4-Sheet Dossier & Print"
+                              title="Print All Sheets"
                               onClick={() => setPrintBilty(c)}
                             >
                               <Printer className="w-3.5 h-3.5" />
@@ -2239,7 +2239,7 @@ export default function BiltyPage() {
                 }}
                 className="rounded-xl text-xs font-semibold gap-1.5"
               >
-                <Printer className="w-3.5 h-3.5" /> 4-Sheet Dossier
+                <Printer className="w-3.5 h-3.5" /> All 4 Sheets
               </Button>
               <Button
                 type="button"

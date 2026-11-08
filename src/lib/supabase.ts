@@ -418,6 +418,77 @@ export async function safeUpsertBroker(
   return { success: false, error: minError || coreError || insError };
 }
 
+export interface ChallanPayload {
+  id?: string;
+  challan_number: string;
+  vehicle_number?: string | null;
+  driver_name?: string | null;
+  driver_phone?: string | null;
+  status?: string | null;
+  dispatch_date?: string | null;
+  created_at?: string | null;
+  origin?: string | null;
+  destination?: string | null;
+  total_truck_hire?: number | null;
+  advance_paid?: number | null;
+  balance_payable?: number | null;
+}
+
+export async function safeUpsertChallan(
+  payload: ChallanPayload
+): Promise<{ success: boolean; data?: any; error?: any }> {
+  if (!isSupabaseConfigured) return { success: false, error: new Error('Supabase not configured') };
+
+  const validId = isValidUUID(payload.id) ? payload.id!.trim() : undefined;
+
+  // Primary attempt: sanitized to core existing schema columns
+  const corePayload: Record<string, any> = {
+    challan_number: payload.challan_number.trim(),
+  };
+  if (validId) corePayload.id = validId;
+  if (payload.vehicle_number?.trim()) corePayload.vehicle_number = payload.vehicle_number.trim();
+  if (payload.driver_name?.trim()) corePayload.driver_name = payload.driver_name.trim();
+  if (payload.driver_phone?.trim()) corePayload.driver_phone = payload.driver_phone.trim();
+  if (payload.status?.trim()) corePayload.status = payload.status.trim();
+  if (payload.dispatch_date?.trim()) corePayload.dispatch_date = payload.dispatch_date.trim();
+  if (payload.created_at?.trim()) corePayload.created_at = payload.created_at.trim();
+
+  // Attempt 1: Upsert with valid UUID if provided
+  if (validId) {
+    const { data, error } = await supabase.from('challans').upsert([corePayload]).select().maybeSingle();
+    if (!error) return { success: true, data };
+  }
+
+  // Attempt 2: Insert without ID (auto-generates standard UUID in database)
+  const payloadNoId = { ...corePayload };
+  delete payloadNoId.id;
+
+  const { data: insData, error: insError } = await supabase
+    .from('challans')
+    .insert([payloadNoId])
+    .select()
+    .maybeSingle();
+
+  if (!insError) return { success: true, data: insData };
+
+  // Attempt 3: Minimal fallback: challan_number, vehicle_number, driver_name
+  const minPayload: Record<string, any> = {
+    challan_number: payload.challan_number.trim(),
+  };
+  if (payload.vehicle_number?.trim()) minPayload.vehicle_number = payload.vehicle_number.trim();
+  if (payload.driver_name?.trim()) minPayload.driver_name = payload.driver_name.trim();
+
+  const { data: minData, error: minError } = await supabase
+    .from('challans')
+    .insert([minPayload])
+    .select()
+    .maybeSingle();
+
+  if (!minError) return { success: true, data: minData };
+
+  return { success: false, error: minError || insError };
+}
+
 export interface InquiryPayload {
   type?: string;
   service?: string | null;

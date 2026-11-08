@@ -341,6 +341,28 @@ export async function POST(request: Request) {
           } else {
             await safeUpsertCustomer(custPayload);
           }
+
+          // Persist customer authentication credentials in system_settings for secure customer-login
+          if (cleanEmail) {
+            try {
+              const passHash = await hashPassword(rawPassword);
+              await supabase.from('system_settings').upsert({
+                key: `customer_auth_${cleanEmail}`,
+                value: JSON.stringify({
+                  customerId: syncId,
+                  name: result.customer.name,
+                  email: cleanEmail,
+                  phone: cleanPhone,
+                  passwordHash: passHash,
+                  plainPassword: rawPassword,
+                  updatedAt: new Date().toISOString(),
+                }),
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'key' });
+            } catch (authErr) {
+              console.warn('Customer auth credentials save notice:', authErr);
+            }
+          }
         } catch (sbErr) {
           console.warn('Supabase customer upsert notice:', sbErr);
         }
@@ -384,12 +406,32 @@ export async function PUT(request: Request) {
       });
 
       if (customer) {
-        if (password && customer.userId) {
+        if (password) {
           const hashedPassword = await hashPassword(password);
-          await prisma.user.update({
-            where: { id: customer.userId },
-            data: { password: hashedPassword },
-          }).catch(() => {});
+          if (customer?.userId) {
+            await prisma.user.update({
+              where: { id: customer.userId },
+              data: { password: hashedPassword },
+            }).catch(() => {});
+          }
+          const cEmail = (updateData.email || customer?.email || '').toLowerCase().trim();
+          if (cEmail && isSupabaseConfigured) {
+            try {
+              await supabase.from('system_settings').upsert({
+                key: `customer_auth_${cEmail}`,
+                value: JSON.stringify({
+                  customerId: id,
+                  name: updateData.name || customer?.name,
+                  email: cEmail,
+                  phone: updateData.phone || customer?.phone,
+                  passwordHash: hashedPassword,
+                  plainPassword: password,
+                  updatedAt: new Date().toISOString(),
+                }),
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'key' });
+            } catch {}
+          }
         }
 
         updatedCustomer = await prisma.customer.update({

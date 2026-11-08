@@ -34,6 +34,7 @@ import {
   Trash2,
   RotateCcw,
   Archive,
+  Pencil,
   AlertTriangle,
   FileSpreadsheet,
   Truck,
@@ -179,6 +180,15 @@ function CashBooksContent() {
   const [deletingTx, setDeletingTx] = useState(false);
   const [archiveBookOpen, setArchiveBookOpen] = useState(false);
   const [archivingBook, setArchivingBook] = useState(false);
+  const [editBookOpen, setEditBookOpen] = useState(false);
+  const [editingBookData, setEditingBookData] = useState({
+    name: "",
+    city: "Lahore",
+    description: "",
+  });
+  const [savingBookName, setSavingBookName] = useState(false);
+  const [deleteBookOpen, setDeleteBookOpen] = useState(false);
+  const [deletingBook, setDeletingBook] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -864,6 +874,101 @@ function CashBooksContent() {
     }
   };
 
+  // Open Edit Cash Book modal
+  const openEditBook = () => {
+    if (!selectedBook) return;
+    setEditingBookData({
+      name: selectedBook.name || "",
+      city: selectedBook.city || "Lahore",
+      description: selectedBook.description || "",
+    });
+    setEditBookOpen(true);
+  };
+
+  // Update Cash Book Name & Details (PUT /api/admin/cash-books)
+  const handleUpdateBookName = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedBook || !editingBookData.name.trim()) return;
+    try {
+      setSavingBookName(true);
+      const res = await fetch("/api/admin/cash-books", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedBook.id,
+          name: editingBookData.name.trim(),
+          city: editingBookData.city,
+          description: editingBookData.description,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update cash book");
+      }
+
+      const updatedBook: CashBookItem = {
+        ...selectedBook,
+        name: editingBookData.name.trim(),
+        city: editingBookData.city,
+        description: editingBookData.description,
+      };
+
+      setSelectedBook(updatedBook);
+      setCashBooks((prev) => {
+        const next = prev.map((b) => (b.id === selectedBook.id ? updatedBook : b));
+        try {
+          localStorage.setItem("spd_cash_books", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
+      setEditBookOpen(false);
+      setFeedback({ type: "success", message: `Cash book renamed to "${updatedBook.name}".` });
+      toast.success("Cash book name updated successfully");
+      await fetchCashBooks();
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Failed to update cash book" });
+      toast.error(err.message || "Failed to update cash book");
+    } finally {
+      setSavingBookName(false);
+    }
+  };
+
+  // Permanent Delete Cash Book (checks for existing transactions)
+  const handleDeleteBook = async () => {
+    if (!selectedBook) return;
+    try {
+      setDeletingBook(true);
+      const res = await fetch(`/api/admin/cash-books?cashBookId=${selectedBook.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete cash book");
+      }
+
+      setDeleteBookOpen(false);
+      setArchiveBookOpen(false);
+      setFeedback({ type: "success", message: `"${selectedBook.name}" deleted successfully.` });
+      toast.success(`"${selectedBook.name}" deleted successfully.`);
+
+      setCashBooks((prev) => {
+        const remaining = prev.filter((b) => b.id !== selectedBook.id);
+        try {
+          localStorage.setItem("spd_cash_books", JSON.stringify(remaining));
+        } catch {}
+        setSelectedBook(remaining[0] || null);
+        return remaining;
+      });
+      await fetchCashBooks();
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Delete error" });
+      toast.error(err.message || "Delete error");
+    } finally {
+      setDeletingBook(false);
+    }
+  };
+
   // Helper to extract clean party name
   const getTxPartyName = (t: TransactionItem): string => {
     return (t.party || t.accountPerson || t.customer?.name || t.driverName || "").trim();
@@ -1409,15 +1514,26 @@ function CashBooksContent() {
           </div>
 
           {selectedBook && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setArchiveBookOpen(true)}
-              className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 h-8 font-bold"
-            >
-              <Archive className="w-3.5 h-3.5 mr-1" />
-              Archive Book
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={openEditBook}
+                className="text-xs text-spd-blue hover:text-spd-blue hover:bg-spd-blue/10 h-8 font-bold"
+              >
+                <Pencil className="w-3.5 h-3.5 mr-1" />
+                Edit Name
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteBookOpen(true)}
+                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 h-8 font-bold"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                Delete Book
+              </Button>
+            </div>
           )}
         </div>
 
@@ -2560,37 +2676,128 @@ function CashBooksContent() {
       </Dialog>
 
       {/* ======================================================== */}
-      {/* MODAL 5: ARCHIVE CASH BOOK */}
+      {/* MODAL 5: EDIT CASH BOOK */}
       {/* ======================================================== */}
-      <Dialog open={archiveBookOpen} onOpenChange={setArchiveBookOpen}>
-        <DialogContent className="sm:max-w-[420px]">
+      <Dialog open={editBookOpen} onOpenChange={setEditBookOpen}>
+        <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-rose-600">
-              <Archive className="w-5 h-5" />
-              <span>Archive Cash Book</span>
+            <DialogTitle className="flex items-center gap-2 text-spd-blue">
+              <Pencil className="w-5 h-5" />
+              <span>Edit Cash Book Details</span>
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to archive &quot;{selectedBook?.name}&quot;? Existing transactions will be preserved in the archive.
+              Update the name, city, or description for &quot;{selectedBook?.name}&quot;. The Cash Book ID and transaction ledger remain preserved.
             </DialogDescription>
           </DialogHeader>
+
+          <form onSubmit={handleUpdateBookName} className="space-y-4">
+            <div>
+              <Label className="text-xs font-bold">Cash Book Name *</Label>
+              <Input
+                required
+                value={editingBookData.name}
+                onChange={(e) => setEditingBookData({ ...editingBookData, name: e.target.value })}
+                className="h-9 text-xs mt-1"
+                placeholder="Enter Cash Book Name"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">City / Station *</Label>
+                <Input
+                  required
+                  value={editingBookData.city}
+                  onChange={(e) => setEditingBookData({ ...editingBookData, city: e.target.value })}
+                  className="h-9 text-xs mt-1"
+                  placeholder="e.g. Lahore"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold text-muted-foreground">Cash Book ID (Fixed)</Label>
+                <Input
+                  disabled
+                  value={selectedBook?.id || ""}
+                  className="h-9 text-xs mt-1 font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-bold">Description / Purpose</Label>
+              <Input
+                value={editingBookData.description}
+                onChange={(e) => setEditingBookData({ ...editingBookData, description: e.target.value })}
+                className="h-9 text-xs mt-1"
+                placeholder="Operational purpose or station note"
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditBookOpen(false)}
+                className="rounded-xl text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={savingBookName || !editingBookData.name.trim()}
+                className="bg-spd-blue hover:bg-spd-blue/90 text-white rounded-xl text-xs font-bold"
+              >
+                {savingBookName && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                Save Updated Name
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ======================================================== */}
+      {/* MODAL 6: DELETE CASH BOOK */}
+      {/* ======================================================== */}
+      <Dialog open={deleteBookOpen || archiveBookOpen} onOpenChange={(open) => { setDeleteBookOpen(open); setArchiveBookOpen(open); }}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-600">
+              <Trash2 className="w-5 h-5" />
+              <span>Delete Cash Book</span>
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete &quot;{selectedBook?.name}&quot;?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl text-xs text-amber-800 dark:text-amber-300">
+            <div className="flex items-center gap-2 font-bold mb-1">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Financial Audit Safety Rule</span>
+            </div>
+            <p className="text-[11px] leading-relaxed">
+              If this Cash Book contains any recorded financial transactions, deletion will be blocked to maintain complete audit history. Only empty Cash Books can be deleted.
+            </p>
+          </div>
 
           <DialogFooter className="pt-2">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setArchiveBookOpen(false)}
+              onClick={() => { setDeleteBookOpen(false); setArchiveBookOpen(false); }}
               className="rounded-xl text-xs"
             >
               Cancel
             </Button>
             <Button
               type="button"
-              onClick={handleArchiveBook}
-              disabled={archivingBook}
+              onClick={handleDeleteBook}
+              disabled={deletingBook}
               className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold"
             >
-              {archivingBook && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-              Archive Book
+              {deletingBook && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              Confirm Delete Book
             </Button>
           </DialogFooter>
         </DialogContent>

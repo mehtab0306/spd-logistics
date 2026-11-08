@@ -87,7 +87,7 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
           documentNumber={billNumber}
           date={billDate}
           copyFor="ORIGINAL BILL"
-          station={bilty.warehouse ? `${bilty.warehouse} Station` : "Karachi / Lahore Hub"}
+          station={bilty.warehouse ? `${bilty.warehouse} Station` : "Head Office Station (Lahore)"}
         />
 
         {/* Bill To & Invoice Metadata Row */}
@@ -158,7 +158,7 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
         <div className="border border-black p-2 bg-slate-50 text-[10px] grid grid-cols-5 gap-2">
           <div>
             <span className="text-slate-500 block text-[8.5px] uppercase">Vehicle #</span>
-            <span className="font-mono font-bold text-black">{bilty.vehicleNumber || "Assigned Truck"}</span>
+            <span className="font-mono font-bold text-black">{bilty.vehicleNumber || "/"}</span>
           </div>
           <div>
             <span className="text-slate-500 block text-[8.5px] uppercase">Driver Name</span>
@@ -313,20 +313,23 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
         </div>
 
         {/* Signatures & Corporate Seal Block */}
-        <div className="grid grid-cols-3 gap-8 text-center text-xs pt-6 border-t border-black break-inside-avoid">
+        <div className="grid grid-cols-3 gap-8 text-center text-xs pt-2 break-inside-avoid">
           <div>
+            <div className="h-14 min-h-[50px]" />
             <div className="border-t-2 border-black pt-1 font-bold uppercase text-[9.5px] text-black">
               Prepared By
             </div>
             <div className="text-[8.5px] text-slate-500 mt-0.5">Billing & Accounts Clerk</div>
           </div>
           <div>
+            <div className="h-14 min-h-[50px]" />
             <div className="border-t-2 border-black pt-1 font-bold uppercase text-[9.5px] text-black">
               Checked & Verified
             </div>
             <div className="text-[8.5px] text-slate-500 mt-0.5">Manager Finance</div>
           </div>
           <div>
+            <div className="h-14 min-h-[50px]" />
             <div className="border-t-2 border-black pt-1 font-bold uppercase text-[9.5px] text-black">
               For Super Pak Data Wale Goods Transport Co.®
             </div>

@@ -62,7 +62,7 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
           documentNumber={taxInvoiceNo}
           date={invoiceDate}
           copyFor="ORIGINAL TAX INVOICE"
-          station={bilty.warehouse ? `${bilty.warehouse} Station` : "Karachi / Lahore Hub"}
+          station={bilty.warehouse ? `${bilty.warehouse} Station` : "Head Office Station (Lahore)"}
         />
 
         {/* Supplier & Buyer Two-Column Structured Grid */}
@@ -130,7 +130,7 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
           </div>
           <div>
             <span className="text-slate-500 block text-[8.5px] uppercase">Vehicle / Truck #</span>
-            <span className="font-mono font-bold text-black">{bilty.vehicleNumber || "Assigned Fleet"}</span>
+            <span className="font-mono font-bold text-black">{bilty.vehicleNumber || "/"}</span>
           </div>
         </div>
 
@@ -226,14 +226,16 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
         </div>
 
         {/* Official Signatures & Seal Block */}
-        <div className="grid grid-cols-2 gap-12 text-center text-xs pt-6 border-t border-black break-inside-avoid">
+        <div className="grid grid-cols-2 gap-12 text-center text-xs pt-2 break-inside-avoid">
           <div>
+            <div className="h-14 min-h-[50px]" />
             <div className="border-t-2 border-black pt-1 font-bold uppercase text-[9.5px] text-black">
               Prepared & Verified By
             </div>
             <div className="text-[8.5px] text-slate-500 mt-0.5">Sales Tax & Billing Department</div>
           </div>
           <div>
+            <div className="h-14 min-h-[50px]" />
             <div className="border-t-2 border-black pt-1 font-bold uppercase text-[9.5px] text-black">
               For Super Pak Data Wale Goods Transport Co.®
             </div>

@@ -386,18 +386,37 @@ export default function AccountsPage() {
         const custCompNorm = (acc.customer?.companyName || "").toLowerCase().trim();
         const custId = acc.customerId || acc.customer?.id;
 
-        // A. Post newly generated and local bilties as DEBIT entries (Freight billed)
+        // A. Post newly generated and local bilties as DEBIT entries (Freight billed to the single responsible account)
         const matchedBilties = uniqueBilties.filter((b: any) => {
-          const bCustId = b.customerId && b.customerId === custId;
-          const sMatch =
-            (custNameNorm && b.senderName?.toLowerCase().includes(custNameNorm)) ||
-            (custCompNorm && b.senderName?.toLowerCase().includes(custCompNorm)) ||
-            (accNameNorm && b.senderName?.toLowerCase().includes(accNameNorm));
-          const rMatch =
-            (custNameNorm && b.receiverName?.toLowerCase().includes(custNameNorm)) ||
-            (custCompNorm && b.receiverName?.toLowerCase().includes(custCompNorm)) ||
-            (accNameNorm && b.receiverName?.toLowerCase().includes(accNameNorm));
-          return bCustId || sMatch || rMatch;
+          // If customerId is explicitly set on the bilty, use that stable database ID
+          if (b.customerId && custId) {
+            return String(b.customerId) === String(custId);
+          }
+
+          const bSender = (b.senderName || "").toLowerCase().trim();
+          const bReceiver = (b.receiverName || "").toLowerCase().trim();
+
+          const isSenderMatch =
+            (b.senderId && custId && String(b.senderId) === String(custId)) ||
+            (custNameNorm && bSender === custNameNorm) ||
+            (custCompNorm && bSender === custCompNorm) ||
+            (accNameNorm && bSender === accNameNorm);
+
+          const isReceiverMatch =
+            (b.receiverId && custId && String(b.receiverId) === String(custId)) ||
+            (custNameNorm && bReceiver === custNameNorm) ||
+            (custCompNorm && bReceiver === custCompNorm) ||
+            (accNameNorm && bReceiver === accNameNorm);
+
+          // One Bilty must only debit ONE responsible party/account:
+          // If explicitly marked as Bill To: Receiver, receiver is billed.
+          // Otherwise, sender is billed. Never debit both accounts for the same bilty.
+          const billToReceiver = (b.billTo && String(b.billTo).toLowerCase() === "receiver");
+          if (billToReceiver) {
+            return isReceiverMatch;
+          }
+
+          return isSenderMatch;
         });
 
         for (const b of matchedBilties) {

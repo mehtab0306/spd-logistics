@@ -46,7 +46,7 @@ import {
 import { PAKISTAN_CITIES } from "@/lib/constants";
 import { exportToExcel } from "@/lib/export-excel";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertChallan, generateUUID } from "@/lib/supabase";
 
 export default function ChallanPage() {
   const router = useRouter();
@@ -467,7 +467,7 @@ export default function ChallanPage() {
 
     setSubmitting(true);
     try {
-      const uniqueId = Date.now().toString();
+      const uniqueId = generateUUID();
       const timestamp = new Date().toISOString();
       const year = new Date().getFullYear();
       const finalChallanNo =
@@ -515,31 +515,29 @@ export default function ChallanPage() {
         createdAt: timestamp,
       };
 
-      // 1. Enforce Cloud Database Persistence
+      // 1. Enforce Cloud Database Persistence via schema-safe upsert
       let savedSuccessfully = false;
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { error: sbErr } = await supabase.from("challans").upsert([
-          {
-            id: String(newChallanRecord.id),
-            challan_number: finalChallanNo,
-            vehicle_number: newChallanRecord.truckNumber || null,
-            driver_name: newChallanRecord.driverName || null,
-            driver_phone: newChallanRecord.driverPhone || null,
-            origin: newChallanRecord.origin || null,
-            destination: newChallanRecord.destination || null,
-            total_truck_hire: Number(truckFreightCost) || 0,
-            advance_paid: Number(driverAdvancePaid) || 0,
-            balance_payable: Number(driverBalanceDue) || 0,
-            status: "In Transit",
-          },
-        ]);
+        const { success: sbOk, data: sbData, error: sbErr } = await safeUpsertChallan({
+          id: uniqueId,
+          challan_number: finalChallanNo,
+          vehicle_number: newChallanRecord.truckNumber || null,
+          driver_name: newChallanRecord.driverName || null,
+          driver_phone: newChallanRecord.driverPhone || null,
+          status: "In Transit",
+          dispatch_date: newChallanRecord.date,
+          created_at: timestamp,
+        });
 
-        if (sbErr) {
-          lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
+        if (!sbOk || sbErr) {
+          lastErrorMessage = `Supabase write failed: ${sbErr?.message || JSON.stringify(sbErr)}`;
         } else {
           savedSuccessfully = true;
+          if (sbData?.id) {
+            newChallanRecord.id = sbData.id;
+          }
 
           // Update linked bilties status in Supabase
           if (selectedBiltyIds.length > 0) {

@@ -158,9 +158,16 @@ export default function ReceivablesPage() {
                 const cCompNorm = (cust.companyName || "").toLowerCase().trim();
 
                 const matchingLocal = localBilties.filter((b: any) => {
-                  const bCId = b.customerId && b.customerId === cust.customerId;
-                  const bSender = (cNameNorm && b.senderName?.toLowerCase().includes(cNameNorm)) || (cCompNorm && b.senderName?.toLowerCase().includes(cCompNorm));
-                  return bCId || bSender;
+                  if (b.customerId && cust.customerId) {
+                    return String(b.customerId) === String(cust.customerId);
+                  }
+                  const bSender = (b.senderName || "").toLowerCase().trim();
+                  const bReceiver = (b.receiverName || "").toLowerCase().trim();
+                  const billToReceiver = (b.billTo && String(b.billTo).toLowerCase() === "receiver");
+                  if (billToReceiver) {
+                    return (cNameNorm && bReceiver === cNameNorm) || (cCompNorm && bReceiver === cCompNorm);
+                  }
+                  return (cNameNorm && bSender === cNameNorm) || (cCompNorm && bSender === cCompNorm);
                 });
 
                 const existingBilties = [...cust.bilties];

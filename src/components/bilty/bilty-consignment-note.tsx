@@ -110,7 +110,7 @@ export function BiltyConsignmentNote({
           documentNumber={biltyNumber}
           date={bilty.bookingDate ? formatDate(bilty.bookingDate) : bilty.date ? formatDate(bilty.date) : undefined}
           copyFor={selectedCopy}
-          station={bilty.warehouse ? `${bilty.warehouse} Hub` : "Head Office Station (Lahore)"}
+          station={bilty.warehouse ? `${bilty.warehouse} Station` : "Head Office Station (Lahore)"}
         />
 
         {/* Route, Commercial & Booking Metadata Bar */}
@@ -126,7 +126,7 @@ export function BiltyConsignmentNote({
             </div>
             <div>
               <span className="text-[8.5px] uppercase text-slate-500 block">Vehicle / Truck #</span>
-              <span className="font-mono font-bold text-black">{bilty.vehicleNumber || "Pending"}</span>
+              <span className="font-mono font-bold text-black">{bilty.vehicleNumber || "/"}</span>
             </div>
             <div>
               <span className="text-[8.5px] uppercase text-slate-500 block">Driver In-Charge</span>
@@ -385,26 +385,30 @@ export function BiltyConsignmentNote({
         </div>
 
         {/* Signatures & Stamp Block */}
-        <div className="grid grid-cols-4 gap-4 text-center text-xs pt-4 border-t border-black break-inside-avoid">
+        <div className="grid grid-cols-4 gap-4 text-center text-xs pt-2 break-inside-avoid">
           <div>
+            <div className="h-14 min-h-[50px]" />
             <div className="border-t border-black pt-1 font-bold uppercase text-[9px] text-black">
               Shipper&apos;s Signature
             </div>
             <div className="text-[8px] text-slate-500 mt-0.5">Consignor Acceptance</div>
           </div>
           <div>
+            <div className="h-14 min-h-[50px]" />
             <div className="border-t border-black pt-1 font-bold uppercase text-[9px] text-black">
               Booking Officer
             </div>
             <div className="text-[8px] text-slate-500 mt-0.5">Super Pak Data Wale Stamp</div>
           </div>
           <div>
+            <div className="h-14 min-h-[50px]" />
             <div className="border-t border-black pt-1 font-bold uppercase text-[9px] text-black">
               Driver In-Charge
             </div>
             <div className="text-[8px] text-slate-500 mt-0.5">Fleet Linehaul Signature</div>
           </div>
           <div>
+            <div className="h-14 min-h-[50px]" />
             <div className="border-t border-black pt-1 font-bold uppercase text-[9px] text-black">
               Consignee Signature
             </div>

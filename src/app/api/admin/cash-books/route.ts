@@ -707,6 +707,26 @@ export async function DELETE(request: Request) {
 
     // Delete / archive entire Cash Book
     if (cashBookId) {
+      // 1. Transaction dependency check to protect historical financial records
+      let txCount = 0;
+      try {
+        txCount = await prisma.cashBookTransaction.count({ where: { cashBookId } });
+      } catch {}
+
+      const centralTxs = (getCentralCollection('cashTransactions') || []) as any[];
+      const centralBookTxs = centralTxs.filter((t: any) => t.cashBookId === cashBookId);
+      const totalTxs = Math.max(txCount, centralBookTxs.length);
+
+      if (totalTxs > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Cannot delete Cash Book because it contains ${totalTxs} recorded financial transaction(s). Historical financial records cannot be deleted for audit and compliance safety.`,
+          },
+          { status: 400 }
+        );
+      }
+
       if (isSupabaseConfigured) {
         try {
           await supabase.from('cash_books').delete().eq('id', cashBookId);
@@ -736,5 +756,92 @@ export async function DELETE(request: Request) {
   } catch (error: any) {
     console.error('Error deleting cash book entry:', error);
     return NextResponse.json({ success: false, error: error.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+    if (auth.errorResponse) return auth.errorResponse;
+
+    const body = await request.json();
+    const { id, name, description, city } = body;
+
+    if (!id || !name || !String(name).trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Cash Book ID and Name are required' },
+        { status: 400 }
+      );
+    }
+
+    const cleanName = String(name).trim();
+    const cleanDesc = description ? String(description).trim() : null;
+    const cleanCity = city ? String(city).trim() : null;
+
+    // 1. Update in Prisma
+    let updated: any = null;
+    try {
+      updated = await prisma.cashBook.update({
+        where: { id },
+        data: {
+          name: cleanName,
+          description: cleanDesc,
+          city: cleanCity,
+        },
+      });
+    } catch (dbErr) {
+      console.warn('Prisma cashBook update notice:', dbErr);
+    }
+
+    // 2. Update in Central Store
+    updateCentralRecord('cashBooks', id, {
+      name: cleanName,
+      description: cleanDesc,
+      city: cleanCity,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // 3. Persist update in Supabase system_settings
+    if (isSupabaseConfigured) {
+      try {
+        const { data: existingSettings } = await supabase
+          .from('system_settings')
+          .select('*')
+          .eq('key', 'custom_cash_books')
+          .maybeSingle();
+
+        let booksList: any[] = [];
+        if (existingSettings?.value) {
+          try {
+            booksList = JSON.parse(existingSettings.value);
+          } catch {}
+        }
+        const idx = booksList.findIndex((b: any) => b.id === id);
+        if (idx >= 0) {
+          booksList[idx] = { ...booksList[idx], name: cleanName, description: cleanDesc, city: cleanCity };
+        } else {
+          booksList.push({ id, name: cleanName, description: cleanDesc, city: cleanCity });
+        }
+        await supabase.from('system_settings').upsert({
+          key: 'custom_cash_books',
+          value: JSON.stringify(booksList),
+          updated_at: new Date().toISOString(),
+        });
+      } catch (sbErr) {
+        console.warn('Supabase cashBook update notice:', sbErr);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Cash book updated successfully',
+      data: updated || { id, name: cleanName, description: cleanDesc, city: cleanCity },
+    });
+  } catch (error: any) {
+    console.error('Error updating cash book:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to update cash book' },
+      { status: 500 }
+    );
   }
 }

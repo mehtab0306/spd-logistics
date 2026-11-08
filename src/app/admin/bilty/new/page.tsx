@@ -55,12 +55,12 @@ import {
   saveStoredBilty,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
-import { PAKISTAN_CITIES } from "@/lib/constants";
+import { PAKISTAN_CITIES, CARGO_DESCRIPTION_OPTIONS } from "@/lib/constants";
 import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
 import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID } from "@/lib/supabase";
 
-export interface BiltyCargoItem {
+interface BiltyCargoItem {
   detail: string;
   quantity: string | number;
   weight: string | number;
@@ -100,7 +100,7 @@ export default function NewBiltyPage() {
   // Dynamic Cargo Items Rows
   const [items, setItems] = useState<BiltyCargoItem[]>([
     {
-      detail: "General Commercial Merchandise",
+      detail: "",
       quantity: "1",
       weight: "100",
       volume: "",
@@ -192,13 +192,17 @@ export default function NewBiltyPage() {
 
   useEffect(() => {
     fetchPrerequisites();
-    // Auto-generate initial bilty number if empty
     setFormData((prev) => {
+      const year = new Date().getFullYear();
+      const updates: any = {};
       if (!prev.biltyNumber) {
-        return {
-          ...prev,
-          biltyNumber: generateBiltyNumberCandidate(prev.origin || "Karachi"),
-        };
+        updates.biltyNumber = generateBiltyNumberCandidate(prev.origin || "Karachi");
+      }
+      if (!prev.trackingId) {
+        updates.trackingId = `SPD-${year}-${Math.floor(100000 + Math.random() * 900000)}`;
+      }
+      if (Object.keys(updates).length > 0) {
+        return { ...prev, ...updates };
       }
       return prev;
     });
@@ -660,7 +664,7 @@ export default function NewBiltyPage() {
     });
     setItems([
       {
-        detail: "General Commercial Merchandise",
+        detail: "",
         quantity: "1",
         weight: "100",
         volume: "",
@@ -1136,7 +1140,7 @@ export default function NewBiltyPage() {
             className="border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl shadow-xs gap-2 h-10 px-4"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4 text-slate-600 dark:text-slate-300" />}
-            <span>Save &amp; Print 4-Sheet Dossier</span>
+            <span>Save &amp; Print Complete Sheets</span>
           </Button>
           <Button
             type="button"
@@ -1167,7 +1171,7 @@ export default function NewBiltyPage() {
             <Link href={`/admin/bilty/${encodeURIComponent(savedBilty.biltyNumber)}`}>
               <Button size="sm" variant="outline" className="rounded-xl text-xs font-bold gap-1 h-8 bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-50">
                 <FileText className="w-3.5 h-3.5" />
-                <span>Open 4-Sheet Dossier Now</span>
+                <span>Open Complete Sheets Now</span>
               </Button>
             </Link>
           )}
@@ -1717,13 +1721,32 @@ export default function NewBiltyPage() {
                     <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
                       1. Item Detail / Description *
                     </Label>
-                    <Input
-                      required
-                      value={item.detail}
-                      placeholder=""
-                      onChange={(e) => handleItemChange(index, "detail", e.target.value)}
-                      className="rounded-xl h-9 text-xs font-medium bg-white dark:bg-slate-900"
-                    />
+                    <select
+                      value={CARGO_DESCRIPTION_OPTIONS.includes(item.detail) ? item.detail : (item.detail ? "Other / Custom" : "")}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "Other / Custom") {
+                          handleItemChange(index, "detail", item.detail && !CARGO_DESCRIPTION_OPTIONS.includes(item.detail) ? item.detail : "");
+                        } else {
+                          handleItemChange(index, "detail", val);
+                        }
+                      }}
+                      className="w-full h-9 px-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                    >
+                      <option value="" disabled>Select Cargo / Package Type</option>
+                      {CARGO_DESCRIPTION_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                    {(!CARGO_DESCRIPTION_OPTIONS.filter((o) => o !== "Other / Custom").includes(item.detail)) && (
+                      <Input
+                        required
+                        value={item.detail === "Other / Custom" ? "" : item.detail}
+                        placeholder="Enter custom description or package type..."
+                        onChange={(e) => handleItemChange(index, "detail", e.target.value)}
+                        className="rounded-xl h-8 text-xs font-medium bg-white dark:bg-slate-900 mt-1"
+                      />
+                    )}
                   </div>
 
                   <div className="sm:col-span-1 space-y-1">
@@ -2232,7 +2255,7 @@ export default function NewBiltyPage() {
               ) : (
                 <Printer className="w-4 h-4 text-slate-600 dark:text-slate-300" />
               )}
-              <span>Save &amp; Print 4-Sheet Dossier</span>
+              <span>Save &amp; Print Complete Sheets</span>
             </Button>
 
             <Button
@@ -2438,7 +2461,7 @@ export default function NewBiltyPage() {
                   className="bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl h-10 gap-2 shadow-xs"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Print 4-Sheet Dossier</span>
+                  <span>Print Complete Sheets</span>
                 </Button>
 
                 <Button

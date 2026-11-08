@@ -81,7 +81,7 @@ export default function BiltyConsignmentPrintPage() {
             className="rounded-xl text-xs font-bold gap-1.5"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Dossier</span>
+            <span>Back to Sheets</span>
           </Button>
           <span className="text-xs text-slate-400">|</span>
           <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">

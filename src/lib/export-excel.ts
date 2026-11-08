@@ -430,7 +430,7 @@ export function export4SheetBiltyExcel(bilty: any): boolean {
         <Cell ss:MergeAcross="3" ss:StyleID="SubHeader"><Data ss:Type="String">CONSIGNMENT NOTE / BILTY (OFFICE / CUSTOMER COPY)</Data></Cell>
       </Row>
       <Row>
-        <Cell ss:MergeAcross="3" ss:StyleID="SubHeader"><Data ss:Type="String">Karachi: 0300-2024433, 021-32351333 | Lahore: 0346-2024433 | Web: superpakdata.com</Data></Cell>
+        <Cell ss:MergeAcross="3" ss:StyleID="SubHeader"><Data ss:Type="String">Karachi: 0300-2024433, 021-32351333 | Lahore: 0325-2024433 | Web: superpakdata.com</Data></Cell>
       </Row>
       <Row><Cell><Data ss:Type="String"></Data></Cell></Row>
       <Row>

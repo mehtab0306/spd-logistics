@@ -322,14 +322,29 @@ export default function CustomersPage() {
         const cCompNorm = (c.companyName || "").toLowerCase().trim();
 
         const matchedBilties = allBilties.filter((b: any) => {
-          const bCIdMatch = b.customerId && String(b.customerId) === String(c.id);
+          if (b.customerId && c.id) {
+            return String(b.customerId) === String(c.id);
+          }
+
+          const bSender = (b.senderName || "").toLowerCase().trim();
+          const bReceiver = (b.receiverName || "").toLowerCase().trim();
+
           const bSenderMatch =
-            (cNameNorm && b.senderName?.toLowerCase().includes(cNameNorm)) ||
-            (cCompNorm && b.senderName?.toLowerCase().includes(cCompNorm));
+            (b.senderId && String(b.senderId) === String(c.id)) ||
+            (cNameNorm && bSender === cNameNorm) ||
+            (cCompNorm && bSender === cCompNorm);
+
           const bReceiverMatch =
-            (cNameNorm && b.receiverName?.toLowerCase().includes(cNameNorm)) ||
-            (cCompNorm && b.receiverName?.toLowerCase().includes(cCompNorm));
-          return bCIdMatch || bSenderMatch || bReceiverMatch;
+            (b.receiverId && String(b.receiverId) === String(c.id)) ||
+            (cNameNorm && bReceiver === cNameNorm) ||
+            (cCompNorm && bReceiver === cCompNorm);
+
+          const billToReceiver = (b.billTo && String(b.billTo).toLowerCase() === "receiver");
+          if (billToReceiver) {
+            return bReceiverMatch;
+          }
+
+          return bSenderMatch;
         });
 
         // Generate dynamic ledger transactions
