@@ -106,10 +106,9 @@ export function BiltyConsignmentNote({
       >
         {/* Official Header */}
         <BiltyTransportHeader
-          title="Consignment Note / Bilty"
+          title="CONSIGNMENT NOTE / BILTY"
           documentNumber={biltyNumber}
           date={bilty.bookingDate ? formatDate(bilty.bookingDate) : bilty.date ? formatDate(bilty.date) : undefined}
-          copyFor={selectedCopy}
           station={bilty.warehouse ? `${bilty.warehouse} Station` : "Head Office Station (Lahore)"}
         />
 
@@ -249,6 +248,7 @@ export function BiltyConsignmentNote({
                   <td className="p-1.5 border-r border-black text-center font-bold text-slate-600">{idx + 1}</td>
                   <td className="p-1.5 border-r border-black font-semibold text-black">
                     {item.detail || "General Commercial Merchandise"}
+                    {item.bundleDescription ? ` (${item.bundleDescription})` : ""}
                   </td>
                   <td className="p-1.5 border-r border-black text-center font-mono font-bold">
                     {item.quantity || 1}

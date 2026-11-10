@@ -31,11 +31,11 @@ export function BiltyTransportHeader({
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           <img
-            src="/images/spd-logo.jpg"
+            src="/images/spd-logo.png"
             alt="SPD Logistics"
-            className="h-16 w-16 object-contain rounded border border-slate-400 shrink-0 mt-0.5"
+            className="h-16 w-16 object-contain shrink-0 mt-0.5"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = "/images/spd-logo.png";
+              (e.target as HTMLImageElement).src = "/images/spd-logo.jpg";
             }}
           />
           <div className="min-w-0 flex-1">
@@ -43,20 +43,20 @@ export function BiltyTransportHeader({
               SUPER PAK DATA WALE GOODS TRANSPORT CO.®
             </h1>
             <p className="text-[10px] font-bold text-slate-800 uppercase tracking-wider mt-0.5">
-              Container & Fleet Logistics • NTN: 1692873-3 • STRN: 17-00-1692-873-3
+              NTN: 1692873-3
             </p>
 
-            {/* Branch Contacts matching Official Excel System */}
+            {/* Branch Contacts & Official Details */}
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] text-slate-700 mt-1 leading-tight">
               <div>
                 <span className="font-bold text-black">Karachi Head Office:</span> Gate 1, St 4, Plot 9, Truck Stand Hawksbay Rd.
                 <br />
-                <span className="font-mono text-slate-900">Ph: 021-32351333, 0300-2024433, 0321-2024433</span>
+                <span className="font-mono text-slate-900 font-bold">Ph: 03002024433, 03212024433, 03022314433</span>
               </div>
               <div>
                 <span className="font-bold text-black">Lahore Branch:</span> Saggian Bypass, Hazrat Ali Rd, Near IGG House.
                 <br />
-                <span className="font-mono text-slate-900">Ph: 0325-2024433, 0301-8264433 | FSD: 0300-3391733</span>
+                <span className="font-mono text-slate-900">Email: superpakdatawale@gmail.com | Web: www.superpakdata.com</span>
               </div>
             </div>
           </div>

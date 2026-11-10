@@ -307,6 +307,21 @@ export async function POST(request: Request) {
       const rawPassword = password || 'spd12345';
       result.customer.loginPassword = rawPassword;
       result.customer.password = rawPassword;
+      result.customer.currentRate = body.currentRate ? Number(body.currentRate) : null;
+      result.customer.rateBasis = body.rateBasis || 'Per KG';
+      result.customer.notes = body.notes || '';
+      result.customer.rateHistory = body.rateHistory || [
+        {
+          effectiveDate: new Date().toISOString().slice(0, 10),
+          previousRate: 0,
+          newRate: body.currentRate ? Number(body.currentRate) : 0,
+          rateBasis: body.rateBasis || 'Per KG',
+          reason: 'Initial agreed contract rate setup',
+          notes: body.notes || '',
+          quotationAttachment: body.quotationAttachment || null,
+        }
+      ];
+      result.customer.quotationAttachment = body.quotationAttachment || null;
       saveCentralRecord('customers', result.customer);
 
       if (isSupabaseConfigured) {
@@ -460,6 +475,15 @@ export async function PUT(request: Request) {
 
     if (!updatedCustomer) {
       updatedCustomer = { id, ...updateData };
+    } else {
+      updatedCustomer = {
+        ...updatedCustomer,
+        currentRate: updateData.currentRate !== undefined ? (updateData.currentRate ? Number(updateData.currentRate) : null) : updatedCustomer.currentRate,
+        rateBasis: updateData.rateBasis || updatedCustomer.rateBasis || 'Per KG',
+        notes: updateData.notes !== undefined ? updateData.notes : updatedCustomer.notes,
+        rateHistory: updateData.rateHistory || updatedCustomer.rateHistory || [],
+        quotationAttachment: updateData.quotationAttachment !== undefined ? updateData.quotationAttachment : updatedCustomer.quotationAttachment,
+      };
     }
 
     saveCentralRecord('customers', updatedCustomer);

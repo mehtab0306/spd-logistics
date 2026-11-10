@@ -83,58 +83,53 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
       <div className="p-5 border-2 border-black rounded-lg print:border-none print:p-0 space-y-3">
         {/* Official Header matching Excel BILL */}
         <BiltyTransportHeader
-          title="Freight Bill / Commercial Invoice"
+          title="FREIGHT BILL / COMMERCIAL INVOICE"
           documentNumber={billNumber}
           date={billDate}
-          copyFor="ORIGINAL BILL"
           station={bilty.warehouse ? `${bilty.warehouse} Station` : "Head Office Station (Lahore)"}
         />
 
-        {/* Bill To & Invoice Metadata Row */}
+        {/* Sender & Receiver Box & Invoice Metadata Row */}
         <div className="grid grid-cols-12 gap-3">
-          {/* Bill To Box (6 cols) */}
-          <div className="col-span-6 p-3 border-2 border-black rounded bg-slate-50">
-            <div className="flex items-center justify-between border-b border-black pb-1 mb-1.5">
-              <span className="font-black uppercase text-[11px] text-blue-900">
-                Bill To / Debtor: {billToParty.role}
+          {/* Sender & Receiver Box (6 cols) */}
+          <div className="col-span-6 p-3 border-2 border-black rounded bg-slate-50 flex flex-col justify-between">
+            <div className="space-y-1">
+              <span className="font-black uppercase text-[10px] text-slate-500 block">
+                Sender / Consignor:
               </span>
-              <span className="text-[9px] font-bold uppercase bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded">
-                {bilty.amountType || "To Be Billed"}
-              </span>
-            </div>
-            <p className="font-black text-sm text-black">{billToParty.name}</p>
-            <p className="text-[10px] text-slate-700 mt-0.5 leading-snug">{billToParty.address}</p>
-            <div className="grid grid-cols-2 gap-2 text-[10px] pt-1.5 mt-1.5 border-t border-slate-300">
-              <p>
-                <span className="text-slate-500">Contact / Phone:</span>{" "}
-                <span className="font-mono font-bold text-black">{billToParty.phone}</span>
+              <p className="font-black text-base text-black tracking-tight">
+                {bilty.senderName || bilty.customer?.name || "Sender"}
               </p>
-              <p>
-                <span className="text-slate-500">Party NTN / STRN:</span>{" "}
-                <span className="font-mono font-bold text-black">{billToParty.ntn}</span>
+            </div>
+            <div className="border-t border-slate-300 pt-2 mt-2 space-y-1">
+              <span className="font-black uppercase text-[10px] text-slate-500 block">
+                Receiver / Consignee:
+              </span>
+              <p className="font-black text-base text-black tracking-tight">
+                {bilty.receiverName || "Receiver"}
               </p>
             </div>
           </div>
 
-          {/* Invoice Summary Box (4 cols) */}
-          <div className="col-span-4 p-3 border-2 border-black rounded bg-white space-y-1 text-[10.5px]">
-            <div className="flex justify-between">
+          {/* Invoice Summary Box with Vehicle Moved to Upper Section (4 cols) */}
+          <div className="col-span-4 p-3 border-2 border-black rounded bg-white space-y-1.5 text-[10.5px]">
+            <div className="flex justify-between items-center">
               <span className="text-slate-500 uppercase text-[9px] font-bold">Bill Reference:</span>
-              <span className="font-mono font-black text-red-700">{billNumber}</span>
+              <span className="font-mono text-sm font-black text-red-700">{billNumber}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-slate-500 uppercase text-[9px] font-bold">Bilty Number:</span>
-              <span className="font-mono font-bold text-black">{biltyNumber}</span>
+              <span className="font-mono text-sm font-black text-black">{biltyNumber}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-slate-500 uppercase text-[9px] font-bold">Billing Date:</span>
-              <span className="font-medium text-black">{billDate}</span>
+              <span className="text-xs font-bold text-black">{billDate}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500 uppercase text-[9px] font-bold">Payment Due:</span>
-              <span className="font-bold text-black">Upon Receipt / 15 Days</span>
+            <div className="flex justify-between items-center border-t border-slate-200 pt-1">
+              <span className="text-slate-500 uppercase text-[9px] font-bold">Vehicle / Truck #:</span>
+              <span className="font-mono text-xs font-black text-slate-900">{bilty.vehicleNumber || "/"}</span>
             </div>
-            <div className="flex justify-between border-t border-black pt-1">
+            <div className="flex justify-between items-center border-t border-black pt-1">
               <span className="text-slate-500 uppercase text-[9px] font-bold">Route / Corridor:</span>
               <span className="font-black uppercase text-black">
                 {bilty.origin || "Lahore"} &rarr; {bilty.destination || "Karachi"}
@@ -154,16 +149,8 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
           </div>
         </div>
 
-        {/* Transport Fleet & Shipment Metadata */}
-        <div className="border border-black p-2 bg-slate-50 text-[10px] grid grid-cols-5 gap-2">
-          <div>
-            <span className="text-slate-500 block text-[8.5px] uppercase">Vehicle #</span>
-            <span className="font-mono font-bold text-black">{bilty.vehicleNumber || "/"}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block text-[8.5px] uppercase">Driver Name</span>
-            <span className="font-bold text-black truncate block">{bilty.driverName || "Linehaul Driver"}</span>
-          </div>
+        {/* Transport Fleet & Shipment Metadata (Driver & LC No Removed) */}
+        <div className="border border-black p-2 bg-slate-50 text-[10px] grid grid-cols-3 gap-3">
           <div>
             <span className="text-slate-500 block text-[8.5px] uppercase">Order / PO #</span>
             <span className="font-mono font-bold text-black">{bilty.poNumber || "-"}</span>
@@ -178,44 +165,54 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
           </div>
         </div>
 
-        {/* Commercial Items & Freight Charges Table */}
+        {/* Commercial Items & Freight Charges Table with CBM Column */}
         <div className="border border-black rounded overflow-hidden">
           <table className="w-full text-left border-collapse table-fixed">
             <colgroup>
-              <col style={{ width: "5%" }} />
-              <col style={{ width: "45%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "38%" }} />
               <col style={{ width: "10%" }} />
               <col style={{ width: "12%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "15%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "14%" }} />
             </colgroup>
             <thead className="bg-slate-100 text-[9.5px] font-black uppercase border-b border-black">
               <tr>
-                <th className="p-2 border-r border-black text-center">S#</th>
+                <th className="p-2 border-r border-black text-center">S.no</th>
                 <th className="p-2 border-r border-black">Description of Transport & Freight Services</th>
                 <th className="p-2 border-r border-black text-center">Qty</th>
                 <th className="p-2 border-r border-black text-right">Weight (KG)</th>
+                <th className="p-2 border-r border-black text-right">CBM</th>
                 <th className="p-2 border-r border-black text-center">Basis</th>
                 <th className="p-2 text-right">Amount (PKR)</th>
               </tr>
             </thead>
             <tbody className="text-[10px]">
-              {items.map((item: any, idx: number) => (
-                <tr key={idx} className="border-b border-slate-200">
-                  <td className="p-2 border-r border-black text-center font-bold text-slate-600">{idx + 1}</td>
-                  <td className="p-2 border-r border-black font-semibold text-black">
-                    {item.detail || "Freight Carriage Charges"} ({bilty.origin} to {bilty.destination})
-                  </td>
-                  <td className="p-2 border-r border-black text-center font-mono font-bold">{item.quantity || 1}</td>
-                  <td className="p-2 border-r border-black text-right font-mono">{item.weight || "-"}</td>
-                  <td className="p-2 border-r border-black text-center text-[9px] uppercase font-semibold text-slate-600">
-                    {item.freightAsPer || "Fixed"}
-                  </td>
-                  <td className="p-2 text-right font-mono font-bold text-black">
-                    {formatCurrency(item.freight || item.rate || initialFreight)}
-                  </td>
-                </tr>
-              ))}
+              {items.map((item: any, idx: number) => {
+                const itemCbm = item.volume ? Number(item.volume) : (bilty.cpm ? Number(bilty.cpm) : null);
+                return (
+                  <tr key={idx} className="border-b border-slate-200">
+                    <td className="p-2 border-r border-black text-center font-bold text-slate-600">{idx + 1}</td>
+                    <td className="p-2 border-r border-black font-semibold text-black">
+                      {item.detail || "Freight Carriage Charges"}
+                      {item.bundleDescription ? ` (${item.bundleDescription})` : ""}
+                      {" "}({bilty.origin} to {bilty.destination})
+                    </td>
+                    <td className="p-2 border-r border-black text-center font-mono font-bold">{item.quantity || 1}</td>
+                    <td className="p-2 border-r border-black text-right font-mono">{item.weight ? `${item.weight} kg` : "-"}</td>
+                    <td className="p-2 border-r border-black text-right font-mono font-semibold text-slate-800">
+                      {itemCbm !== null && !isNaN(itemCbm) ? `${itemCbm} cbm` : "-"}
+                    </td>
+                    <td className="p-2 border-r border-black text-center text-[9px] uppercase font-semibold text-slate-600">
+                      {item.freightAsPer || "Fixed"}
+                    </td>
+                    <td className="p-2 text-right font-mono font-bold text-black">
+                      {formatCurrency(item.freight || item.rate || initialFreight)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -254,19 +251,21 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
               </div>
             </div>
 
-            {/* Bank Payment Details */}
+            {/* Bank Payment Details — Meezan Bank */}
             <div className="mt-2 pt-2 border-t border-black bg-slate-50 p-2 rounded text-[9px] text-slate-800 space-y-0.5">
               <p className="font-black uppercase text-[9.5px] text-red-700">Bank Remittance Instructions:</p>
-              <p><span className="font-bold">Account Title:</span> Super Pak Data Wale Goods Transport Co.</p>
-              <p><span className="font-bold">Bank Name:</span> Bank Alfalah Limited / Meezan Bank Limited</p>
-              <p><span className="font-bold">Account / IBAN:</span> PK36MEZN0001000123456789</p>
+              <p><span className="font-bold">Account Title:</span> SUPER PAK DATA WALE GOODS TRANSPORT CO.</p>
+              <p><span className="font-bold">Bank Name:</span> Meezan Bank</p>
+              <p><span className="font-bold">Branch:</span> Abdalians Cooperative Housing Society</p>
+              <p><span className="font-bold">Account Number:</span> 11650111286305</p>
+              <p><span className="font-bold">IBAN:</span> PK50MEZN0011650111286305</p>
             </div>
           </div>
 
           {/* Totals & Tax Box (5 cols) */}
           <div className="col-span-5 border-2 border-black rounded p-3 space-y-1.5 bg-slate-50 text-[10.5px]">
             <div className="flex justify-between">
-              <span className="text-slate-600">Net Linehaul Freight:</span>
+              <span className="text-slate-600">Freight:</span>
               <span className="font-mono font-bold">{formatCurrency(initialFreight)}</span>
             </div>
             <div className="flex justify-between">

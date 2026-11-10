@@ -42,6 +42,8 @@ export default function NewCustomerPage() {
     warehouse: "KARACHI",
     creditLimit: "",
     openingBalance: "0",
+    currentRate: "",
+    rateBasis: "Per KG",
     photo: "",
     notes: "",
   });
@@ -154,6 +156,19 @@ export default function NewCustomerPage() {
         warehouse: formData.warehouse || "KARACHI",
         creditLimit: credLim,
         openingBalance: openBal,
+        currentRate: formData.currentRate ? Number(formData.currentRate) : null,
+        rateBasis: formData.rateBasis || "Per KG",
+        rateHistory: [
+          {
+            effectiveDate: timestamp.slice(0, 10),
+            previousRate: 0,
+            newRate: formData.currentRate ? Number(formData.currentRate) : 0,
+            rateBasis: formData.rateBasis || "Per KG",
+            reason: "Initial registration rate agreement",
+            notes: formData.notes.trim() || "Base agreed linehaul tariff",
+            quotationAttachment: null,
+          },
+        ],
         photo: photoUrl || null,
         notes: formData.notes.trim() || null,
         status: "ACTIVE",
@@ -577,12 +592,43 @@ export default function NewCustomerPage() {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
+                Agreed Freight Rate (Contract PKR)
+              </Label>
+              <Input
+                type="number"
+                step="any"
+                value={formData.currentRate}
+                placeholder="e.g. 15 or 5000"
+                onChange={(e) => setFormData({ ...formData, currentRate: e.target.value })}
+                className="rounded-xl h-10 text-xs font-mono font-bold"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
+                Agreed Rate Basis
+              </Label>
+              <select
+                value={formData.rateBasis}
+                onChange={(e) => setFormData({ ...formData, rateBasis: e.target.value })}
+                className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+              >
+                <option value="Per KG">Per KG</option>
+                <option value="Per CBM">Per CBM</option>
+                <option value="Per Qty">Per Qty</option>
+                <option value="Fixed Freight">Fixed Freight</option>
+              </select>
+            </div>
+
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
-                Internal Account Notes
+                Internal Account Notes &amp; Rate Terms
               </Label>
               <Input
                 value={formData.notes}
+                placeholder="e.g. Rate valid until Dec 2026, minimum 500 kg dispatch"
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 className="rounded-xl h-10 text-xs"
               />

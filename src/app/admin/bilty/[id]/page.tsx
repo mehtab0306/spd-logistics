@@ -40,46 +40,9 @@ export default function BiltyDetailPage() {
       try {
         let matchedRecord: any = null;
 
-        // 1. Check Supabase database directly for real-time cross-device accuracy
-        if (isSupabaseConfigured) {
-          try {
-            const { data: sbRow } = await supabase
-              .from("bilties")
-              .select("*")
-              .or(`bilty_number.eq.${biltyId},id.eq.${biltyId}`)
-              .maybeSingle();
-
-            if (sbRow) {
-              matchedRecord = {
-                id: sbRow.id || sbRow.bilty_number,
-                biltyNumber: sbRow.bilty_number || sbRow.id,
-                manualBiltyNumber: sbRow.manual_bilty_number || sbRow.bilty_number || sbRow.id,
-                trackingId: sbRow.bilty_number || sbRow.id,
-                bookingDate: sbRow.booking_date || sbRow.created_at || new Date().toISOString(),
-                senderName: sbRow.sender_name || "Walk-in Shipper",
-                senderPhone: sbRow.sender_phone || "",
-                receiverName: sbRow.receiver_name || "Consignee",
-                receiverPhone: sbRow.receiver_phone || "",
-                origin: sbRow.origin_station || sbRow.origin || "Lahore",
-                destination: sbRow.destination_station || sbRow.destination || "Karachi",
-                totalFreight: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
-                totalAmount: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
-                freightAmount: Number(sbRow.freight_amount ?? sbRow.total_freight ?? 0),
-                paidAmount: Number(sbRow.advance_paid ?? 0),
-                remainingBalance: Number(sbRow.remaining_balance ?? 0),
-                paymentMode: sbRow.payment_mode || "TO-PAY",
-                status: sbRow.status || "Booked",
-                shipmentStatus: (sbRow.status || "BOOKED").toUpperCase(),
-                ...sbRow,
-              };
-            }
-          } catch (sbErr) {
-            console.warn("Direct Supabase bilty lookup notice:", sbErr);
-          }
-        }
-
-        // 2. Check spd_selected_bilty & sessionStorage for instant load
-        if (!matchedRecord && typeof window !== "undefined") {
+        // 1. Find local rich record first (contains full breakdown, items, CBM, photos)
+        let localRichRecord: any = null;
+        if (typeof window !== "undefined") {
           try {
             const selected = localStorage.getItem("spd_selected_bilty");
             if (selected) {
@@ -91,12 +54,12 @@ export default function BiltyDetailPage() {
                   String(parsed.manualBiltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
                   String(parsed.trackingId || "").toUpperCase() === biltyId.toUpperCase())
               ) {
-                matchedRecord = parsed;
+                localRichRecord = parsed;
               }
             }
           } catch {}
 
-          if (!matchedRecord) {
+          if (!localRichRecord) {
             try {
               const lastCreated = sessionStorage.getItem("last_created_bilty");
               if (lastCreated) {
@@ -108,26 +71,82 @@ export default function BiltyDetailPage() {
                     String(parsed.manualBiltyNumber || "").toUpperCase() === biltyId.toUpperCase() ||
                     String(parsed.trackingId || "").toUpperCase() === biltyId.toUpperCase())
                 ) {
-                  matchedRecord = parsed;
+                  localRichRecord = parsed;
                 }
               }
             } catch {}
           }
+
+          if (!localRichRecord) {
+            const stored = getStoredBilties();
+            localRichRecord = findMatchInList(stored);
+          }
+
+          if (!localRichRecord) {
+            try {
+              const raw1 = JSON.parse(localStorage.getItem("spd_bilties") || "[]");
+              const raw2 = JSON.parse(localStorage.getItem("spd_local_bilties") || "[]");
+              localRichRecord = findMatchInList([...(Array.isArray(raw1) ? raw1 : []), ...(Array.isArray(raw2) ? raw2 : [])]);
+            } catch {}
+          }
         }
 
-        // 3. Check local storage
-        if (!matchedRecord) {
-          const stored = getStoredBilties();
-          matchedRecord = findMatchInList(stored);
-        }
-
-        // 4. Fallback check raw localStorage keys directly
-        if (!matchedRecord && typeof window !== "undefined") {
+        // 2. Check Supabase database directly for real-time cross-device updates
+        if (isSupabaseConfigured) {
           try {
-            const raw1 = JSON.parse(localStorage.getItem("spd_bilties") || "[]");
-            const raw2 = JSON.parse(localStorage.getItem("spd_local_bilties") || "[]");
-            matchedRecord = findMatchInList([...(Array.isArray(raw1) ? raw1 : []), ...(Array.isArray(raw2) ? raw2 : [])]);
-          } catch {}
+            const { data: sbRow } = await supabase
+              .from("bilties")
+              .select("*")
+              .or(`bilty_number.eq.${biltyId},id.eq.${biltyId}`)
+              .maybeSingle();
+
+            if (sbRow) {
+              matchedRecord = {
+                ...localRichRecord,
+                id: sbRow.id || sbRow.bilty_number || localRichRecord?.id,
+                biltyNumber: sbRow.bilty_number || sbRow.id || localRichRecord?.biltyNumber,
+                manualBiltyNumber: sbRow.manual_bilty_number || localRichRecord?.manualBiltyNumber || sbRow.bilty_number || sbRow.id,
+                trackingId: sbRow.bilty_number || localRichRecord?.trackingId || sbRow.id,
+                bookingDate: sbRow.booking_date || sbRow.created_at || localRichRecord?.bookingDate || new Date().toISOString(),
+                senderName: sbRow.sender_name || localRichRecord?.senderName || "Walk-in Shipper",
+                senderPhone: sbRow.sender_phone || localRichRecord?.senderPhone || "",
+                receiverName: sbRow.receiver_name || localRichRecord?.receiverName || "Consignee",
+                receiverPhone: sbRow.receiver_phone || localRichRecord?.receiverPhone || "",
+                origin: sbRow.origin_station || sbRow.origin || localRichRecord?.origin || "Lahore",
+                destination: sbRow.destination_station || sbRow.destination || localRichRecord?.destination || "Karachi",
+                totalFreight: Number(sbRow.freight_amount ?? sbRow.total_freight ?? localRichRecord?.totalFreight ?? 0),
+                totalAmount: Number(sbRow.freight_amount ?? sbRow.total_freight ?? localRichRecord?.totalAmount ?? 0),
+                freightAmount: Number(sbRow.freight_amount ?? sbRow.total_freight ?? localRichRecord?.freightAmount ?? 0),
+                paidAmount: Number(sbRow.advance_paid ?? localRichRecord?.paidAmount ?? 0),
+                remainingBalance: Number(sbRow.remaining_balance ?? localRichRecord?.remainingBalance ?? 0),
+                paymentMode: sbRow.payment_mode || localRichRecord?.paymentMode || "TO-PAY",
+                status: sbRow.status || localRichRecord?.status || "Booked",
+                shipmentStatus: (sbRow.status || localRichRecord?.shipmentStatus || "BOOKED").toUpperCase(),
+                vehicleNumber: sbRow.vehicle_number || localRichRecord?.vehicleNumber || "Pending",
+                driverName: sbRow.driver_name || localRichRecord?.driverName || "Pending",
+                additionalChargesBreakdown: localRichRecord?.additionalChargesBreakdown || {
+                  godownStorage: sbRow.storage_charges || 0,
+                  labour: sbRow.labour_charges || 0,
+                  pickupLocal: 0,
+                  deliveryLocal: 0,
+                  lifterCrane: 0,
+                  other: sbRow.other_charges || 0,
+                },
+                items: (localRichRecord?.items && localRichRecord.items.length > 0) ? localRichRecord.items : (sbRow.item_description ? [{ detail: sbRow.item_description, packages: sbRow.packages_count || 1, weight: sbRow.weight || 0, rate: sbRow.freight_amount || 0 }] : []),
+                photos: localRichRecord?.photos || [],
+                cargoPhoto: localRichRecord?.cargoPhoto || null,
+                biltyPhoto: localRichRecord?.biltyPhoto || null,
+                weightSlipPhoto: localRichRecord?.weightSlipPhoto || null,
+                cpm: localRichRecord?.cpm || null,
+              };
+            }
+          } catch (sbErr) {
+            console.warn("Direct Supabase bilty lookup notice:", sbErr);
+          }
+        }
+
+        if (!matchedRecord && localRichRecord) {
+          matchedRecord = localRichRecord;
         }
 
         if (matchedRecord && isMounted) {
@@ -135,15 +154,22 @@ export default function BiltyDetailPage() {
           setLoading(false);
         }
 
-        // 4. Fetch fresh record from API in background or fallback
+        // 3. Fetch fresh record from API in background or fallback
         try {
           const res = await fetch(`/api/admin/bilty/${encodeURIComponent(biltyId)}`);
           if (res.ok) {
             const data = await res.json();
             const record = data.data || data.consignment || data;
             if (record && record.biltyNumber && isMounted) {
-              matchedRecord = record;
-              setBilty(record);
+              matchedRecord = {
+                ...matchedRecord,
+                ...record,
+                additionalChargesBreakdown: record.additionalChargesBreakdown || matchedRecord?.additionalChargesBreakdown,
+                items: (record.items && record.items.length > 0) ? record.items : (matchedRecord?.items || []),
+                cpm: record.cpm !== undefined && record.cpm !== null ? record.cpm : matchedRecord?.cpm,
+                photos: record.photos || matchedRecord?.photos,
+              };
+              setBilty(matchedRecord);
             }
           } else {
             // Also try query param fallback
@@ -152,8 +178,15 @@ export default function BiltyDetailPage() {
               const dataParam = await resParam.json();
               const recordParam = dataParam.data || dataParam.consignment || dataParam;
               if (recordParam && recordParam.biltyNumber && isMounted) {
-                matchedRecord = recordParam;
-                setBilty(recordParam);
+                matchedRecord = {
+                  ...matchedRecord,
+                  ...recordParam,
+                  additionalChargesBreakdown: recordParam.additionalChargesBreakdown || matchedRecord?.additionalChargesBreakdown,
+                  items: (recordParam.items && recordParam.items.length > 0) ? recordParam.items : (matchedRecord?.items || []),
+                  cpm: recordParam.cpm !== undefined && recordParam.cpm !== null ? recordParam.cpm : matchedRecord?.cpm,
+                  photos: recordParam.photos || matchedRecord?.photos,
+                };
+                setBilty(matchedRecord);
               }
             }
           }

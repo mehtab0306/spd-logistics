@@ -44,6 +44,8 @@ export default function EditCustomerPage() {
     city: "Karachi",
     warehouse: "KARACHI",
     creditLimit: "",
+    currentRate: "",
+    rateBasis: "Per KG",
     photo: "",
     notes: "",
     status: "ACTIVE",
@@ -94,6 +96,8 @@ export default function EditCustomerPage() {
             city: found.city || "Karachi",
             warehouse: found.warehouse || "KARACHI",
             creditLimit: found.creditLimit !== undefined && found.creditLimit !== null ? String(found.creditLimit) : "",
+            currentRate: found.currentRate !== undefined && found.currentRate !== null ? String(found.currentRate) : "",
+            rateBasis: found.rateBasis || "Per KG",
             photo: photoUrl,
             notes: found.notes || "",
             status: found.status || "ACTIVE",
@@ -177,10 +181,13 @@ export default function EditCustomerPage() {
       }
 
       const credLim = parseFloat(formData.creditLimit) || 0;
+      const numRate = formData.currentRate ? parseFloat(formData.currentRate) : null;
       const payload = {
         ...formData,
         id: customerId,
         creditLimit: credLim,
+        currentRate: numRate,
+        rateBasis: formData.rateBasis || "Per KG",
         photo: finalPhotoUrl || null,
       };
 
@@ -505,7 +512,7 @@ export default function EditCustomerPage() {
         {/* SECTION 4: FINANCIAL & ACCOUNT */}
         <FormSectionCard
           title="Account & Financial Terms"
-          description="Credit limits and operational billing terms"
+          description="Credit limits, agreed transport freight rates and operational billing terms"
           icon={CreditCard}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -522,11 +529,42 @@ export default function EditCustomerPage() {
             </div>
 
             <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
+                Agreed Freight Rate (PKR)
+              </Label>
+              <Input
+                type="number"
+                step="any"
+                value={formData.currentRate}
+                placeholder="e.g. 15 or 5000"
+                onChange={(e) => setFormData({ ...formData, currentRate: e.target.value })}
+                className="rounded-xl h-10 text-xs font-mono font-bold"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
+                Agreed Rate Basis
+              </Label>
+              <select
+                value={formData.rateBasis}
+                onChange={(e) => setFormData({ ...formData, rateBasis: e.target.value })}
+                className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+              >
+                <option value="Per KG">Per KG</option>
+                <option value="Per CBM">Per CBM</option>
+                <option value="Per Qty">Per Qty</option>
+                <option value="Fixed Freight">Fixed Freight</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
-                Internal Account Notes
+                Internal Account Notes &amp; Rate Terms
               </Label>
               <Input
                 value={formData.notes}
+                placeholder="e.g. Rate terms, contract notes"
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 className="rounded-xl h-10 text-xs"
               />

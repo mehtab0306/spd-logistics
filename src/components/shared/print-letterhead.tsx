@@ -13,7 +13,7 @@ interface PrintHeaderProps {
 
 export function PrintHeader({
   title,
-  subtitle = "Container & Fleet Logistics • Est. 1996",
+  subtitle = "NTN: 1692873-3 • Est. 1996",
   documentNumber,
   date,
   station = "Head Office Station (Lahore)",
@@ -30,22 +30,22 @@ export function PrintHeader({
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <img
-            src="/images/spd-logo.jpg"
+            src="/images/spd-logo.png"
             alt="SPD Logistics"
-            className="h-16 w-auto object-contain rounded border border-slate-300"
+            className="h-16 w-auto object-contain shrink-0"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = "/images/spd-logo.png";
+              (e.target as HTMLImageElement).src = "/images/spd-logo.jpg";
             }}
           />
           <div>
             <h1 className="text-xl font-black tracking-tight text-red-600 uppercase">
-              {companyName || "SUPER PAK DATA GOODS TRANSPORT CO. (SPD LOGISTICS)"}
+              {companyName || "SUPER PAK DATA WALE GOODS TRANSPORT CO.®"}
             </h1>
             <p className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">
               {subtitle}
             </p>
             <p className="text-[10px] text-slate-600">
-              Main Head Office: Bhati Gate Transport Center, Lahore • Karachi Port Terminal Hub • Ph: 042-111-773-773, 0300-8441234
+              Gate 1, St 4, Plot 9, Truck Stand Hawksbay Rd, Karachi • Lahore: Saggian Bypass • Ph: 03002024433, 03212024433, 03022314433
             </p>
           </div>
         </div>

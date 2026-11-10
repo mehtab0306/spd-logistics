@@ -119,6 +119,8 @@ export default function CustomersPage() {
     warehouse: "KARACHI",
     creditLimit: "",
     openingBalance: "0",
+    currentRate: "",
+    rateBasis: "Per KG",
     photo: "",
     notes: "",
     status: "ACTIVE",
@@ -155,6 +157,8 @@ export default function CustomersPage() {
       warehouse: c.warehouse || "KARACHI",
       creditLimit: c.creditLimit !== null && c.creditLimit !== undefined ? String(c.creditLimit) : "",
       openingBalance: c.openingBalance !== null && c.openingBalance !== undefined ? String(c.openingBalance) : "0",
+      currentRate: c.currentRate !== null && c.currentRate !== undefined ? String(c.currentRate) : "",
+      rateBasis: c.rateBasis || "Per KG",
       photo: photoUrl,
       notes: c.notes || "",
       status: c.status || "ACTIVE",
@@ -1145,7 +1149,7 @@ export default function CustomersPage() {
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto pr-1 space-y-4 pt-2 print:hidden">
-            <div className="grid grid-cols-3 gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-xs">
               <div>
                 <p className="text-slate-400 font-bold uppercase">Opening Balance</p>
                 <p className="text-base font-black text-slate-900 dark:text-white mt-1">
@@ -1159,10 +1163,69 @@ export default function CustomersPage() {
                 </p>
               </div>
               <div>
+                <p className="text-slate-400 font-bold uppercase">Agreed Rate</p>
+                <p className="text-base font-black text-amber-600 dark:text-amber-400 mt-1">
+                  {viewCustomer?.currentRate ? `PKR ${viewCustomer.currentRate} (${viewCustomer.rateBasis || "Per KG"})` : "Standard Rate"}
+                </p>
+              </div>
+              <div>
                 <p className="text-slate-400 font-bold uppercase">Portal Login</p>
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mt-1 truncate">
                   {viewCustomer?.email || "None"}
                 </p>
+              </div>
+            </div>
+
+            {/* Customer Agreed Rate History (Phase 5) */}
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                  Agreed Rate History &amp; Quotation Archive
+                </h3>
+                <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
+                  {viewCustomer?.rateHistory?.length || 1} Record(s)
+                </span>
+              </div>
+              <div className="space-y-2">
+                {(viewCustomer?.rateHistory && viewCustomer.rateHistory.length > 0 ? viewCustomer.rateHistory : [
+                  {
+                    effectiveDate: viewCustomer?.createdAt ? new Date(viewCustomer.createdAt).toLocaleDateString() : "Initial Agreement",
+                    previousRate: 0,
+                    newRate: viewCustomer?.currentRate || "Standard",
+                    rateBasis: viewCustomer?.rateBasis || "Per KG",
+                    reason: "Standard client onboarding agreement",
+                    notes: viewCustomer?.notes || "Agreed base linehaul tariff",
+                    quotationAttachment: viewCustomer?.quotationAttachment || null,
+                  }
+                ]).map((rh: any, idx: number) => (
+                  <div key={idx} className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        Rate: PKR {rh.newRate} ({rh.rateBasis || "Per KG"})
+                      </span>
+                      {rh.previousRate > 0 && (
+                        <span className="text-slate-400 text-[10px] ml-2 line-through">
+                          Prev: PKR {rh.previousRate}
+                        </span>
+                      )}
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Effective: {rh.effectiveDate} &bull; Reason: {rh.reason || "Scheduled rate agreement"}
+                      </p>
+                      {rh.notes && <p className="text-[11px] text-slate-600 dark:text-slate-400 italic">Notes: {rh.notes}</p>}
+                    </div>
+                    {rh.quotationAttachment && (
+                      <a
+                        href={rh.quotationAttachment}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline shrink-0"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>View Quotation</span>
+                      </a>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 

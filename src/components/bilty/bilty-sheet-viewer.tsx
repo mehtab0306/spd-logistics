@@ -37,6 +37,7 @@ export function BiltySheetViewer({
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<BiltySheetTab>(initialTab);
   const [showPhotos, setShowPhotos] = useState(false);
+  const [includePicturesInPrint, setIncludePicturesInPrint] = useState(false);
 
   if (!bilty) return null;
 
@@ -106,15 +107,27 @@ export function BiltySheetViewer({
             )}
 
             {uniquePhotos.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowPhotos(!showPhotos)}
-                className="rounded-xl text-xs font-semibold gap-1.5 h-9 text-slate-700 dark:text-slate-200"
-              >
-                <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
-                <span>Photos ({uniquePhotos.length})</span>
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPhotos(!showPhotos)}
+                  className="rounded-xl text-xs font-semibold gap-1.5 h-9 text-slate-700 dark:text-slate-200"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Photos ({uniquePhotos.length})</span>
+                </Button>
+
+                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 select-none h-9">
+                  <input
+                    type="checkbox"
+                    checked={includePicturesInPrint}
+                    onChange={(e) => setIncludePicturesInPrint(e.target.checked)}
+                    className="rounded text-blue-700 focus:ring-0 w-3.5 h-3.5"
+                  />
+                  <span>Print Photos</span>
+                </label>
+              </>
             )}
 
             <Button
@@ -239,6 +252,36 @@ export function BiltySheetViewer({
             </div>
             <div className="pt-6 print:pt-0">
               <BiltySalesTaxInvoice bilty={bilty} />
+            </div>
+          </div>
+        )}
+
+        {/* Printable Attached Photographs Section (Phase 12B) */}
+        {includePicturesInPrint && uniquePhotos.length > 0 && (
+          <div className="printable-document print:break-before-page mt-8 print:mt-6 bg-white p-4 print:p-0 border border-slate-200 print:border-none rounded-xl">
+            <div className="border-b-2 border-slate-900 pb-2 mb-4 text-center">
+              <h3 className="font-black text-sm uppercase tracking-wider text-slate-900">
+                Attached Shipment Photographs — Consignment Bilty #{bilty.biltyNumber}
+              </h3>
+              <p className="text-[11px] text-slate-700 font-medium">
+                Shipper: {bilty.senderName} • Consignee: {bilty.receiverName} • Route: {bilty.origin} &rarr; {bilty.destination}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {uniquePhotos.map((url, i) => (
+                <div key={i} className="border border-slate-400 rounded-lg p-2 bg-slate-50 flex flex-col items-center">
+                  <div className="w-full h-64 flex items-center justify-center bg-white rounded border border-slate-200 overflow-hidden">
+                    <img
+                      src={url}
+                      alt={`Shipment photo ${i + 1}`}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] font-bold text-slate-800 text-center">
+                    Shipment Photograph #{i + 1}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         )}

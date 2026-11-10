@@ -169,13 +169,27 @@
       box-sizing: border-box !important;
     }
 
-    html, body {
+    :root, .dark, [data-theme="dark"] {
+      --background: 0 0% 100% !important;
+      --foreground: 0 0% 0% !important;
+      --card: 0 0% 100% !important;
+      --card-foreground: 0 0% 0% !important;
+      --popover: 0 0% 100% !important;
+      --popover-foreground: 0 0% 0% !important;
+      --muted: 0 0% 96% !important;
+      --muted-foreground: 0 0% 40% !important;
+      --border: 0 0% 80% !important;
+    }
+
+    html, html.dark, body, body.dark, .dark, [data-theme="dark"] {
       width: 100% !important;
       max-width: 100% !important;
       margin: 0 !important;
       padding: 0 !important;
+      background-color: #ffffff !important;
       background: #ffffff !important;
       color: #000000 !important;
+      color-scheme: light !important;
       font-family: Arial, Helvetica, sans-serif !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
@@ -206,14 +220,18 @@
       display: none !important;
     }
 
-    /* Radix Dialog Backdrop Overlay & Portal Isolation */
+    /* Radix Dialog Backdrop Overlay & Portal Isolation - completely suppress black backdrops */
     div[data-state="open"][aria-hidden="true"],
-    [data-radix-portal] > div[class*="fixed"][class*="inset-0"],
+    [data-radix-portal] > div[class*="fixed"],
+    div[class*="fixed"][class*="inset-0"],
     .fixed.inset-0.bg-black\/70,
     .fixed.inset-0.bg-black\/80,
-    .fixed.inset-0.bg-background\/80 {
+    .fixed.inset-0.bg-background\/80,
+    div[class*="backdrop-blur"],
+    div[class*="bg-black\/"] {
       display: none !important;
       background: transparent !important;
+      opacity: 0 !important;
     }
 
     [data-radix-portal]:has(.printable-document),
@@ -244,7 +262,7 @@
       overflow: visible !important;
     }
 
-    /* Reset Layout Containers */
+    /* Reset Layout Containers to clean white */
     main,
     .main-content,
     div[class*="min-h-screen"],

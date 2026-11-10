@@ -51,6 +51,7 @@ import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID } from
 
 interface BiltyCargoItem {
   detail: string;
+  bundleDescription?: string;
   quantity: string | number;
   weight: string | number;
   volume: string | number;
@@ -84,6 +85,9 @@ export default function EditBiltyPage() {
     address: "",
     ntn: "",
     strn: "",
+    currentRate: "",
+    rateBasis: "Per KG",
+    notes: "",
   });
   const [quickCustomerSubmitting, setQuickCustomerSubmitting] = useState(false);
 
@@ -378,6 +382,9 @@ export default function EditBiltyPage() {
         address: "",
         ntn: "",
         strn: "",
+        currentRate: "",
+        rateBasis: "Per KG",
+        notes: "",
       });
       return;
     }
@@ -394,6 +401,9 @@ export default function EditBiltyPage() {
         address: quickCustomerData.address.trim() || `${quickCustomerData.city || "Pakistan"}, Pakistan`,
         ntn: quickCustomerData.ntn.trim() || null,
         strn: quickCustomerData.strn.trim() || null,
+        currentRate: quickCustomerData.currentRate ? Number(quickCustomerData.currentRate) : null,
+        rateBasis: quickCustomerData.rateBasis || "Per KG",
+        notes: quickCustomerData.notes || "",
         balance: 0,
         createdAt: new Date().toISOString(),
       };
@@ -445,6 +455,9 @@ export default function EditBiltyPage() {
         address: "",
         ntn: "",
         strn: "",
+        currentRate: "",
+        rateBasis: "Per KG",
+        notes: "",
       });
     } catch (err) {
       console.error("Failed to save quick customer:", err);
@@ -546,6 +559,33 @@ export default function EditBiltyPage() {
       }
       return { ...prev, customerId };
     });
+  };
+
+  const selectedSenderCustomer = React.useMemo(() => {
+    return customers.find(
+      (c) =>
+        (formData.customerId && String(c.id) === String(formData.customerId)) ||
+        (formData.senderName &&
+          (c.name?.trim().toLowerCase() === formData.senderName.trim().toLowerCase() ||
+            c.companyName?.trim().toLowerCase() === formData.senderName.trim().toLowerCase()))
+    );
+  }, [customers, formData.customerId, formData.senderName]);
+
+  const selectedReceiverCustomer = React.useMemo(() => {
+    return customers.find(
+      (c) =>
+        formData.receiverName &&
+        (c.name?.trim().toLowerCase() === formData.receiverName.trim().toLowerCase() ||
+          c.companyName?.trim().toLowerCase() === formData.receiverName.trim().toLowerCase())
+    );
+  }, [customers, formData.receiverName]);
+
+  const handleApplyAgreedRate = (rate: number | string, basis?: string) => {
+    const rateNum = parseFloat(String(rate)) || 0;
+    const rateBasis = basis === "Per KG" ? "Per KG" : basis === "Per CBM" ? "Per CBM" : basis === "Per Quantity" ? "Per Quantity" : "Fixed Freight";
+    handleItemChange(0, "rate", rateNum);
+    handleItemChange(0, "freightAsPer", rateBasis);
+    toast.success(`Applied agreed rate: PKR ${rateNum} (${rateBasis})`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -843,9 +883,7 @@ export default function EditBiltyPage() {
       <form id="edit-bilty-form" onSubmit={handleSubmit} noValidate className="space-y-6">
         {/* Booking Controls */}
         <FormSectionCard
-          title="Sheet 1: Booking Controls & Corridor"
-          badge="Header Controls"
-          description="Primary billing party, payment terms, dispatch priority, and station routing"
+          title="Section A: Booking Controls & Corridor"
         >
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
@@ -1059,6 +1097,35 @@ export default function EditBiltyPage() {
               />
             </div>
 
+            {selectedSenderCustomer?.currentRate ? (
+              <div className="col-span-1 sm:col-span-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-3">
+                <div className="text-xs">
+                  <span className="font-bold text-amber-900 dark:text-amber-200 block">
+                    Agreed Rate ({selectedSenderCustomer.name}): PKR {selectedSenderCustomer.currentRate} ({selectedSenderCustomer.rateBasis || "Per KG"})
+                  </span>
+                  {selectedSenderCustomer.notes && (
+                    <span className="text-[11px] text-amber-800 dark:text-amber-300 block mt-0.5">
+                      Terms / Notes: {selectedSenderCustomer.notes}
+                    </span>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    handleApplyAgreedRate(
+                      selectedSenderCustomer.currentRate,
+                      selectedSenderCustomer.rateBasis
+                    )
+                  }
+                  className="h-8 text-xs font-bold text-amber-900 dark:text-amber-100 border-amber-300 dark:border-amber-700 bg-white dark:bg-amber-900/50 hover:bg-amber-100 shrink-0"
+                >
+                  Apply Rate
+                </Button>
+              </div>
+            ) : null}
+
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                 Sender Address
@@ -1077,6 +1144,34 @@ export default function EditBiltyPage() {
             badge="Destination Party"
             description="Receiver contact, delivery site, and specific factory address"
           >
+            {selectedReceiverCustomer?.currentRate ? (
+              <div className="col-span-1 sm:col-span-2 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between gap-3">
+                <div className="text-xs">
+                  <span className="font-bold text-blue-900 dark:text-blue-200 block">
+                    Agreed Consignee Rate ({selectedReceiverCustomer.name}): PKR {selectedReceiverCustomer.currentRate} ({selectedReceiverCustomer.rateBasis || "Per KG"})
+                  </span>
+                  {selectedReceiverCustomer.notes && (
+                    <span className="text-[11px] text-blue-800 dark:text-blue-300 block mt-0.5">
+                      Terms / Notes: {selectedReceiverCustomer.notes}
+                    </span>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    handleApplyAgreedRate(
+                      selectedReceiverCustomer.currentRate,
+                      selectedReceiverCustomer.rateBasis
+                    )
+                  }
+                  className="h-8 text-xs font-bold text-blue-900 dark:text-blue-100 border-blue-300 dark:border-blue-700 bg-white dark:bg-blue-900/50 hover:bg-blue-100 shrink-0"
+                >
+                  Apply Rate
+                </Button>
+              </div>
+            ) : null}
             <div className="col-span-1 sm:col-span-2 flex items-end gap-2">
               <div className="flex-1 space-y-1.5">
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
@@ -1306,6 +1401,20 @@ export default function EditBiltyPage() {
                         onChange={(e) => handleItemChange(index, "detail", e.target.value)}
                         className="rounded-xl h-8 text-xs font-medium bg-white dark:bg-slate-900 mt-1"
                       />
+                    )}
+                    {item.detail?.toLowerCase().includes("bundle") && (
+                      <div className="mt-1.5 space-y-1">
+                        <Label className="text-[10px] font-bold text-red-700 dark:text-red-400">
+                          Bundle Description / Bundle Kis Cheez Ka Hai (e.g. Steel / Fabric / Paper) *
+                        </Label>
+                        <Input
+                          required
+                          value={item.bundleDescription || ""}
+                          placeholder="e.g. Steel Bars, Fabric Rolls, Paper Bundles"
+                          onChange={(e) => handleItemChange(index, "bundleDescription", e.target.value)}
+                          className="rounded-xl h-8 text-xs font-semibold bg-white dark:bg-slate-900 border-red-300 dark:border-red-800"
+                        />
+                      </div>
                     )}
                   </div>
 
@@ -1669,7 +1778,7 @@ export default function EditBiltyPage() {
             </div>
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Sales Tax (15%)
+                Sales Tax (PRA / SRB)
               </p>
               <p className="text-lg font-black text-blue-300 font-mono">
                 {formatCurrency(salesTax15Pct)}
@@ -1795,6 +1904,48 @@ export default function EditBiltyPage() {
                 onChange={(e) => setQuickCustomerData({ ...quickCustomerData, address: e.target.value })}
                 className="rounded-xl h-9 text-xs"
               />
+            </div>
+
+            {/* Customer Agreed Rate & Terms (Phase 5) */}
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
+                Customer Agreed Rate (Contract Rate)
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold">Agreed Rate (PKR)</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={quickCustomerData.currentRate}
+                    placeholder="e.g. 15 or 5000"
+                    onChange={(e) => setQuickCustomerData({ ...quickCustomerData, currentRate: e.target.value })}
+                    className="rounded-xl h-9 text-xs font-mono font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold">Rate Basis</Label>
+                  <select
+                    value={quickCustomerData.rateBasis}
+                    onChange={(e) => setQuickCustomerData({ ...quickCustomerData, rateBasis: e.target.value })}
+                    className="w-full h-9 px-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+                  >
+                    <option value="Per KG">Per KG</option>
+                    <option value="Per CBM">Per CBM</option>
+                    <option value="Per Quantity">Per Quantity</option>
+                    <option value="Fixed Freight">Fixed Freight</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold">Rate Notes / Special Agreement</Label>
+                <Input
+                  value={quickCustomerData.notes}
+                  placeholder="e.g. Valid until Dec 2026, minimum 500kg"
+                  onChange={(e) => setQuickCustomerData({ ...quickCustomerData, notes: e.target.value })}
+                  className="rounded-xl h-8 text-xs"
+                />
+              </div>
             </div>
 
             <DialogFooter className="pt-3">

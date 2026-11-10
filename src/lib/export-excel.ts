@@ -60,30 +60,187 @@ export function exportToExcel<T = any>(
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const sanitizedBase = (baseFilename || "Export").replace(/[^a-zA-Z0-9_-]/g, "_");
-  const fullFilename = `${sanitizedBase}_${todayStr}.csv`;
+  const fullFilename = `${sanitizedBase}_${todayStr}.xls`;
 
-  const escapeField = (val: any): string => {
+  const xmlEscape = (val: any): string => {
     if (val === null || val === undefined) return "";
-    const str = String(val).trim();
-    // Wrap in quotes if it contains commas, quotes, or newlines
-    if (str.includes('"') || str.includes(",") || str.includes("\n") || str.includes("\r")) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    // If it's a numeric string that might lose leading zeroes or needs standard quoting
-    if (/^[0-9+-\s]+$/.test(str) && str.length > 10) {
-      return `="${str}"`; // Excel text formula to preserve phone numbers / CNICs
-    }
-    return `"${str}"`;
+    return String(val)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
   };
 
-  const headerRow = columns.map((col) => `"${col.header.replace(/"/g, '""')}"`).join(",");
-  const dataRows = data.map((item) =>
-    columns.map((col) => escapeField(col.accessor(item))).join(",")
-  );
+  const isNumeric = (val: any): boolean => {
+    if (typeof val === "number") return true;
+    if (typeof val !== "string") return false;
+    const clean = val.replace(/,/g, "").trim();
+    return clean !== "" && !isNaN(Number(clean));
+  };
 
-  // UTF-8 BOM (\uFEFF) instructs Excel to open file with UTF-8 encoding
-  const csvContent = "\uFEFF" + [headerRow, ...dataRows].join("\r\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const numCols = columns.length;
+  // Calculate reasonable column widths based on headers
+  const colWidths = columns.map((col) => {
+    const len = col.header.length;
+    if (col.header.toLowerCase().includes("bilty") || col.header.toLowerCase().includes("id")) return 110;
+    if (col.header.toLowerCase().includes("date")) return 95;
+    if (col.header.toLowerCase().includes("sender") || col.header.toLowerCase().includes("receiver")) return 160;
+    if (col.header.toLowerCase().includes("phone")) return 110;
+    if (col.header.toLowerCase().includes("cargo") || col.header.toLowerCase().includes("description")) return 220;
+    if (col.header.toLowerCase().includes("station") || col.header.toLowerCase().includes("route")) return 120;
+    if (col.header.toLowerCase().includes("amount") || col.header.toLowerCase().includes("freight") || col.header.toLowerCase().includes("balance")) return 130;
+    if (col.header.toLowerCase().includes("qty") || col.header.toLowerCase().includes("weight") || col.header.toLowerCase().includes("cbm")) return 90;
+    return Math.max(90, Math.min(220, len * 11));
+  });
+
+  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+  <Styles>
+    <Style ss:ID="Default" ss:Name="Normal">
+      <Alignment ss:Vertical="Center"/>
+      <Borders/>
+      <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
+      <Interior/>
+      <NumberFormat/>
+      <Protection/>
+    </Style>
+    <Style ss:ID="HeaderStyle">
+      <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+      <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/>
+      <Interior ss:Color="#1E3A8A" ss:Pattern="Solid"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#0F172A"/>
+        <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#3B82F6"/>
+        <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#3B82F6"/>
+        <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#3B82F6"/>
+      </Borders>
+    </Style>
+    <Style ss:ID="DataCellLeft">
+      <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
+      <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1F2937"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+      </Borders>
+    </Style>
+    <Style ss:ID="DataCellCenter">
+      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+      <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1F2937"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+      </Borders>
+    </Style>
+    <Style ss:ID="DataCellRight">
+      <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+      <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1F2937"/>
+      <NumberFormat ss:Format="#,##0.00"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+      </Borders>
+    </Style>
+    <Style ss:ID="DataCellInteger">
+      <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+      <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1F2937"/>
+      <NumberFormat ss:Format="#,##0"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+        <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+      </Borders>
+    </Style>
+  </Styles>
+  <Worksheet ss:Name="Sheet1">
+    <Table ss:DefaultRowHeight="20">
+      ${colWidths.map((w) => `<Column ss:Width="${w}"/>`).join("\n      ")}
+      <Row ss:Height="26">
+        ${columns
+          .map(
+            (col) =>
+              `<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${xmlEscape(
+                col.header
+              )}</Data></Cell>`
+          )
+          .join("")}
+      </Row>
+      ${data
+        .map((item) => {
+          const cells = columns
+            .map((col) => {
+              const rawVal = col.accessor(item);
+              const headerLower = col.header.toLowerCase();
+              if (rawVal === null || rawVal === undefined || rawVal === "") {
+                return `<Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">-</Data></Cell>`;
+              }
+              if (
+                headerLower.includes("amount") ||
+                headerLower.includes("freight") ||
+                headerLower.includes("balance") ||
+                headerLower.includes("debit") ||
+                headerLower.includes("credit") ||
+                headerLower.includes("price")
+              ) {
+                const cleanNum = parseFloat(String(rawVal).replace(/,/g, ""));
+                if (!isNaN(cleanNum)) {
+                  return `<Cell ss:StyleID="DataCellRight"><Data ss:Type="Number">${cleanNum}</Data></Cell>`;
+                }
+              }
+              if (
+                headerLower.includes("qty") ||
+                headerLower.includes("packages") ||
+                headerLower.includes("weight")
+              ) {
+                const cleanNum = parseFloat(String(rawVal).replace(/,/g, ""));
+                if (!isNaN(cleanNum)) {
+                  return `<Cell ss:StyleID="DataCellInteger"><Data ss:Type="Number">${cleanNum}</Data></Cell>`;
+                }
+              }
+              if (
+                headerLower.includes("date") ||
+                headerLower.includes("status") ||
+                headerLower.includes("code") ||
+                headerLower.includes("phone")
+              ) {
+                return `<Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">${xmlEscape(
+                  String(rawVal)
+                )}</Data></Cell>`;
+              }
+              return `<Cell ss:StyleID="DataCellLeft"><Data ss:Type="String">${xmlEscape(
+                String(rawVal)
+              )}</Data></Cell>`;
+            })
+            .join("");
+          return `<Row ss:Height="21">${cells}</Row>`;
+        })
+        .join("\n      ")}
+    </Table>
+    <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+      <Selected/>
+      <FreezePanes/>
+      <FrozenNoSplit/>
+      <SplitHorizontal>1</SplitHorizontal>
+      <TopRowBottomPane>1</TopRowBottomPane>
+      <ActivePane>2</ActivePane>
+    </WorksheetOptions>
+    <AutoFilter x:Range="R1C1:R1C${numCols}" xmlns="urn:schemas-microsoft-com:office:excel"/>
+  </Worksheet>
+</Workbook>`;
+
+  const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" });
 
   // Native WebKit / Safari file share support when available on mobile devices
   if (
@@ -92,18 +249,14 @@ export function exportToExcel<T = any>(
     typeof navigator.canShare === "function"
   ) {
     try {
-      const shareFile = new File([blob], fullFilename, { type: "text/csv;charset=utf-8" });
+      const shareFile = new File([blob], fullFilename, { type: "application/vnd.ms-excel;charset=utf-8" });
       if (navigator.canShare({ files: [shareFile] })) {
         navigator.share({
           files: [shareFile],
           title: fullFilename,
-        }).catch(() => {
-          // User dismissed native share sheet; anchor click handles fallback
-        });
+        }).catch(() => {});
       }
-    } catch {
-      // Fallback seamlessly to anchor download
-    }
+    } catch {}
   }
 
   const url = URL.createObjectURL(blob);
@@ -115,16 +268,13 @@ export function exportToExcel<T = any>(
   document.body.appendChild(link);
   link.click();
 
-  // Defer cleanup for iOS Safari / WebKit asynchronous download processing
   setTimeout(() => {
     try {
       if (link.parentNode) {
         document.body.removeChild(link);
       }
       window.URL.revokeObjectURL(url);
-    } catch (e) {
-      // Safe cleanup fallback
-    }
+    } catch (e) {}
   }, 1500);
 
   return true;
@@ -601,11 +751,11 @@ export function export4SheetBiltyExcel(bilty: any): boolean {
         <Cell ss:MergeAcross="3" ss:StyleID="TableCell"><Data ss:Type="String">Name: ${xmlEscape(billTo === "Receiver" ? receiverName : senderName)}</Data></Cell>
       </Row>
       <Row>
-        <Cell ss:MergeAcross="3" ss:StyleID="TableCell"><Data ss:Type="String">Address: Plot 9, Hawksbay Road Truck Stand, Karachi</Data></Cell>
+        <Cell ss:MergeAcross="3" ss:StyleID="TableCell"><Data ss:Type="String">Address: Plot No. 543, Gate No. 3, Street No. 4, Truck Stand Hawksbay Road, Karachi</Data></Cell>
         <Cell ss:MergeAcross="3" ss:StyleID="TableCell"><Data ss:Type="String">Address: ${xmlEscape(billTo === "Receiver" ? receiverAddress : senderAddress)}</Data></Cell>
       </Row>
       <Row>
-        <Cell ss:MergeAcross="3" ss:StyleID="TableCell"><Data ss:Type="String">NTN: 1692873-3 | STRN: 17-00-1692-873-3</Data></Cell>
+        <Cell ss:MergeAcross="3" ss:StyleID="TableCell"><Data ss:Type="String">NTN: 1692873-3 | Ph: 0218288833</Data></Cell>
         <Cell ss:MergeAcross="3" ss:StyleID="TableCell"><Data ss:Type="String">Tel: ${xmlEscape(billTo === "Receiver" ? receiverPhone : senderPhone)}</Data></Cell>
       </Row>
       <Row>

@@ -42,9 +42,9 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
 
   const discount = parseFloat(bilty.discount) || 0;
   const taxableValue = Math.max(0, initialFreight + totalAdditional - discount);
-  const salesTaxRate = 15; // 15% standard provincial transport services sales tax (PRA/SRB)
-  const salesTaxAmount = Math.round(taxableValue * 0.15);
-  const totalValueWithTax = taxableValue + salesTaxAmount;
+  const salesTaxRate = bilty.salesTaxRate !== undefined ? Number(bilty.salesTaxRate) : 15;
+  const salesTaxAmount = bilty.salesTax !== undefined ? Number(bilty.salesTax) : Math.round(taxableValue * (salesTaxRate / 100));
+  const totalValueWithTax = bilty.totalAmount ? Number(bilty.totalAmount) : taxableValue + salesTaxAmount;
 
   const amountInWords = numberToWordsPKR(totalValueWithTax);
 
@@ -55,15 +55,15 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
       className="printable-document bg-white text-black font-sans text-xs selection:bg-red-100 max-w-4xl mx-auto print:max-w-none print:w-full"
     >
       <div className="p-5 border-2 border-black rounded-lg print:border-none print:p-0 space-y-3">
-        {/* Official Header */}
-        <BiltyTransportHeader
-          title="Sales Tax Invoice (15%)"
-          subtitle="Issued Under Section 23 of the Sales Tax Act, 1990 / Provincial Services Sales Tax Acts (PRA / SRB / KPRA / BRA)"
-          documentNumber={taxInvoiceNo}
-          date={invoiceDate}
-          copyFor="ORIGINAL TAX INVOICE"
-          station={bilty.warehouse ? `${bilty.warehouse} Station` : "Head Office Station (Lahore)"}
-        />
+        {/* Simple Top Header without Masthead as requested */}
+        <div className="border-b-2 border-black pb-2 mb-3 text-center">
+          <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-black leading-none">
+            SALES TAX INVOICE
+          </h1>
+          <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wide mt-1">
+            Issued Under Section 23 of the Sales Tax Act, 1990 / Provincial Services Sales Tax Acts (PRA / SRB)
+          </p>
+        </div>
 
         {/* Supplier & Buyer Two-Column Structured Grid */}
         <div className="grid grid-cols-2 gap-3 border border-black p-3 rounded bg-slate-50">
@@ -74,7 +74,7 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
             </span>
             <p className="font-black text-xs text-black">SUPER PAK DATA WALE GOODS TRANSPORT CO.®</p>
             <p className="text-[10px] text-slate-700 leading-tight">
-              Gate No. 1, Street No. 4, Plot No. 9, Truck Stand Hawksbay Road, Karachi.
+              Plot No. 543, Gate No. 3, Street No. 4, Truck Stand Hawksbay Road, Karachi.
             </p>
             <div className="grid grid-cols-2 gap-1 text-[10px] pt-1 mt-1 border-t border-slate-200">
               <p>
@@ -82,30 +82,23 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
                 <span className="font-mono font-black text-black">1692873-3</span>
               </p>
               <p>
-                <span className="text-slate-500 font-bold">STRN:</span>{" "}
-                <span className="font-mono font-black text-black">17-00-1692-873-3</span>
+                <span className="text-slate-500 font-bold">Phone:</span>{" "}
+                <span className="font-mono font-black text-black">0218288833</span>
               </p>
             </div>
-            <p className="text-[9.5px] text-slate-600">
-              <span className="font-bold text-slate-800">Tax Jurisdiction:</span> SRB (Sindh) / PRA (Punjab)
-            </p>
           </div>
 
-          {/* Buyer Box */}
+          {/* Buyer Box (STRN Removed) */}
           <div className="pl-1 space-y-1">
             <span className="font-black uppercase text-[10px] text-blue-900 block border-b border-slate-300 pb-0.5">
               Service Recipient / Buyer Details
             </span>
             <p className="font-black text-xs text-black">{buyerName}</p>
             <p className="text-[10px] text-slate-700 leading-tight">{buyerAddress}</p>
-            <div className="grid grid-cols-2 gap-1 text-[10px] pt-1 mt-1 border-t border-slate-200">
+            <div className="text-[10px] pt-1 mt-1 border-t border-slate-200">
               <p>
                 <span className="text-slate-500 font-bold">Buyer NTN:</span>{" "}
                 <span className="font-mono font-bold text-black">{buyerNtn}</span>
-              </p>
-              <p>
-                <span className="text-slate-500 font-bold">Buyer STRN:</span>{" "}
-                <span className="font-mono font-bold text-black">{buyerStrn}</span>
               </p>
             </div>
             <p className="text-[9.5px] text-slate-600">
@@ -114,43 +107,41 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
           </div>
         </div>
 
-        {/* Invoice Cross-Reference Bar */}
+        {/* Invoice Cross-Reference Bar in Exact Requested Order */}
         <div className="border border-black p-2 bg-slate-100 rounded text-[10px] grid grid-cols-4 gap-2 font-semibold">
           <div>
-            <span className="text-slate-500 block text-[8.5px] uppercase">Sales Tax Invoice No</span>
+            <span className="text-slate-500 block text-[8.5px] uppercase">1. Sales Tax Invoice No</span>
             <span className="font-mono font-bold text-red-700">{taxInvoiceNo}</span>
           </div>
           <div>
-            <span className="text-slate-500 block text-[8.5px] uppercase">Bilty Reference No</span>
-            <span className="font-mono font-bold text-black">{biltyNumber}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block text-[8.5px] uppercase">Date of Invoice</span>
+            <span className="text-slate-500 block text-[8.5px] uppercase">2. Date of Invoice</span>
             <span className="text-black font-medium">{invoiceDate}</span>
           </div>
           <div>
-            <span className="text-slate-500 block text-[8.5px] uppercase">Vehicle / Truck #</span>
-            <span className="font-mono font-bold text-black">{bilty.vehicleNumber || "/"}</span>
+            <span className="text-slate-500 block text-[8.5px] uppercase">3. Bilty</span>
+            <span className="font-mono font-bold text-black">{biltyNumber}</span>
+          </div>
+          <div>
+            <span className="text-slate-500 block text-[8.5px] uppercase">4. Order No</span>
+            <span className="font-mono font-bold text-black">{bilty.poNumber || "-"}</span>
           </div>
         </div>
 
-        {/* Structured Sales Tax Calculation Table matching Excel Sheet1 */}
+        {/* Structured Sales Tax Calculation Table (Tariff / Heading column removed) */}
         <div className="border border-black rounded overflow-hidden">
           <table className="w-full text-left border-collapse table-fixed">
             <colgroup>
-              <col style={{ width: "5%" }} />
-              <col style={{ width: "35%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "14%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "46%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "11%" }} />
             </colgroup>
             <thead className="bg-slate-100 text-[9px] font-black uppercase border-b border-black">
               <tr>
-                <th className="p-2 border-r border-black text-center">S#</th>
+                <th className="p-2 border-r border-black text-center">S.no</th>
                 <th className="p-2 border-r border-black">Description of Goods / Taxable Logistics Services</th>
-                <th className="p-2 border-r border-black text-center">Tariff / Heading</th>
                 <th className="p-2 border-r border-black text-right">Taxable Value (Excl. Tax)</th>
                 <th className="p-2 border-r border-black text-center">Rate (%)</th>
                 <th className="p-2 border-r border-black text-right">Sales Tax Payable</th>
@@ -166,11 +157,10 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
                   <span className="font-bold uppercase text-red-700">{bilty.destination || "Karachi"}</span> under Bilty #{biltyNumber}.
                   <br />
                   <span className="text-[9px] text-slate-500 font-normal">
-                    Commodity: {bilty.itemDescription || bilty.packageDetails || "Commercial Cargo"} • Qty: {bilty.packagesCount || bilty.quantity || 1} • Weight: {bilty.weight ? `${bilty.weight} kg` : "N/A"}
+                    Commodity: {bilty.itemDescription || bilty.packageDetails || "Commercial Cargo"}
+                    {bilty.items?.[0]?.bundleDescription ? ` (${bilty.items[0].bundleDescription})` : ""}
+                    {" "}• Qty: {bilty.packagesCount || bilty.quantity || 1} • Weight: {bilty.weight ? `${bilty.weight} kg` : "N/A"}
                   </span>
-                </td>
-                <td className="p-2 border-r border-black text-center font-mono text-[9.5px]">
-                  9804.1000
                 </td>
                 <td className="p-2 border-r border-black text-right font-mono font-bold">
                   {formatCurrency(taxableValue)}
@@ -188,14 +178,14 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
             </tbody>
             <tfoot className="bg-slate-50 text-[10.5px] font-black border-t-2 border-black">
               <tr>
-                <td colSpan={3} className="p-2 border-r border-black text-right uppercase">
+                <td colSpan={2} className="p-2 border-r border-black text-right uppercase">
                   Total Taxable Services:
                 </td>
                 <td className="p-2 border-r border-black text-right font-mono">
                   {formatCurrency(taxableValue)}
                 </td>
                 <td className="p-2 border-r border-black text-center font-mono">
-                  15%
+                  {salesTaxRate}%
                 </td>
                 <td className="p-2 border-r border-black text-right font-mono text-red-700">
                   {formatCurrency(salesTaxAmount)}
@@ -220,7 +210,7 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
           <p>
             We hereby declare and certify that the particulars given above are true and correct, and the amount of
             provincial sales tax charged herein on freight transportation services has been or will be duly deposited
-            into the relevant Government Treasury (PRA / SRB / FBR) in accordance with the provisions of the Sales
+            into the relevant Government Treasury (PRA / SRB) in accordance with the provisions of the Sales
             Tax Act, 1990 and applicable Provincial Sales Tax on Services rules.
           </p>
         </div>

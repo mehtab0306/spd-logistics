@@ -717,7 +717,7 @@ export async function POST(request: Request) {
     };
   }
 
-  // Ensure all cargo particulars are present on the consignment object before notification, email and central store
+  // Ensure all cargo particulars, additional charges breakdown, photos and tax rates are present on the consignment object before notification, email and central store
   consignment = {
     ...consignment,
     bookingDate: body.bookingDate || consignment.bookingDate || (consignment.date ? String(consignment.date).slice(0, 10) : new Date().toISOString().split("T")[0]),
@@ -726,12 +726,44 @@ export async function POST(request: Request) {
     packagingType: body.packagingType || consignment.packagingType || 'Standard',
     packagesCount: parseInt(body.packagesCount || consignment.packagesCount || consignment.quantity) || 1,
     quantity: parseInt(body.packagesCount || consignment.quantity) || 1,
+    weight: (body.weight !== undefined && body.weight !== null) ? parseFloat(body.weight) : (consignment.weight || null),
+    cpm: (body.cpm !== undefined && body.cpm !== null) ? parseFloat(body.cpm) : (consignment.cpm || null),
     freightAmount: consignment.freightAmount !== undefined ? consignment.freightAmount : (consignment.freight !== undefined ? consignment.freight : freightNum),
-    labourCharges: body.labourCharges !== undefined ? parseFloat(body.labourCharges) || 0 : (consignment.labourCharges || 0),
-    otherCharges: body.otherCharges !== undefined ? parseFloat(body.otherCharges) || 0 : (consignment.otherCharges || 0),
+    additionalChargesBreakdown: body.additionalChargesBreakdown || consignment.additionalChargesBreakdown || {
+      labour: body.labourCharges || 0,
+      lifterCrane: 0,
+      pickupLocal: 0,
+      deliveryLocal: 0,
+      godownStorage: body.godownStorage || body.storageCharges || 0,
+      other: body.otherCharges || 0,
+    },
+    labourCharges: body.additionalChargesBreakdown?.labour !== undefined
+      ? parseFloat(body.additionalChargesBreakdown.labour) || 0
+      : (body.labourCharges !== undefined ? parseFloat(body.labourCharges) || 0 : (consignment.labourCharges || 0)),
+    godownCharges: body.additionalChargesBreakdown?.godownStorage !== undefined
+      ? parseFloat(body.additionalChargesBreakdown.godownStorage) || 0
+      : (body.godownStorage !== undefined ? parseFloat(body.godownStorage) || 0 : (consignment.godownCharges || 0)),
+    pickupCharges: body.additionalChargesBreakdown?.pickupLocal !== undefined
+      ? parseFloat(body.additionalChargesBreakdown.pickupLocal) || 0
+      : (body.pickupCharges || 0),
+    deliveryCharges: body.additionalChargesBreakdown?.deliveryLocal !== undefined
+      ? parseFloat(body.additionalChargesBreakdown.deliveryLocal) || 0
+      : (body.deliveryCharges || 0),
+    otherCharges: body.additionalChargesBreakdown?.other !== undefined
+      ? parseFloat(body.additionalChargesBreakdown.other) || 0
+      : (body.otherCharges !== undefined ? parseFloat(body.otherCharges) || 0 : (consignment.otherCharges || 0)),
+    additionalCharges: addlNum,
+    salesTaxRate: body.salesTaxRate !== undefined ? Number(body.salesTaxRate) : (consignment.salesTaxRate || 15),
+    incomeTaxRate: body.incomeTaxRate !== undefined ? Number(body.incomeTaxRate) : (consignment.incomeTaxRate || 6),
+    salesTaxAmount: body.salesTaxAmount !== undefined ? Number(body.salesTaxAmount) : (consignment.salesTaxAmount || 0),
+    incomeTaxAmount: body.incomeTaxAmount !== undefined ? Number(body.incomeTaxAmount) : (consignment.incomeTaxAmount || 0),
     paymentMode: body.paymentMode || consignment.paymentMode || (consignment.paymentStatus === 'PAID' ? 'PAID' : consignment.paymentStatus === 'TO_BE_BILLED' ? 'BILLED' : 'TO-PAY'),
     status: consignment.status || 'Booked',
     items: body.items || consignment.items || [],
+    cargoPhoto: body.cargoPhoto || consignment.cargoPhoto || null,
+    biltyPhoto: body.biltyPhoto || consignment.biltyPhoto || null,
+    weightSlipPhoto: body.weightSlipPhoto || consignment.weightSlipPhoto || null,
+    photos: body.photos || consignment.photos || [],
   };
 
     // 1. Generate real persistent Notification in SQLite
