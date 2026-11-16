@@ -243,12 +243,15 @@ export default function ChallanPage() {
         dedupedBilties.push(item);
       }
 
-      const unassigned = dedupedBilties.filter(
-        (b: any) =>
-          !b.challanId &&
-          b.shipmentStatus !== "DELIVERED" &&
-          b.shipmentStatus !== "DELETED"
-      );
+      const unassigned = dedupedBilties.filter((b: any) => {
+        if (!b) return false;
+        if (b.challanId) return false;
+        const normStatus = String(b.shipmentStatus || b.status || "").toUpperCase().replace(/[\s-]+/g, "_");
+        if (normStatus === "IN_TRANSIT" || normStatus === "DISPATCHED" || normStatus === "DELIVERED" || normStatus === "DELETED" || normStatus === "OUT_FOR_DELIVERY") {
+          return false;
+        }
+        return true;
+      });
       setAvailableBilties(unassigned);
 
       const localDrivers = getStoredDrivers();
@@ -290,9 +293,12 @@ export default function ChallanPage() {
       }));
     } catch (err) {
       console.error("Error loading challan setup data:", err);
-      const localUnassigned = getStoredBilties().filter(
-        (b: any) => !b.challanId && b.shipmentStatus !== "DELIVERED" && b.shipmentStatus !== "DELETED"
-      );
+      const localUnassigned = getStoredBilties().filter((b: any) => {
+        if (!b) return false;
+        if (b.challanId) return false;
+        const normStatus = String(b.shipmentStatus || b.status || "").toUpperCase().replace(/[\s-]+/g, "_");
+        return normStatus !== "IN_TRANSIT" && normStatus !== "DISPATCHED" && normStatus !== "DELIVERED" && normStatus !== "DELETED" && normStatus !== "OUT_FOR_DELIVERY";
+      });
       setAvailableBilties(localUnassigned);
       setVehicles(getStoredVehicles());
       setDrivers(getStoredDrivers());
@@ -539,17 +545,23 @@ export default function ChallanPage() {
             newChallanRecord.id = sbData.id;
           }
 
-          // Update linked bilties status in Supabase
+          // Update linked bilties status in Supabase (schema-safe: omit unmapped vehicle/driver columns)
           if (selectedBiltyIds.length > 0) {
             await supabase
               .from("bilties")
-              .update({
-                status: "In Transit",
-                vehicle_number: newChallanRecord.truckNumber || null,
-                driver_name: newChallanRecord.driverName || null,
-              })
+              .update({ status: "In Transit" })
               .in("id", selectedBiltyIds);
+
+            await supabase
+              .from("bilties")
+              .update({ status: "In Transit" })
+              .in("bilty_number", selectedBiltyIds);
           }
+
+          // Immediately remove dispatched bilties from local available warehouse state
+          setAvailableBilties((prev) =>
+            prev.filter((b) => !selectedBiltyIds.includes(b.id) && !selectedBiltyIds.includes(b.biltyNumber))
+          );
 
           // Synchronize locally only after affirmative database write
           const allSavedChallans = saveStoredChallan(newChallanRecord);
@@ -708,9 +720,6 @@ export default function ChallanPage() {
             <FileSpreadsheet className="w-7 h-7 text-spd-blue" />
             Challan & Trip Manifest
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Group warehouse bilties onto long-haul trucks, assign drivers, calculate live trip profitability, and issue dispatch challans.
-          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">

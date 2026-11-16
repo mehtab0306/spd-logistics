@@ -33,10 +33,10 @@ const INITIAL_BROKERS: BrokerRecord[] = [];
 
 export const INITIAL_CASH_BOOKS = [
   {
-    id: "cb-lhr-main",
-    name: "Lahore Head Office Cash Book",
-    city: "Lahore",
-    description: "Main central treasury cash book for Lahore terminal operations",
+    id: "cb-khi-ho",
+    name: "Karachi Head Office Cash Book",
+    city: "Karachi",
+    description: "Main treasury cash book for Karachi Head Office operations",
     openingBalance: 0,
     totalCredits: 0,
     totalDebits: 0,
@@ -46,10 +46,10 @@ export const INITIAL_CASH_BOOKS = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: "cb-khi-hub",
-    name: "Karachi Port Terminal Cash Book",
-    city: "Karachi",
-    description: "Operating cash book for Port Qasim and Mauripur delivery terminal",
+    id: "cb-lhr-branch",
+    name: "Lahore Branch Cash Book",
+    city: "Lahore",
+    description: "Operating cash book for Lahore Station / Branch operations",
     openingBalance: 0,
     totalCredits: 0,
     totalDebits: 0,
@@ -57,7 +57,33 @@ export const INITIAL_CASH_BOOKS = [
     transactionCount: 0,
     status: "ACTIVE",
     updatedAt: new Date().toISOString(),
-  }
+  },
+  {
+    id: "cb-hammad-lhr",
+    name: "Hammad Cash Book (Lahore)",
+    city: "Lahore",
+    description: "Operational accounts cash book - Lahore Branch",
+    openingBalance: 0,
+    totalCredits: 0,
+    totalDebits: 0,
+    currentBalance: 0,
+    transactionCount: 0,
+    status: "ACTIVE",
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "cb-hammad-khi",
+    name: "Hammad Cash Book (Karachi)",
+    city: "Karachi",
+    description: "Central dispatch & freight collection cash book - Karachi",
+    openingBalance: 0,
+    totalCredits: 0,
+    totalDebits: 0,
+    currentBalance: 0,
+    transactionCount: 0,
+    status: "ACTIVE",
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 interface CentralStoreData {
@@ -70,6 +96,8 @@ interface CentralStoreData {
   cashBooks: any[];
   cashTransactions: any[];
   brokerPayments: any[];
+  marketingLeads: any[];
+  marketingCampaigns: any[];
   lastUpdated: string;
 }
 
@@ -94,6 +122,8 @@ function loadStoreFromFile(): CentralStoreData {
           cashBooks: Array.isArray(parsed.cashBooks) && parsed.cashBooks.length > 0 ? parsed.cashBooks : [...INITIAL_CASH_BOOKS],
           cashTransactions: Array.isArray(parsed.cashTransactions) ? parsed.cashTransactions : [],
           brokerPayments: Array.isArray(parsed.brokerPayments) ? parsed.brokerPayments : [],
+          marketingLeads: Array.isArray(parsed.marketingLeads) ? parsed.marketingLeads : [],
+          marketingCampaigns: Array.isArray(parsed.marketingCampaigns) ? parsed.marketingCampaigns : [],
           lastUpdated: parsed.lastUpdated || new Date().toISOString(),
         };
         return memoryStore;
@@ -114,6 +144,8 @@ function loadStoreFromFile(): CentralStoreData {
     cashBooks: [...INITIAL_CASH_BOOKS],
     cashTransactions: [],
     brokerPayments: [],
+    marketingLeads: [],
+    marketingCampaigns: [],
     lastUpdated: new Date().toISOString(),
   };
 
@@ -223,6 +255,8 @@ export function mergeCentralStore(incoming: Partial<CentralStoreData>): CentralS
     'cashBooks',
     'cashTransactions',
     'brokerPayments',
+    'marketingLeads',
+    'marketingCampaigns',
   ];
 
   for (const k of keys) {

@@ -212,27 +212,8 @@ export default function ArrivalsPage() {
         }).catch(() => {});
       }
 
-      // If no individual bilties, create a consolidated delivery queue manifest item
-      if (linkedBilties.length === 0) {
-        saveStoredDelivery({
-          id: `del-${challan.id}`,
-          challanId: challan.id,
-          challanNumber: challan.challanNumber,
-          biltyNumber: `MANIFEST-${challan.challanNumber}`,
-          origin: challan.origin,
-          destination: challan.destination,
-          receiverName: challan.driverName ? `Assigned to ${challan.driverName}` : "Consignee Handover",
-          receiverPhone: challan.driverPhone || "0300-0000000",
-          packageDetails: `Consolidated cargo from Challan #${challan.challanNumber}`,
-          quantity: challan.totalBilties || 1,
-          weight: challan.totalWeight || 0,
-          freight: challan.totalBiltyFreight || challan.totalFreight || 0,
-          remainingBalance: 0,
-          shipmentStatus: "READY_FOR_DELIVERY",
-          status: "READY_FOR_DELIVERY",
-          createdAt: timestamp,
-        });
-      }
+      // Real bilties are individually updated and added to delivery queue above.
+      // Do not synthesize artificial MANIFEST- entries into individual delivery queues.
 
       // Direct Supabase sync
       if (isSupabaseConfigured) {

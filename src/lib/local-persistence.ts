@@ -997,3 +997,40 @@ export function emptyTrash(): TrashItem[] {
   return [];
 }
 
+const MARKETING_LEADS_KEY = "spd_marketing_leads";
+const MARKETING_LOCAL_LEADS_KEY = "spd_local_marketing_leads";
+
+export function getStoredMarketingLeads(): any[] {
+  if (typeof window === "undefined") return [];
+  const primary = safeParseArray(localStorage.getItem(MARKETING_LEADS_KEY));
+  const fallback = safeParseArray(localStorage.getItem(MARKETING_LOCAL_LEADS_KEY));
+  const mergedMap = new Map();
+  fallback.forEach((item) => { if (item?.id) mergedMap.set(item.id, item); });
+  primary.forEach((item) => { if (item?.id) mergedMap.set(item.id, item); });
+  return Array.from(mergedMap.values());
+}
+
+export function saveStoredMarketingLead(lead: any): void {
+  if (typeof window === "undefined" || !lead?.id) return;
+  const list = getStoredMarketingLeads();
+  const idx = list.findIndex((l) => l.id === lead.id);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...lead, updatedAt: new Date().toISOString() };
+  } else {
+    list.unshift({ ...lead, createdAt: lead.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  }
+  try {
+    localStorage.setItem(MARKETING_LEADS_KEY, JSON.stringify(list));
+    localStorage.setItem(MARKETING_LOCAL_LEADS_KEY, JSON.stringify(list));
+  } catch {}
+}
+
+export function removeStoredMarketingLead(id: string): void {
+  if (typeof window === "undefined" || !id) return;
+  const list = getStoredMarketingLeads().filter((l) => l.id !== id);
+  try {
+    localStorage.setItem(MARKETING_LEADS_KEY, JSON.stringify(list));
+    localStorage.setItem(MARKETING_LOCAL_LEADS_KEY, JSON.stringify(list));
+  } catch {}
+}
+

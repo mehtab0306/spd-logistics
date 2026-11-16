@@ -11,17 +11,17 @@ interface BiltySalesTaxInvoiceProps {
 export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
   if (!bilty) return null;
 
-  const biltyNumber = bilty.biltyNumber || "BLT-PENDING";
-  const taxInvoiceNo = `STI-${biltyNumber}`;
+  const biltyNumber = bilty.biltyNumber || bilty.manualBiltyNumber || "BLT-PENDING";
+  const taxInvoiceNo = bilty.salesTaxInvoiceNumber || `STI-${String(biltyNumber).replace(/^(BLT-|B-)/i, "")}`;
   const invoiceDate = bilty.bookingDate ? formatDate(bilty.bookingDate) : bilty.date ? formatDate(bilty.date) : formatDate(new Date());
 
   // Determine Buyer based on bilty.billTo
-  const isReceiver = bilty.billTo === "Receiver";
+  const isReceiver = bilty.billTo === "Receiver" || bilty.billTo === "Consignee" || (!bilty.billTo && (bilty.freightAsPer === "To Pay" || bilty.paymentMode === "To Pay"));
   const buyerName = isReceiver ? (bilty.receiverName || "Receiver") : (bilty.senderName || bilty.customer?.name || "Sender");
   const buyerAddress = isReceiver
-    ? (bilty.receiverAddress || `${bilty.destination || "Karachi"}, Pakistan`)
-    : (bilty.senderAddress || `${bilty.origin || "Lahore"}, Pakistan`);
-  const buyerPhone = isReceiver ? (bilty.receiverPhone || "0300-0000000") : (bilty.senderPhone || "0300-0000000");
+    ? (bilty.receiverAddress || `${bilty.destination || "Lahore"}, Pakistan`)
+    : (bilty.senderAddress || `${bilty.origin || "Karachi"}, Pakistan`);
+  const buyerPhone = isReceiver ? (bilty.receiverPhone || "") : (bilty.senderPhone || "");
   const buyerNtn = (isReceiver ? bilty.receiverNtn : bilty.customer?.ntn || bilty.senderNtn) || "Unregistered / Final Consumer";
   const buyerStrn = (isReceiver ? bilty.receiverStrn : bilty.customer?.strn || bilty.senderStrn) || "-";
 
@@ -74,16 +74,16 @@ export function BiltySalesTaxInvoice({ bilty }: BiltySalesTaxInvoiceProps) {
             </span>
             <p className="font-black text-xs text-black">SUPER PAK DATA WALE GOODS TRANSPORT CO.®</p>
             <p className="text-[10px] text-slate-700 leading-tight">
-              Plot No. 543, Gate No. 3, Street No. 4, Truck Stand Hawksbay Road, Karachi.
+              Head Office Karachi: Plot # 9, Gate No 1, Street No 4, Truck Stand Hawksbay Road, Karachi, Pakistan.
             </p>
             <div className="grid grid-cols-2 gap-1 text-[10px] pt-1 mt-1 border-t border-slate-200">
               <p>
                 <span className="text-slate-500 font-bold">NTN:</span>{" "}
-                <span className="font-mono font-black text-black">1692873-3</span>
+                <span className="font-mono font-black text-black">4774077-5</span>
               </p>
               <p>
                 <span className="text-slate-500 font-bold">Phone:</span>{" "}
-                <span className="font-mono font-black text-black">0218288833</span>
+                <span className="font-mono font-black text-black">021-32351333, 0300-2024433</span>
               </p>
             </div>
           </div>

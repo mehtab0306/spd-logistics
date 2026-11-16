@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { validateAdminSession } from "@/lib/auth";
 import { createSystemNotification } from "@/lib/notifications";
 import { sendEventEmail } from "@/lib/mailer";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -17,28 +18,77 @@ export async function GET(request: Request) {
     const statusFilter = (searchParams.get("status") || "ALL").toUpperCase();
     const customerFilter = searchParams.get("customerId") || "";
 
-    // 1. Fetch active consignments
-    const consignments = await prisma.consignment.findMany({
-      where: {
-        shipmentStatus: { not: "DELETED" },
-        ...(customerFilter ? {
-          OR: [
-            { customerId: customerFilter },
-            { senderId: customerFilter },
-            { receiverId: customerFilter },
-          ],
-        } : {}),
-      },
-      include: {
-        customer: { select: { id: true, name: true, phone: true, city: true, companyName: true } },
-        sender: { select: { id: true, name: true, phone: true, city: true, companyName: true } },
-        receiver: { select: { id: true, name: true, phone: true, city: true, companyName: true } },
-        payments: {
-          orderBy: { date: "desc" },
+    // 1. Fetch active consignments from Prisma with Supabase fallback
+    let consignments: any[] = [];
+    try {
+      consignments = await prisma.consignment.findMany({
+        where: {
+          shipmentStatus: { not: "DELETED" },
+          ...(customerFilter ? {
+            OR: [
+              { customerId: customerFilter },
+              { senderId: customerFilter },
+              { receiverId: customerFilter },
+            ],
+          } : {}),
         },
-      },
-      orderBy: { date: "desc" },
-    });
+        include: {
+          customer: { select: { id: true, name: true, phone: true, city: true, companyName: true } },
+          sender: { select: { id: true, name: true, phone: true, city: true, companyName: true } },
+          receiver: { select: { id: true, name: true, phone: true, city: true, companyName: true } },
+          payments: {
+            orderBy: { date: "desc" },
+          },
+        },
+        orderBy: { date: "desc" },
+      });
+    } catch (dbErr) {
+      console.warn("Prisma consignment query warning:", dbErr);
+    }
+
+    // Fallback: If local database has no consignments, query live Supabase PostgreSQL
+    if (consignments.length === 0 && isSupabaseConfigured) {
+      try {
+        const { data: sbBilties, error: sbErr } = await supabase
+          .from("bilties")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!sbErr && Array.isArray(sbBilties)) {
+          for (const b of sbBilties) {
+            const total = Number(b.freight_amount) || 0;
+            const paid = Number(b.advance_paid) || 0;
+            const remaining = Number(b.remaining_balance !== undefined ? b.remaining_balance : Math.max(0, total - paid));
+            const pStatus = remaining <= 0 && total > 0 ? "PAID" : paid > 0 ? "PARTIAL" : "UNPAID";
+            consignments.push({
+              id: b.id,
+              biltyNumber: b.manual_bilty_number || b.bilty_number || b.id,
+              trackingId: b.bilty_number || b.id,
+              date: b.booking_date || b.created_at,
+              senderName: b.sender_name || "Walk-in Shipper",
+              receiverName: b.receiver_name || "Consignee",
+              senderPhone: b.sender_phone || "",
+              receiverPhone: b.receiver_phone || "",
+              origin: b.origin_station || "Karachi",
+              destination: b.destination_station || "Lahore",
+              freight: total,
+              totalAmount: total,
+              paidAmount: paid,
+              remainingBalance: remaining,
+              paymentStatus: pStatus,
+              shipmentStatus: b.status || "BOOKED",
+              customerId: b.customer_id || null,
+              customer: b.customer_id ? { id: b.customer_id, name: b.sender_name, phone: b.sender_phone, city: b.origin_station } : null,
+              sender: null,
+              receiver: null,
+              payments: [],
+            });
+          }
+        }
+      } catch (sbEx) {
+        console.warn("Supabase receivables fallback warning:", sbEx);
+      }
+    }
 
     // 2. Fetch all registered customers to ensure complete customer directory
     const allCustomers = await prisma.customer.findMany({

@@ -13,10 +13,12 @@ interface PrintableChallanProps {
 }
 
 export function PrintableChallan({ challan, onClose, isFullPage = false }: PrintableChallanProps) {
+  const [hideFreight, setHideFreight] = React.useState(false);
+
   if (!challan) return null;
 
   const bilties = challan.consignments || [];
-  const totalPackages = bilties.reduce((sum: number, b: any) => sum + (Number(b.quantity) || 1), 0);
+  const totalPackages = bilties.reduce((sum: number, b: any) => sum + (Number(b.quantity || b.packagesCount) || 1), 0);
   const totalWeight = bilties.reduce((sum: number, b: any) => sum + (Number(b.weight) || 0), 0);
   const totalFreight = bilties.reduce(
     (sum: number, b: any) => sum + (Number(b.remainingBalance !== undefined ? b.remainingBalance : (b.freight || b.totalAmount || 0))),
@@ -25,11 +27,11 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
 
   const challanNo = challan.challanNumber || challan.id || "CHL-2026";
   const dispatchDate = formatDate(challan.dispatchDate || challan.date || challan.createdAt);
-  const origin = challan.origin || "Lahore";
-  const destination = challan.destination || "Karachi";
-  const truckNo = challan.truckNumber || (challan.vehicle ? challan.vehicle.vehicleNumber : "LES-8921");
+  const origin = challan.origin || "Karachi";
+  const destination = challan.destination || "Lahore";
+  const truckNo = challan.truckNumber || (challan.vehicle ? (challan.vehicle.vehicleNumber || challan.vehicle.registrationNumber) : "LES-8921");
   const driverName = challan.driverName || (challan.driver ? challan.driver.name : "Muhammad Khan");
-  const driverPhone = challan.driverPhone || (challan.driver ? challan.driver.phone : "0301 5566778");
+  const driverPhone = challan.driverPhone || (challan.driver ? challan.driver.phone : "0300-2024433");
   
   const truckHireCost = Number(challan.truckFreight || challan.brokerFreight || 0);
   const advancePaid = Number(challan.advancePaidToDriver || challan.brokerAdvance || 0);
@@ -101,7 +103,17 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer select-none px-3 py-1.5 rounded-xl border border-slate-300 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={hideFreight}
+                  onChange={(e) => setHideFreight(e.target.checked)}
+                  className="rounded text-spd-red w-4 h-4"
+                />
+                <span>Hide Bilty Freight (Market Challan)</span>
+              </label>
+
               <Button
                 onClick={() => window.print()}
                 className="bg-spd-blue hover:bg-blue-800 text-white font-bold text-xs rounded-xl gap-2 h-9 px-4 shadow-sm"
@@ -124,37 +136,36 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <img
-                  src="/images/spd-logo.jpg"
+                  src="/images/spd-logo.png"
                   alt="SPD Logo"
-                  className="h-16 w-16 object-contain rounded-full border-2 border-red-600 shrink-0"
+                  className="h-16 w-16 object-contain shrink-0"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "/images/spd-logo.png";
+                    (e.target as HTMLImageElement).src = "/images/spd-logo.jpg";
                   }}
                 />
                 <div>
                   <h1 className="text-lg sm:text-xl font-black text-red-600 uppercase tracking-tight leading-tight">
                     SUPER PAK DATA WALE GOODS TRANSPORT CO.®
                   </h1>
-                  <p className="text-[9.5px] font-black text-slate-900 uppercase tracking-wider mt-0.5">
-                    Govt. Licensed Inter-City Goods Carrier & Heavy Fleet Operator • Est. 1996
+                  <p className="text-[9.5px] font-bold text-slate-800 uppercase tracking-wider mt-0.5">
+                    All Pakistan 24 Hours Urgent, Container, Mazda &amp; Train Service Available
                   </p>
                   <div className="text-[8.5px] text-slate-700 leading-tight mt-1 space-y-0.5">
                     <p>
-                      <span className="font-bold text-black">Lahore Station:</span> Outside Bhati Gate / Badami Bagh Truck Stand, Lahore • Tel: 042-37725944 / 0300-8441234
+                      <span className="font-bold text-black">Head Office Karachi:</span> Plot # 9, Gate No 1, Street No 4, Truck Stand, Hawksbay Road, Karachi, Pakistan. • Tel: 021-32351333, 021-32352688 / 0300-2024433, 0321-2024433
                     </p>
                     <p>
-                      <span className="font-bold text-black">Karachi Terminal:</span> Plot 12-A, Mauripur Road, Hawksbay Truck Stand, Karachi • Tel: 021-32354411 / 0321-2244556
+                      <span className="font-bold text-black">Lahore Office:</span> Saggian Bypass, Hazrat Ali Road, Opposite IGG House, Lahore, Pakistan. • Tel: 0325-2024433, 0301-8264433, 0300-2928633
                     </p>
-                    <p className="font-mono font-bold text-black">
-                      Income Tax NTN: 4774077-5 • Sales Tax STRN: 32-77-8761-123-45
+                    <p className="text-slate-600 font-medium">
+                      Email: superpakdatawale@gmail.com
                     </p>
                   </div>
                 </div>
               </div>
 
               <div className="text-right border-2 border-black p-2 rounded bg-slate-50 min-w-[200px] shrink-0">
-                <p className="text-[8.5px] font-black uppercase tracking-wider text-slate-500">Official Transport Record</p>
-                <p className="text-xs font-black text-black uppercase leading-tight mt-0.5">DISPATCH MANIFEST</p>
+                <p className="text-xs font-black text-black uppercase leading-tight">DISPATCH MANIFEST</p>
                 <p className="text-[11px] font-mono font-black text-red-700 mt-0.5">
                   CHALLAN #: {challanNo}
                 </p>
@@ -188,7 +199,6 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
                 <span className="font-black text-black text-[10.5px] block uppercase">
                   {origin} ➔ {destination}
                 </span>
-                <span className="text-[8px] text-slate-600 block mt-0.5">Direct Highway Corridor</span>
               </div>
               <div className="border-r border-slate-300 pr-2">
                 <span className="text-[8px] uppercase font-bold text-slate-500 block">Vehicle No</span>
@@ -232,13 +242,17 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
                   <th className="p-1 border border-black">GOODS / PACKAGES</th>
                   <th className="p-1 border border-black">WEIGHT</th>
                   <th className="p-1 border border-black">FREIGHT TYPE</th>
-                  <th className="p-1 border border-black text-right">TO PAY / ADVANCE</th>
+                  <th className="p-1 border border-black text-right">
+                    {hideFreight ? "STATUS" : "TO PAY / ADVANCE"}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {bilties.map((b: any, idx: number) => {
                   const bDate = formatDate(b.date || b.createdAt);
                   const bAmount = b.remainingBalance !== undefined ? b.remainingBalance : (b.freight || b.totalAmount || 0);
+                  const isReceiverBilled = b.billTo === "Receiver" || b.billTo === "Consignee" || (!b.billTo && (b.freightAsPer === "To Pay" || b.paymentMode === "To Pay"));
+                  const isSenderBilled = b.billTo === "Sender" || b.billTo === "Consignor" || (!b.billTo && !isReceiverBilled);
                   return (
                     <tr key={b.id || idx}>
                       <td className="p-1 border border-black text-center font-mono font-bold">{idx + 1}</td>
@@ -249,15 +263,29 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
                         {bDate}
                       </td>
                       <td className="p-1 border border-black truncate">
-                        <span className="font-semibold block truncate">{b.senderName || "Sender"}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold truncate">{b.senderName || "Sender"}</span>
+                          {isSenderBilled && (
+                            <span className="text-[7px] font-bold text-red-700 bg-red-50 border border-red-200 px-1 rounded shrink-0">
+                              Bill To
+                            </span>
+                          )}
+                        </div>
                         {b.senderPhone && <span className="text-[7.5px] text-slate-500 font-mono block truncate">{b.senderPhone}</span>}
                       </td>
                       <td className="p-1 border border-black truncate">
-                        <span className="font-semibold block truncate">{b.receiverName || "Receiver"}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold truncate">{b.receiverName || "Receiver"}</span>
+                          {isReceiverBilled && (
+                            <span className="text-[7px] font-bold text-red-700 bg-red-50 border border-red-200 px-1 rounded shrink-0">
+                              Bill To
+                            </span>
+                          )}
+                        </div>
                         {b.receiverPhone && <span className="text-[7.5px] text-slate-500 font-mono block truncate">{b.receiverPhone}</span>}
                       </td>
                       <td className="p-1 border border-black truncate">
-                        <span className="font-bold text-black">{b.quantity || 1} Pkgs</span> - {b.packageDetails || b.description || "Commercial Cargo"}
+                        <span className="font-bold text-black">{b.quantity || b.packagesCount || 1} Pkgs</span> - {b.packageDetails || b.description || b.itemDescription || "Commercial Cargo"}
                       </td>
                       <td className="p-1 border border-black text-center font-mono whitespace-nowrap truncate">
                         {b.weight ? `${b.weight} kg` : "—"}
@@ -266,7 +294,11 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
                         {b.freightAsPer || b.amountType || b.paymentStatus || "To Pay"}
                       </td>
                       <td className="p-1 border border-black text-right font-black font-mono text-black truncate">
-                        {formatCurrency(bAmount)}
+                        {hideFreight ? (
+                          <span className="text-slate-500 font-semibold italic text-[8px]">CONFIDENTIAL</span>
+                        ) : (
+                          formatCurrency(bAmount)
+                        )}
                       </td>
                     </tr>
                   );
@@ -294,7 +326,11 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
                     Net Due
                   </td>
                   <td className="p-1 text-right font-mono font-black text-red-700 truncate">
-                    {formatCurrency(totalFreight)}
+                    {hideFreight ? (
+                      <span className="text-slate-500 font-semibold italic text-[8px]">CONFIDENTIAL</span>
+                    ) : (
+                      formatCurrency(totalFreight)
+                    )}
                   </td>
                 </tr>
               </tfoot>
@@ -307,7 +343,7 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
               <div className="border-r border-slate-300 pr-2 text-left">
                 <span className="text-[8px] uppercase font-bold text-slate-500 block">Total Freight (Bilties)</span>
                 <span className="font-mono font-black text-black text-[11px] block">
-                  {formatCurrency(challan.totalBiltyFreight || challan.totalAmount || totalFreight)}
+                  {hideFreight ? "CONFIDENTIAL" : formatCurrency(challan.totalBiltyFreight || challan.totalAmount || totalFreight)}
                 </span>
               </div>
               <div className="border-r border-slate-300 pr-2 text-left">
@@ -339,18 +375,21 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
 
             <div className="grid grid-cols-3 gap-6 text-center text-xs pt-3">
               <div>
+                <div className="h-14" />
                 <div className="border-t-2 border-black pt-1 font-bold uppercase text-[9.5px] text-black">
                   Prepared By: Dispatch Officer
                 </div>
                 <div className="text-[8px] text-slate-600 mt-0.5">Booking / Outward Terminal Control</div>
               </div>
               <div>
+                <div className="h-14" />
                 <div className="border-t-2 border-black pt-1 font-bold uppercase text-[9.5px] text-black">
                   Driver Acceptance Signature
                 </div>
                 <div className="text-[8px] text-slate-600 mt-0.5">Fleet Operator / Driver In-Charge</div>
               </div>
               <div>
+                <div className="h-14" />
                 <div className="border-t-2 border-black pt-1 font-bold uppercase text-[9.5px] text-black">
                   Authorized Station Seal
                 </div>

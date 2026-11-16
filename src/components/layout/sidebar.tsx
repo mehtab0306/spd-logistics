@@ -36,6 +36,7 @@ import {
   Handshake,
   Trash2,
   FilePlus2,
+  Megaphone,
 } from "lucide-react";
 
 const iconMap: Record<string, React.ElementType> = {
@@ -62,6 +63,7 @@ const iconMap: Record<string, React.ElementType> = {
   CheckCircle2,
   Trash2,
   FilePlus2,
+  Megaphone,
 };
 
 interface SidebarProps {

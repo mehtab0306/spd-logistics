@@ -86,9 +86,10 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Smooth scrolling */
+  /* Base typography & smooth scrolling */
   html {
     scroll-behavior: smooth;
+    font-size: 16.5px; /* Slightly increased software-wide typography for clear readability */
   }
 
   /* Custom scrollbar */

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { validateAdminSession } from "@/lib/auth";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,44 @@ export async function GET(request: Request) {
       });
     } catch (dbErr) {
       console.warn("DB error fetching payables (using fallback):", dbErr);
+    }
+
+    // Fallback: If local database has no payables, query live Supabase PostgreSQL challans
+    if ((!payables || payables.length === 0) && isSupabaseConfigured) {
+      try {
+        const { data: sbChallans, error: sbErr } = await supabase
+          .from("challans")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!sbErr && Array.isArray(sbChallans)) {
+          for (const ch of sbChallans) {
+            const hireCost = Number(ch.truck_freight || ch.broker_freight || 0);
+            const advance = Number(ch.advance_paid_to_driver || ch.broker_advance || 0);
+            const remaining = Math.max(0, hireCost - advance);
+            if (hireCost > 0 || advance > 0) {
+              payables.push({
+                id: `pay-${ch.id}`,
+                vendorName: ch.driver_name || ch.broker_name || (ch.vehicle_number ? `Truck ${ch.vehicle_number}` : "Fleet Carrier"),
+                vendorPhone: ch.driver_phone || "",
+                category: "TRUCK_HIRE",
+                reference: ch.challan_number || `CHL-${ch.id}`,
+                description: `Truck Hire / Brokerage: ${ch.origin_station || "Karachi"} to ${ch.destination_station || "Lahore"}`,
+                vehicleNumber: ch.vehicle_number || "",
+                driverName: ch.driver_name || "",
+                totalAmount: hireCost,
+                paidAmount: advance,
+                remainingAmount: remaining,
+                status: remaining <= 0 && hireCost > 0 ? "PAID" : advance > 0 ? "PARTIAL" : "UNPAID",
+                createdAt: ch.created_at || new Date().toISOString(),
+                dueDate: ch.created_at || new Date().toISOString(),
+              });
+            }
+          }
+        }
+      } catch (sbEx) {
+        console.warn("Supabase payables fallback warning:", sbEx);
+      }
     }
 
     if (!payables || payables.length === 0) {

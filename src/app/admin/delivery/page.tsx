@@ -210,6 +210,8 @@ export default function DeliveryPage() {
         if (!item) continue;
         const key = String(item.biltyNumber || item.id || "").toUpperCase().trim();
         if (!key) continue;
+        // Never include synthetic MANIFEST- placeholder entries in individual bilty delivery queue
+        if (key.startsWith("MANIFEST-") || key.startsWith("MANIFEST")) continue;
 
         if (!seen.has(key)) {
           seen.set(key, item);
@@ -219,7 +221,10 @@ export default function DeliveryPage() {
         }
       }
 
-      const unifiedQueue = Array.from(seen.values());
+      const unifiedQueue = Array.from(seen.values()).filter((item) => {
+        const bNum = String(item.biltyNumber || item.id || "").toUpperCase().trim();
+        return !bNum.startsWith("MANIFEST-") && !bNum.startsWith("MANIFEST");
+      });
       setDeliveries(unifiedQueue);
     } catch (err) {
       console.error("Error loading delivery queue:", err);

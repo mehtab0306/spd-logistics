@@ -888,6 +888,62 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              {/* Dedicated Invoice & Sales Tax Serial Numbering */}
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-emerald-600" />
+                  Separate Invoice Numbering Systems (Commercial &amp; Sales Tax)
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Configure independent sequential numbering for Commercial Invoices and Official Sales Tax Invoices rather than duplicating Bilty numbers.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Commercial Invoice Prefix &amp; Starting Serial #
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={settings.commercialInvoicePrefix || "INV-"}
+                        onChange={(e) => handleChange("commercialInvoicePrefix", e.target.value)}
+                        placeholder="INV-"
+                        className="w-24 rounded-xl h-10 text-xs font-mono font-bold"
+                      />
+                      <Input
+                        type="number"
+                        value={settings.commercialInvoiceStart || "1001"}
+                        onChange={(e) => handleChange("commercialInvoiceStart", e.target.value)}
+                        placeholder="1001"
+                        className="flex-1 rounded-xl h-10 text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400">Example: {settings.commercialInvoicePrefix || "INV-"}{settings.commercialInvoiceStart || "1001"}</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Sales Tax Invoice Prefix &amp; Starting Serial #
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={settings.salesTaxInvoicePrefix || "STI-"}
+                        onChange={(e) => handleChange("salesTaxInvoicePrefix", e.target.value)}
+                        placeholder="STI-"
+                        className="w-24 rounded-xl h-10 text-xs font-mono font-bold"
+                      />
+                      <Input
+                        type="number"
+                        value={settings.salesTaxInvoiceStart || "1001"}
+                        onChange={(e) => handleChange("salesTaxInvoiceStart", e.target.value)}
+                        placeholder="1001"
+                        className="flex-1 rounded-xl h-10 text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400">Example: {settings.salesTaxInvoicePrefix || "STI-"}{settings.salesTaxInvoiceStart || "1001"}</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                   Standard Payment Terms
@@ -937,6 +993,10 @@ export default function SettingsPage() {
                     "defaultPaymentMethod",
                     "dueDays",
                     "defaultTaxRate",
+                    "commercialInvoicePrefix",
+                    "commercialInvoiceStart",
+                    "salesTaxInvoicePrefix",
+                    "salesTaxInvoiceStart",
                     "paymentTerms",
                     "defaultNotes",
                   ])

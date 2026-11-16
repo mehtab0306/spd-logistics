@@ -12,27 +12,28 @@ interface BiltyFreightBillProps {
 export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
   if (!bilty) return null;
 
-  const biltyNumber = bilty.biltyNumber || "BLT-PENDING";
-  const billNumber = `BILL-${biltyNumber}`;
+  const biltyNumber = bilty.biltyNumber || bilty.manualBiltyNumber || "BLT-PENDING";
+  const billNumber = bilty.invoiceNumber || bilty.commercialInvoiceNumber || `INV-${String(bilty.biltyNumber || bilty.id || "1001").replace(/^(BLT-|B-)/i, "")}`;
   const billDate = bilty.bookingDate ? formatDate(bilty.bookingDate) : bilty.date ? formatDate(bilty.date) : formatDate(new Date());
 
   // Determine Bill To party based on bilty.billTo
-  const isBillToReceiver = bilty.billTo === "Receiver";
-  const billToParty = isBillToReceiver
+  const isBillToReceiver = bilty.billTo === "Receiver" || bilty.billTo === "Consignee" || (!bilty.billTo && (bilty.freightAsPer === "To Pay" || bilty.paymentMode === "To Pay"));
+  const billedParty = isBillToReceiver
     ? {
         role: "Receiver / Consignee",
         name: bilty.receiverName || "Receiver",
-        phone: bilty.receiverPhone || "0300-0000000",
-        address: bilty.receiverAddress || `${bilty.destination || "Karachi"}, Pakistan`,
-        ntn: bilty.receiverNtn || "Unregistered / NTN on File",
+        phone: bilty.receiverPhone || "",
+        address: bilty.receiverAddress || `${bilty.destination || "Lahore"}, Pakistan`,
       }
     : {
         role: "Sender / Consignor",
         name: bilty.senderName || bilty.customer?.name || "Sender",
-        phone: bilty.senderPhone || "0300-0000000",
-        address: bilty.senderAddress || `${bilty.origin || "Lahore"}, Pakistan`,
-        ntn: bilty.customer?.ntn || bilty.senderNtn || "1692873-3 / NTN on File",
+        phone: bilty.senderPhone || "",
+        address: bilty.senderAddress || `${bilty.origin || "Karachi"}, Pakistan`,
       };
+
+  // Clean vehicle display: empty string if unassigned or pending
+  const vehicleDisplay = bilty.vehicleNumber && !String(bilty.vehicleNumber).toLowerCase().includes("pending") && bilty.vehicleNumber !== "/" ? bilty.vehicleNumber : "";
 
   // Cargo items
   const items: any[] = Array.isArray(bilty.items) && bilty.items.length > 0
@@ -86,28 +87,44 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
           title="FREIGHT BILL / COMMERCIAL INVOICE"
           documentNumber={billNumber}
           date={billDate}
-          station={bilty.warehouse ? `${bilty.warehouse} Station` : "Head Office Station (Lahore)"}
+          station={bilty.warehouse ? `${bilty.warehouse} Station` : "Karachi Head Office / Lahore Branch"}
         />
 
-        {/* Sender & Receiver Box & Invoice Metadata Row */}
+        {/* Billed Party & Shipment Parties Box */}
         <div className="grid grid-cols-12 gap-3">
-          {/* Sender & Receiver Box (6 cols) */}
-          <div className="col-span-6 p-3 border-2 border-black rounded bg-slate-50 flex flex-col justify-between">
-            <div className="space-y-1">
-              <span className="font-black uppercase text-[10px] text-slate-500 block">
-                Sender / Consignor:
-              </span>
-              <p className="font-black text-base text-black tracking-tight">
-                {bilty.senderName || bilty.customer?.name || "Sender"}
+          {/* Bill To & Parties Box (6 cols) */}
+          <div className="col-span-6 p-2.5 border-2 border-black rounded bg-slate-50 flex flex-col justify-between space-y-2">
+            <div className="bg-red-50 border border-red-200 p-2 rounded">
+              <div className="flex items-center justify-between">
+                <span className="font-black uppercase text-[9px] text-red-700 tracking-wider">
+                  BILL TO ({billedParty.role}):
+                </span>
+                <span className="text-[8px] font-bold bg-red-700 text-white px-1.5 py-0.2 rounded uppercase">
+                  Payment Responsible
+                </span>
+              </div>
+              <p className="font-black text-sm text-black tracking-tight mt-0.5">
+                {billedParty.name}
               </p>
+              {billedParty.address && (
+                <p className="text-[9px] text-slate-700 truncate">{billedParty.address}</p>
+              )}
+              {billedParty.phone && (
+                <p className="text-[8.5px] font-mono font-bold text-slate-800">Tel: {billedParty.phone}</p>
+              )}
             </div>
-            <div className="border-t border-slate-300 pt-2 mt-2 space-y-1">
-              <span className="font-black uppercase text-[10px] text-slate-500 block">
-                Receiver / Consignee:
-              </span>
-              <p className="font-black text-base text-black tracking-tight">
-                {bilty.receiverName || "Receiver"}
-              </p>
+
+            <div className="grid grid-cols-2 gap-2 text-[9px] pt-1 border-t border-slate-300">
+              <div>
+                <span className="text-slate-500 font-bold block uppercase text-[8px]">Consignor (Sender):</span>
+                <span className="font-bold text-black block truncate">{bilty.senderName || "Sender"}</span>
+                {bilty.senderPhone && <span className="font-mono text-slate-600 block text-[8px]">{bilty.senderPhone}</span>}
+              </div>
+              <div>
+                <span className="text-slate-500 font-bold block uppercase text-[8px]">Consignee (Receiver):</span>
+                <span className="font-bold text-black block truncate">{bilty.receiverName || "Receiver"}</span>
+                {bilty.receiverPhone && <span className="font-mono text-slate-600 block text-[8px]">{bilty.receiverPhone}</span>}
+              </div>
             </div>
           </div>
 
@@ -127,12 +144,12 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
             </div>
             <div className="flex justify-between items-center border-t border-slate-200 pt-1">
               <span className="text-slate-500 uppercase text-[9px] font-bold">Vehicle / Truck #:</span>
-              <span className="font-mono text-xs font-black text-slate-900">{bilty.vehicleNumber || "/"}</span>
+              <span className="font-mono text-xs font-black text-slate-900">{vehicleDisplay}</span>
             </div>
             <div className="flex justify-between items-center border-t border-black pt-1">
               <span className="text-slate-500 uppercase text-[9px] font-bold">Route / Corridor:</span>
               <span className="font-black uppercase text-black">
-                {bilty.origin || "Lahore"} &rarr; {bilty.destination || "Karachi"}
+                {bilty.origin || "Karachi"} &rarr; {bilty.destination || "Lahore"}
               </span>
             </div>
           </div>

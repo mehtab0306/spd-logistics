@@ -17,7 +17,7 @@ export function BiltyTransportHeader({
   documentNumber,
   date,
   copyFor,
-  station = "Head Office Station (Lahore)",
+  station = "Karachi Head Office / Lahore Branch",
 }: BiltyTransportHeaderProps) {
   const displayDate = date || new Date().toLocaleDateString("en-PK", {
     year: "numeric",
@@ -42,21 +42,21 @@ export function BiltyTransportHeader({
             <h1 className="text-lg sm:text-xl font-black tracking-tight text-red-700 uppercase leading-none">
               SUPER PAK DATA WALE GOODS TRANSPORT CO.®
             </h1>
-            <p className="text-[10px] font-bold text-slate-800 uppercase tracking-wider mt-0.5">
-              NTN: 1692873-3
+            <p className="text-[9.5px] font-bold text-slate-800 uppercase tracking-wider mt-0.5">
+              All Pakistan 24 Hours Urgent, Container, Mazda &amp; Train Service Available
             </p>
 
             {/* Branch Contacts & Official Details */}
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] text-slate-700 mt-1 leading-tight">
               <div>
-                <span className="font-bold text-black">Karachi Head Office:</span> Gate 1, St 4, Plot 9, Truck Stand Hawksbay Rd.
+                <span className="font-bold text-black">Karachi Head Office:</span> Plot # 9, Gate No 1, Street No 4, Truck Stand Hawksbay Rd.
                 <br />
-                <span className="font-mono text-slate-900 font-bold">Ph: 03002024433, 03212024433, 03022314433</span>
+                <span className="font-mono text-slate-900 font-bold">Ph: 021-32351333, 021-32352688 / 0300-2024433, 0321-2024433</span>
               </div>
               <div>
-                <span className="font-bold text-black">Lahore Branch:</span> Saggian Bypass, Hazrat Ali Rd, Near IGG House.
+                <span className="font-bold text-black">Lahore Office:</span> Saggian Bypass, Hazrat Ali Rd, Opp IGG House.
                 <br />
-                <span className="font-mono text-slate-900">Email: superpakdatawale@gmail.com | Web: www.superpakdata.com</span>
+                <span className="font-mono text-slate-900">Ph: 0325-2024433, 0301-8264433 | superpakdatawale@gmail.com</span>
               </div>
             </div>
           </div>

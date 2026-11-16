@@ -54,6 +54,13 @@ export default function ChallanInTransitPage() {
   // Batch Challan Print modal
   const [printBatchManifests, setPrintBatchManifests] = useState(false);
 
+  // Helper to normalize transit status
+  const isChallanInTransit = (c: any) => {
+    if (!c) return false;
+    const norm = String(c.status || "").toUpperCase().replace(/[\s-]+/g, "_");
+    return norm === "IN_TRANSIT" || norm === "DISPATCHED" || norm === "ON_TRIP" || norm === "PENDING_ARRIVAL";
+  };
+
   // 1. Load data strictly once when client mounts
   useEffect(() => {
     try {
@@ -64,9 +71,7 @@ export default function ChallanInTransitPage() {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const active = parsed.filter(
-            (c: any) => c && (c.status === "IN_TRANSIT" || c.status === "DISPATCHED")
-          );
+          const active = parsed.filter(isChallanInTransit);
           if (active.length > 0) {
             setChallans(active);
           }
@@ -125,8 +130,8 @@ export default function ChallanInTransitPage() {
               truckNumber: r.vehicle_number || r.truck_number,
               driverName: r.driver_name,
               driverPhone: r.driver_phone,
-              origin: r.origin_station || r.origin || "Lahore",
-              destination: r.destination_station || r.destination || "Karachi",
+              origin: r.origin_station || r.origin || "Karachi",
+              destination: r.destination_station || r.destination || "Lahore",
               status: r.status || "IN_TRANSIT",
               dispatchDate: r.created_at,
               createdAt: r.created_at,
@@ -155,9 +160,12 @@ export default function ChallanInTransitPage() {
       }
 
       const localChallans = getStoredChallans();
-      const combinedActive = supabaseChallans.length > 0
-        ? mergeLocalWithApi(supabaseChallans, localChallans, getDeletedChallanIds(), "challanNumber")
-        : (supabaseFetchedSuccessfully ? [] : localChallans);
+      const combinedActive = mergeLocalWithApi(
+        supabaseChallans,
+        localChallans,
+        getDeletedChallanIds(),
+        "challanNumber"
+      );
 
       const merged = mergeLocalWithApi(
         combinedActive,
@@ -165,9 +173,7 @@ export default function ChallanInTransitPage() {
         getDeletedChallanIds(),
         "challanNumber"
       );
-      const active = merged.filter(
-        (c: any) => c.status === "IN_TRANSIT" || c.status === "DISPATCHED"
-      );
+      const active = merged.filter(isChallanInTransit);
 
       const dedupedActive: any[] = [];
       const seenChallanIds = new Set<string>();
@@ -186,9 +192,7 @@ export default function ChallanInTransitPage() {
       setChallans(dedupedActive);
     } catch (err) {
       console.error("Error fetching challans in transit:", err);
-      const active = getStoredChallans().filter(
-        (c: any) => c.status === "IN_TRANSIT" || c.status === "DISPATCHED"
-      );
+      const active = getStoredChallans().filter(isChallanInTransit);
       setChallans(active);
     } finally {
       setLoading(false);

@@ -103,6 +103,26 @@ const DEFAULT_SETTINGS: Record<
     category: 'BILLING',
     description: 'Standard credit due days',
   },
+  commercialInvoicePrefix: {
+    value: 'INV-',
+    category: 'BILLING',
+    description: 'Prefix for commercial invoice vouchers',
+  },
+  commercialInvoiceStart: {
+    value: '1001',
+    category: 'BILLING',
+    description: 'Starting serial number for commercial invoices',
+  },
+  salesTaxInvoicePrefix: {
+    value: 'STI-',
+    category: 'BILLING',
+    description: 'Prefix for official sales tax invoices',
+  },
+  salesTaxInvoiceStart: {
+    value: '1001',
+    category: 'BILLING',
+    description: 'Starting serial number for sales tax invoices',
+  },
   defaultNotes: {
     value: 'Goods transported under company standard carriage conditions.',
     category: 'BILLING',

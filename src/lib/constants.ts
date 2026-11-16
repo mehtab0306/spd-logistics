@@ -239,6 +239,12 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'MARKETING & GROWTH',
+    items: [
+      { title: 'Marketing', href: '/admin/marketing', icon: 'Megaphone' },
+    ],
+  },
+  {
     title: 'TRACKING & RECOVERY',
     items: [
       { title: 'Tracking', href: '/admin/tracking', icon: 'MapPin' },

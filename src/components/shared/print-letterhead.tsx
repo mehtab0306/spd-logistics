@@ -13,10 +13,10 @@ interface PrintHeaderProps {
 
 export function PrintHeader({
   title,
-  subtitle = "NTN: 1692873-3 • Est. 1996",
+  subtitle = "All Pakistan 24 Hours Urgent, Container, Mazda & Train Service Available",
   documentNumber,
   date,
-  station = "Head Office Station (Lahore)",
+  station = "Karachi Head Office / Lahore Branch",
   companyName,
 }: PrintHeaderProps) {
   const displayDate = date || new Date().toLocaleDateString("en-PK", {
@@ -41,11 +41,11 @@ export function PrintHeader({
             <h1 className="text-xl font-black tracking-tight text-red-600 uppercase">
               {companyName || "SUPER PAK DATA WALE GOODS TRANSPORT CO.®"}
             </h1>
-            <p className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">
+            <p className="text-[10px] font-bold text-slate-800 uppercase tracking-wide">
               {subtitle}
             </p>
-            <p className="text-[10px] text-slate-600">
-              Gate 1, St 4, Plot 9, Truck Stand Hawksbay Rd, Karachi • Lahore: Saggian Bypass • Ph: 03002024433, 03212024433, 03022314433
+            <p className="text-[9.5px] text-slate-600">
+              Head Office Karachi: Plot # 9, Gate 1, St 4, Hawksbay Rd (021-32351333, 0300-2024433) • Lahore Office: Saggian Bypass (0325-2024433)
             </p>
           </div>
         </div>

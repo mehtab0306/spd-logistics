@@ -283,11 +283,11 @@ export default function BiltyPage() {
               origin: r.origin_station || r.origin || "Karachi",
               destination: r.destination_station || r.destination || "Lahore",
               warehouse: r.warehouse || (String(r.origin_station || r.origin || "").toUpperCase().includes("LAHORE") ? "LAHORE" : "KARACHI"),
-              itemDescription: r.item_description || r.package_details || "General Cargo",
-              packageDetails: r.item_description || r.package_details || "General Cargo",
-              packagesCount: Number(r.packages_count) || 1,
-              quantity: Number(r.packages_count) || 1,
-              weight: Number(r.weight) || 0,
+              itemDescription: r.item_description || r.package_details || "Commercial Cargo",
+              packageDetails: r.package_details || r.item_description || "Commercial Cargo",
+              packagesCount: Number(r.total_packages || r.packages_count) || 1,
+              quantity: Number(r.total_packages || r.packages_count) || 1,
+              weight: Number(r.actual_weight || r.charged_weight || r.weight) || 0,
               totalFreight: Number(r.freight_amount ?? r.total_freight ?? 0),
               freightAmount: Number(r.freight_amount ?? r.total_freight ?? 0),
               freight: Number(r.freight_amount ?? r.total_freight ?? 0),
@@ -296,7 +296,7 @@ export default function BiltyPage() {
               remainingBalance: Number(r.remaining_balance ?? 0),
               paymentMode: r.payment_mode || "TO-PAY",
               paymentStatus: (r.remaining_balance === 0 && (r.freight_amount || r.total_freight)) ? "PAID" : r.payment_mode || "TO-PAY",
-              shipmentStatus: (r.status || "BOOKED").toUpperCase(),
+              shipmentStatus: (r.status || "BOOKED").toUpperCase().replace(/[\s-]+/g, "_"),
               status: r.status || "Booked",
               createdAt: r.created_at || new Date().toISOString(),
               ...r,
@@ -325,21 +325,51 @@ export default function BiltyPage() {
         }
       }
 
-      // Supabase PostgreSQL is the centralized production database
+      // Merge Supabase PostgreSQL data with local rich records
       let items: any[] = [];
+      const localBilties = getLocalBilties();
+      const localMap = new Map<string, any>();
+      for (const lb of localBilties) {
+        if (lb.biltyNumber) localMap.set(String(lb.biltyNumber).toUpperCase(), lb);
+        if (lb.id) localMap.set(String(lb.id), lb);
+      }
+
       if (supabaseFetchedSuccessfully) {
         const map = new Map<string, any>();
         for (const b of supabaseBilties) {
-          const key = b.biltyNumber || b.id;
-          if (key && !map.has(key)) {
-            map.set(key, b);
+          const key = String(b.biltyNumber || b.id).toUpperCase();
+          const localMatch = localMap.get(key) || localMap.get(String(b.id));
+          const merged = {
+            ...b,
+            ...(localMatch || {}),
+            // preserve live status from supabase
+            shipmentStatus: b.shipmentStatus || localMatch?.shipmentStatus || "BOOKED",
+            status: b.status || localMatch?.status || "Booked",
+            // ensure items array and cargo details are preserved
+            items: (localMatch?.items && Array.isArray(localMatch.items) && localMatch.items.length > 0)
+              ? localMatch.items
+              : (b.items && Array.isArray(b.items) && b.items.length > 0 ? b.items : []),
+            packageDetails: localMatch?.packageDetails || localMatch?.itemDescription || b.packageDetails || b.itemDescription,
+            itemDescription: localMatch?.itemDescription || localMatch?.packageDetails || b.itemDescription || b.packageDetails,
+            packagesCount: localMatch?.packagesCount || localMatch?.quantity || b.packagesCount || b.quantity || 1,
+            quantity: localMatch?.quantity || localMatch?.packagesCount || b.quantity || b.packagesCount || 1,
+            weight: localMatch?.weight || b.weight || 0,
+            cpm: localMatch?.cpm || b.cpm || 0,
+            poNumber: localMatch?.poNumber || b.poNumber || "",
+            billTo: localMatch?.billTo || b.billTo || "",
+          };
+          map.set(key, merged);
+        }
+        for (const lb of localBilties) {
+          const key = String(lb.biltyNumber || lb.id).toUpperCase();
+          if (!map.has(key) && !String(lb.id || "").startsWith("bilty-demo-")) {
+            map.set(key, lb);
           }
         }
         items = Array.from(map.values()).filter(
           (b) => b && b.shipmentStatus !== "DELETED" && (b.senderName || b.receiverName || b.biltyNumber)
         );
       } else {
-        const localBilties = getLocalBilties();
         const deletedIds = getDeletedBiltyIds();
         items = mergeLocalWithApi(localBilties, apiItems, deletedIds, "biltyNumber").filter(
           (b) =>
@@ -358,9 +388,16 @@ export default function BiltyPage() {
         items = items.filter(
           (b) =>
             b.biltyNumber?.toLowerCase().includes(q) ||
+            b.manualBiltyNumber?.toLowerCase().includes(q) ||
+            b.poNumber?.toLowerCase().includes(q) ||
+            b.blNumber?.toLowerCase().includes(q) ||
             b.trackingId?.toLowerCase().includes(q) ||
             b.senderName?.toLowerCase().includes(q) ||
             b.receiverName?.toLowerCase().includes(q) ||
+            b.itemDescription?.toLowerCase().includes(q) ||
+            b.packageDetails?.toLowerCase().includes(q) ||
+            b.senderPhone?.toLowerCase().includes(q) ||
+            b.receiverPhone?.toLowerCase().includes(q) ||
             b.origin?.toLowerCase().includes(q) ||
             b.destination?.toLowerCase().includes(q)
         );
@@ -1642,12 +1679,12 @@ export default function BiltyPage() {
               <Table className="min-w-[1100px]">
                 <TableHeader className="bg-slate-50/70 dark:bg-slate-800/50">
                   <TableRow>
-                    <TableHead className="text-xs font-bold whitespace-nowrap">Bilty # / Tracking</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Bilty # / Order (PO) #</TableHead>
                     <TableHead className="text-xs font-bold whitespace-nowrap">Booking Date</TableHead>
                     <TableHead className="text-xs font-bold whitespace-nowrap">Sender & Receiver</TableHead>
-                    <TableHead className="text-xs font-bold whitespace-nowrap">Route (Origin ➔ Destination)</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Route & Status</TableHead>
                     <TableHead className="text-xs font-bold whitespace-nowrap">Cargo Items & Pkgs</TableHead>
-                    <TableHead className="text-xs font-bold whitespace-nowrap">Gross Weight</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Gross Weight & CBM</TableHead>
                     <TableHead className="text-xs font-bold whitespace-nowrap">Total Freight & Terms</TableHead>
                     <TableHead className="text-xs font-bold text-right whitespace-nowrap">Actions</TableHead>
                   </TableRow>
@@ -1659,9 +1696,11 @@ export default function BiltyPage() {
                     const isBilled = mode === "BILLED" || mode === "TO_BE_BILLED" || mode === "TO BE BILLED";
                     const isToPay = mode === "TO-PAY" || mode === "TO_PAY" || mode === "TO PAY" || mode === "UNPAID" || (!isPaid && !isBilled);
 
-                    const cargoDesc = c.itemDescription || c.packageDetails || (c.items && c.items[0]?.detail) || "-";
-                    const pkgsCount = c.packagesCount || c.quantity || "-";
-                    const cargoWeight = c.weight !== null && c.weight !== undefined && Number(c.weight) > 0 ? `${Number(c.weight).toLocaleString()} KG` : "-";
+                    const cargoDesc = c.itemDescription || c.packageDetails || (c.items && c.items[0]?.detail) || "Commercial Cargo";
+                    const pkgsCount = c.packagesCount || c.quantity || (c.items && c.items[0]?.quantity) || 1;
+                    const cargoWeight = (c.weight !== null && c.weight !== undefined && Number(c.weight) > 0)
+                      ? `${Number(c.weight).toLocaleString()} KG`
+                      : (c.items && c.items[0]?.weight ? `${c.items[0].weight} KG` : "-");
 
                     return (
                       <TableRow
@@ -1673,7 +1712,7 @@ export default function BiltyPage() {
                           highlightClass(c.id) || highlightClass(c.biltyNumber)
                         )}
                       >
-                        {/* 1. Bilty # & Tracking (with Clickable preview link) */}
+                        {/* 1. Bilty # & Order # / Tracking */}
                         <TableCell>
                           <div>
                             <Link
@@ -1683,7 +1722,12 @@ export default function BiltyPage() {
                             >
                               {c.biltyNumber || c.id || "-"}
                             </Link>
-                            <p className="text-[10px] text-slate-500 font-mono">{c.trackingId || "-"}</p>
+                            {c.poNumber && (
+                              <p className="text-[10px] text-amber-700 dark:text-amber-400 font-mono font-bold">
+                                PO: {c.poNumber}
+                              </p>
+                            )}
+                            <p className="text-[9.5px] text-slate-500 font-mono">{c.trackingId || "-"}</p>
                           </div>
                         </TableCell>
 
@@ -1694,23 +1738,38 @@ export default function BiltyPage() {
                           </span>
                         </TableCell>
 
-                        {/* 3. Sender & Receiver (Name + Contact) */}
+                        {/* 3. Sender & Receiver (with Bill To indicator) */}
                         <TableCell>
                           <div className="space-y-0.5 max-w-[210px]">
-                            <p className="font-bold text-slate-900 dark:text-white truncate">
-                              <span className="text-slate-400 font-normal">Sender: </span>
-                              {c.senderName || c.customer?.companyName || c.customer?.name || "-"}
-                              {c.senderPhone && <span className="text-slate-500 font-normal"> ({c.senderPhone})</span>}
-                            </p>
-                            <p className="text-slate-700 dark:text-slate-300 truncate">
-                              <span className="text-slate-400 font-normal">Receiver: </span>
-                              {c.receiverName || "-"}
-                              {c.receiverPhone && <span className="text-slate-500 font-normal"> ({c.receiverPhone})</span>}
-                            </p>
+                            <div className="flex items-center gap-1">
+                              <span className="font-bold text-slate-900 dark:text-white truncate">
+                                <span className="text-slate-400 font-normal">Sender: </span>
+                                {c.senderName || c.customer?.companyName || c.customer?.name || "-"}
+                              </span>
+                              {(c.billTo === "Sender" || (!c.billTo && (c.paymentMode === "PAID" || c.amountType === "Paid"))) && (
+                                <span className="text-[7.5px] font-bold text-red-700 bg-red-50 border border-red-200 px-1 rounded shrink-0">
+                                  Bill To
+                                </span>
+                              )}
+                            </div>
+                            {c.senderPhone && <span className="text-[9.5px] text-slate-500 font-normal block truncate">({c.senderPhone})</span>}
+
+                            <div className="flex items-center gap-1 pt-0.5">
+                              <span className="text-slate-700 dark:text-slate-300 truncate font-semibold">
+                                <span className="text-slate-400 font-normal">Receiver: </span>
+                                {c.receiverName || "-"}
+                              </span>
+                              {(c.billTo === "Receiver" || (!c.billTo && (c.paymentMode === "TO-PAY" || c.amountType === "To Pay"))) && (
+                                <span className="text-[7.5px] font-bold text-red-700 bg-red-50 border border-red-200 px-1 rounded shrink-0">
+                                  Bill To
+                                </span>
+                              )}
+                            </div>
+                            {c.receiverPhone && <span className="text-[9.5px] text-slate-500 font-normal block truncate">({c.receiverPhone})</span>}
                           </div>
                         </TableCell>
 
-                        {/* 4. Origin ➔ Destination */}
+                        {/* 4. Origin ➔ Destination & Accurate Status Workflow Badge */}
                         <TableCell>
                           <div>
                             <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
@@ -1718,15 +1777,60 @@ export default function BiltyPage() {
                               <span className="text-slate-400">&rarr;</span>
                               <span className="text-spd-blue">{c.destination || "-"}</span>
                             </div>
-                            <span
-                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold mt-1 inline-block ${
-                                (c.warehouse || c.origin || "").toUpperCase().includes("KARACHI")
-                                  ? "bg-blue-100 text-spd-blue dark:bg-blue-950/60 dark:text-blue-400"
-                                  : "bg-red-100 text-spd-red dark:bg-red-950/60 dark:text-red-400"
-                              }`}
-                            >
-                              {c.warehouse || "KARACHI"}
-                            </span>
+                            <div className="flex items-center gap-1 mt-1 flex-wrap">
+                              {(() => {
+                                const s = String(c.shipmentStatus || c.status || "BOOKED").toUpperCase().replace(/[\s-]+/g, "_");
+                                if (s === "DELIVERED") {
+                                  return (
+                                    <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-300">
+                                      Delivered
+                                    </span>
+                                  );
+                                }
+                                if (s === "OUT_FOR_DELIVERY") {
+                                  return (
+                                    <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-400 border border-cyan-300">
+                                      Out for Delivery
+                                    </span>
+                                  );
+                                }
+                                if (s === "ARRIVED" || s === "ARRIVED_AT_LAHORE" || s === "AT_DESTINATION") {
+                                  return (
+                                    <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-400 border border-purple-300">
+                                      Arrived at Hub
+                                    </span>
+                                  );
+                                }
+                                if (s === "IN_TRANSIT" || s === "DISPATCHED" || s === "ON_TRIP") {
+                                  return (
+                                    <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-300">
+                                      In Transit
+                                    </span>
+                                  );
+                                }
+                                if (s === "PICKED_UP" || s === "AT_KARACHI") {
+                                  return (
+                                    <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-300">
+                                      At Karachi
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-300">
+                                    Booked
+                                  </span>
+                                );
+                              })()}
+                              <span
+                                className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                  (c.warehouse || c.origin || "").toUpperCase().includes("KARACHI")
+                                    ? "bg-blue-50 text-spd-blue border border-blue-200"
+                                    : "bg-red-50 text-spd-red border border-red-200"
+                                }`}
+                              >
+                                {c.warehouse || "KARACHI"}
+                              </span>
+                            </div>
                           </div>
                         </TableCell>
 
@@ -1737,16 +1841,23 @@ export default function BiltyPage() {
                               {cargoDesc}
                             </p>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                              {pkgsCount !== "-" ? `${pkgsCount} ${c.packagingType || "pkgs"}` : "-"}
+                              {pkgsCount !== "-" ? `${pkgsCount} ${c.packagingType || "pkgs"}` : "1 Pkg"}
                             </p>
                           </div>
                         </TableCell>
 
-                        {/* 6. Gross Weight (KG) */}
+                        {/* 6. Gross Weight & CBM */}
                         <TableCell>
-                          <span className="font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                            {cargoWeight}
-                          </span>
+                          <div>
+                            <span className="font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap block">
+                              {cargoWeight}
+                            </span>
+                            {(c.cpm || (c.items && c.items[0]?.volume)) && (
+                              <span className="text-[9.5px] text-slate-500 font-mono block">
+                                {c.cpm || c.items[0]?.volume} CBM
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
 
                         {/* 7. Total Freight & Payment Status Badge */}
