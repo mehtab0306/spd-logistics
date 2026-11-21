@@ -314,11 +314,30 @@ function CashBooksContent() {
         activeBooks = data.data.filter((b: any) => b.status !== "DELETED");
       }
 
-      // Merge local with active
-      const map = new Map<string, CashBookItem>();
-      localBooks.forEach((b) => map.set(b.id, b));
-      activeBooks.forEach((b) => map.set(b.id, b));
-      const combined = Array.from(map.values());
+      // Merge active from server (authoritative) and localBooks, deduplicating by ID AND normalized Name
+      const combined: CashBookItem[] = [];
+      const seenIds = new Set<string>();
+      const seenNames = new Set<string>();
+
+      for (const b of activeBooks) {
+        if (!b || !b.id || !b.name) continue;
+        const idKey = String(b.id).trim().toLowerCase();
+        const nameKey = String(b.name).trim().toLowerCase();
+        if (seenIds.has(idKey) || seenNames.has(nameKey)) continue;
+        seenIds.add(idKey);
+        seenNames.add(nameKey);
+        combined.push(b);
+      }
+
+      for (const b of localBooks) {
+        if (!b || !b.id || !b.name) continue;
+        const idKey = String(b.id).trim().toLowerCase();
+        const nameKey = String(b.name).trim().toLowerCase();
+        if (seenIds.has(idKey) || seenNames.has(nameKey)) continue;
+        seenIds.add(idKey);
+        seenNames.add(nameKey);
+        combined.push(b);
+      }
 
       if (combined.length > 0) {
         setCashBooks(combined);
@@ -781,6 +800,16 @@ function CashBooksContent() {
     const bCity = newBookData.city.trim();
     if (!bName || !bCity) {
       setFeedback({ type: "error", message: "Cash Book Name and City are required." });
+      return;
+    }
+
+    const existingMatch = cashBooks.find(
+      (b) => b.name.trim().toLowerCase() === bName.toLowerCase()
+    );
+    if (existingMatch) {
+      setSelectedBook(existingMatch);
+      setCreateBookOpen(false);
+      toast.info(`Cash book "${existingMatch.name}" is already open.`);
       return;
     }
 

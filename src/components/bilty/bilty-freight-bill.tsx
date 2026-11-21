@@ -157,7 +157,7 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
           {/* Tracking QR Box (2 cols) */}
           <div className="col-span-2 flex flex-col items-center justify-center p-2 border-2 border-black rounded bg-white">
             <BiltyQrCode
-              value={`https://spd-logistics-live.netlify.app/tracking?id=${encodeURIComponent(bilty.biltyNumber || bilty.id)}`}
+              value={`https://spdlogistics.pk/tracking?id=${encodeURIComponent(bilty.biltyNumber || bilty.id)}`}
               size={90}
               level="M"
               label="SCAN TO TRACK"

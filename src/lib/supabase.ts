@@ -74,6 +74,30 @@ export function generateUUID(): string {
   });
 }
 
+/**
+ * Timeout helper for cloud database operations
+ */
+export function withTimeout<T = any>(
+  promise: PromiseLike<T> | Promise<T>,
+  ms = 8000,
+  fallbackMsg = 'Database operation timed out'
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(fallbackMsg));
+    }, ms);
+    Promise.resolve(promise)
+      .then((val) => {
+        clearTimeout(timer);
+        resolve(val);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 export interface CustomerPayload {
   id?: string;
   name: string;
@@ -455,21 +479,26 @@ export async function safeUpsertChallan(
 
   // Attempt 1: Upsert with valid UUID if provided
   if (validId) {
-    const { data, error } = await supabase.from('challans').upsert([corePayload]).select().maybeSingle();
-    if (!error) return { success: true, data };
+    try {
+      const res: any = await withTimeout(
+        supabase.from('challans').upsert([corePayload]).select().maybeSingle(),
+        8000
+      );
+      if (!res?.error) return { success: true, data: res?.data };
+    } catch {}
   }
 
   // Attempt 2: Insert without ID (auto-generates standard UUID in database)
   const payloadNoId = { ...corePayload };
   delete payloadNoId.id;
 
-  const { data: insData, error: insError } = await supabase
-    .from('challans')
-    .insert([payloadNoId])
-    .select()
-    .maybeSingle();
-
-  if (!insError) return { success: true, data: insData };
+  try {
+    const res: any = await withTimeout(
+      supabase.from('challans').insert([payloadNoId]).select().maybeSingle(),
+      8000
+    );
+    if (!res?.error) return { success: true, data: res?.data };
+  } catch {}
 
   // Attempt 3: Minimal fallback: challan_number, vehicle_number, driver_name
   const minPayload: Record<string, any> = {
@@ -478,15 +507,16 @@ export async function safeUpsertChallan(
   if (payload.vehicle_number?.trim()) minPayload.vehicle_number = payload.vehicle_number.trim();
   if (payload.driver_name?.trim()) minPayload.driver_name = payload.driver_name.trim();
 
-  const { data: minData, error: minError } = await supabase
-    .from('challans')
-    .insert([minPayload])
-    .select()
-    .maybeSingle();
-
-  if (!minError) return { success: true, data: minData };
-
-  return { success: false, error: minError || insError };
+  try {
+    const res: any = await withTimeout(
+      supabase.from('challans').insert([minPayload]).select().maybeSingle(),
+      8000
+    );
+    if (!res?.error) return { success: true, data: res?.data };
+    return { success: false, error: res?.error };
+  } catch (err: any) {
+    return { success: false, error: err };
+  }
 }
 
 export interface InquiryPayload {

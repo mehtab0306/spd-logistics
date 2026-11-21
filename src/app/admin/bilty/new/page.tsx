@@ -43,7 +43,7 @@ import { toast } from "sonner";
 import { export4SheetBiltyExcel } from "@/lib/export-excel";
 import { FormSectionCard } from "@/components/shared/form-section-card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import {
   getStoredCustomers,
   getDeletedCustomerIds,
@@ -58,11 +58,15 @@ import {
 import { PAKISTAN_CITIES, CARGO_DESCRIPTION_OPTIONS } from "@/lib/constants";
 import { TripleImageAttachment } from "@/components/shared/triple-image-attachment";
 import { HybridCombobox } from "@/components/ui/hybrid-combobox";
-import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeUpsertCustomer, generateUUID, withTimeout } from "@/lib/supabase";
 
 interface BiltyCargoItem {
   detail: string;
   bundleDescription?: string;
+  bagSpec?: string;
+  cartonSpec?: string;
+  containerSpec?: string;
+  drumSpec?: string;
   quantity: string | number;
   weight: string | number;
   volume: string | number;
@@ -934,96 +938,93 @@ export default function NewBiltyPage() {
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const biltyPayload: Record<string, any> = {
-          id: biltyUuid,
-          bilty_number: finalBiltyNumber || `SPD-${Date.now()}`,
-          manual_bilty_number: manualBiltyNumberToSave,
-          booking_date: newBiltyRecord.bookingDate,
-          sender_name: (newBiltyRecord.senderName || "Walk-in Shipper").trim(),
-          sender_phone: newBiltyRecord.senderPhone || null,
-          receiver_name: (newBiltyRecord.receiverName || "Consignee").trim(),
-          receiver_phone: newBiltyRecord.receiverPhone || null,
-          origin_station: (newBiltyRecord.origin || "Karachi").trim(),
-          destination_station: (newBiltyRecord.destination || "Lahore").trim(),
-          total_packages: Number(newBiltyRecord.packagesCount) || 1,
-          actual_weight: Number(newBiltyRecord.weight) || 0,
-          charged_weight: Number(newBiltyRecord.weight) || 0,
-          freight_amount: Number(newBiltyRecord.totalFreight) || 0,
-          advance_paid: Number(newBiltyRecord.paidAmount) || 0,
-          remaining_balance: Math.max(0, (Number(newBiltyRecord.totalFreight) || 0) - (Number(newBiltyRecord.paidAmount) || 0)),
-          status: newBiltyRecord.shipmentStatus || "Booked",
-          payment_mode: newBiltyRecord.paymentMode || "TO-PAY",
-        };
-
-        // Check if bilty with same bilty_number or ID already exists in Supabase
-        const { data: existingBilty } = await supabase
-          .from("bilties")
-          .select("id")
-          .or(`id.eq.${biltyUuid},bilty_number.eq.${finalBiltyNumber}`)
-          .maybeSingle();
-
-        let sbErr: any = null;
-        if (existingBilty) {
-          const { id: _, ...updatePayload } = biltyPayload;
-          const updateRes = await supabase
-            .from("bilties")
-            .update(updatePayload)
-            .eq("id", existingBilty.id);
-          sbErr = updateRes.error;
-        } else {
-          // Try clean insert matching target columns
-          const insRes = await supabase.from("bilties").insert([biltyPayload]);
-          sbErr = insRes.error;
-
-          // If table doesn't have manual_bilty_number column yet, retry without it
-          if (sbErr && sbErr.message?.toLowerCase().includes("manual_bilty_number")) {
-            const { manual_bilty_number: _, ...withoutManual } = biltyPayload;
-            const retryRes = await supabase.from("bilties").insert([withoutManual]);
-            sbErr = retryRes.error;
-          }
-
-          // If duplicate key exists, update instead
-          if (sbErr && (sbErr.code === "23505" || sbErr.message?.toLowerCase().includes("duplicate key"))) {
-            const updateRes = await supabase
-              .from("bilties")
-              .update(biltyPayload)
-              .eq("bilty_number", finalBiltyNumber);
-            sbErr = updateRes.error;
-          }
-        }
-
-        // Safe fallback for legacy column names if present
-        if (sbErr && sbErr.message?.toLowerCase().includes("origin_station")) {
-          const legacyPayload = {
+        try {
+          const biltyPayload: Record<string, any> = {
             id: biltyUuid,
-            bilty_number: biltyPayload.bilty_number,
-            sender_name: biltyPayload.sender_name,
-            receiver_name: biltyPayload.receiver_name,
-            origin: biltyPayload.origin_station,
-            destination: biltyPayload.destination_station,
-            total_freight: biltyPayload.freight_amount,
-            payment_mode: biltyPayload.payment_mode,
-            status: biltyPayload.status,
+            bilty_number: finalBiltyNumber || `SPD-${Date.now()}`,
+            manual_bilty_number: manualBiltyNumberToSave,
+            booking_date: newBiltyRecord.bookingDate,
+            sender_name: (newBiltyRecord.senderName || "Walk-in Shipper").trim(),
+            sender_phone: newBiltyRecord.senderPhone || null,
+            receiver_name: (newBiltyRecord.receiverName || "Consignee").trim(),
+            receiver_phone: newBiltyRecord.receiverPhone || null,
+            origin_station: (newBiltyRecord.origin || "Karachi").trim(),
+            destination_station: (newBiltyRecord.destination || "Lahore").trim(),
+            total_packages: Number(newBiltyRecord.packagesCount) || 1,
+            actual_weight: Number(newBiltyRecord.weight) || 0,
+            charged_weight: Number(newBiltyRecord.weight) || 0,
+            freight_amount: Number(newBiltyRecord.totalFreight) || 0,
+            advance_paid: Number(newBiltyRecord.paidAmount) || 0,
+            remaining_balance: Math.max(0, (Number(newBiltyRecord.totalFreight) || 0) - (Number(newBiltyRecord.paidAmount) || 0)),
+            status: newBiltyRecord.shipmentStatus || "Booked",
+            payment_mode: newBiltyRecord.paymentMode || "TO-PAY",
           };
-          const legacyRes = await supabase.from("bilties").upsert([legacyPayload]);
-          sbErr = legacyRes.error;
-        }
 
-        if (sbErr) {
-          lastErrorMessage = `Supabase write failed: ${sbErr.message}`;
-        } else {
-          savedSuccessfully = true;
-          saveStoredBilty(newBiltyRecord);
-        }
+          // Check if bilty with same bilty_number or ID already exists in Supabase
+          const checkRes: any = await withTimeout(
+            supabase
+              .from("bilties")
+              .select("id")
+              .or(`id.eq.${biltyUuid},bilty_number.eq.${finalBiltyNumber}`)
+              .maybeSingle(),
+            5000
+          ).catch(() => null);
 
-        // Notify API in background for system notifications / audit logs
-        fetch("/api/admin/bilty", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newBiltyRecord),
-        }).catch((err) => console.warn("API audit dispatch notice:", err));
-      } else {
-        // Supabase not configured — try backend server API
+          let sbErr: any = null;
+          if (checkRes?.data) {
+            const { id: _, ...updatePayload } = biltyPayload;
+            const updateRes: any = await withTimeout(
+              supabase.from("bilties").update(updatePayload).eq("id", checkRes.data.id),
+              5000
+            ).catch((e) => ({ error: e }));
+            sbErr = updateRes?.error;
+          } else {
+            // Try clean insert matching target columns
+            const insRes: any = await withTimeout(
+              supabase.from("bilties").insert([biltyPayload]),
+              5000
+            ).catch((e) => ({ error: e }));
+            sbErr = insRes?.error;
+
+            // If table doesn't have manual_bilty_number column yet, retry without it
+            if (sbErr && sbErr.message?.toLowerCase().includes("manual_bilty_number")) {
+              const { manual_bilty_number: _, ...withoutManual } = biltyPayload;
+              const retryRes: any = await withTimeout(
+                supabase.from("bilties").insert([withoutManual]),
+                5000
+              ).catch((e) => ({ error: e }));
+              sbErr = retryRes?.error;
+            }
+
+            // If duplicate key exists, update instead
+            if (sbErr && (sbErr.code === "23505" || sbErr.message?.toLowerCase().includes("duplicate key"))) {
+              const updateRes: any = await withTimeout(
+                supabase.from("bilties").update(biltyPayload).eq("bilty_number", finalBiltyNumber),
+                5000
+              ).catch((e) => ({ error: e }));
+              sbErr = updateRes?.error;
+            }
+          }
+
+          if (!sbErr) {
+            savedSuccessfully = true;
+            saveStoredBilty(newBiltyRecord);
+            // Notify API in background for audit/notifications
+            fetch("/api/admin/bilty", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(newBiltyRecord),
+            }).catch(() => {});
+          } else {
+            console.warn("Direct Supabase bilty write error, initiating server fallback:", sbErr);
+          }
+        } catch (sbEx: any) {
+          console.warn("Direct Supabase bilty exception, initiating server fallback:", sbEx);
+        }
+      }
+
+      // 2. Resilient Server API Fallback (runs if direct Supabase failed, timed out, or unconfigured)
+      if (!savedSuccessfully) {
         try {
           const apiRes = await fetch("/api/admin/bilty", {
             method: "POST",
@@ -1035,17 +1036,17 @@ export default function NewBiltyPage() {
             savedSuccessfully = true;
             saveStoredBilty(newBiltyRecord);
           } else {
-            lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+            lastErrorMessage = apiJson?.error || "Server could not persist bilty.";
           }
         } catch (apiErr: any) {
-          lastErrorMessage = apiErr?.message || "Cloud database is disconnected. Please configure Supabase keys in Vercel.";
+          lastErrorMessage = apiErr?.message || "Server connection error";
         }
       }
 
       if (!savedSuccessfully) {
         throw new Error(
           lastErrorMessage ||
-          "Database Save Failed: Cloud database is not connected. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Settings."
+          "Database Save Failed: Could not persist Bilty. Please check connection."
         );
       }
 
@@ -1098,10 +1099,14 @@ export default function NewBiltyPage() {
       if (!c || !c.id) return;
       const key = String(c.id);
       if (!map.has(key)) {
+        const rateInfo = c.currentRate || c.agreedRate
+          ? `Agreed Rate: ₨ ${c.currentRate || c.agreedRate} (${c.rateBasis || "Per KG"})`
+          : (c.ntn ? `NTN: ${c.ntn}` : "Standard Rate");
+        const sub = c.city ? `${c.city} • ${rateInfo}` : rateInfo;
         map.set(key, {
           value: c.id,
-          label: `${c.name || c.companyName} (${c.phone || "No phone"})`,
-          subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
+          label: c.name || c.companyName,
+          subLabel: sub,
           meta: c,
         });
       }
@@ -1115,10 +1120,14 @@ export default function NewBiltyPage() {
       const name = (c.name || c.companyName || "").trim();
       const normKey = name.toLowerCase();
       if (name && !map.has(normKey)) {
+        const rateInfo = c.currentRate || c.agreedRate
+          ? `Agreed Rate: ₨ ${c.currentRate || c.agreedRate} (${c.rateBasis || "Per KG"})`
+          : (c.ntn ? `NTN: ${c.ntn}` : "Standard Rate");
+        const sub = c.city ? `${c.city} • ${rateInfo}` : rateInfo;
         map.set(normKey, {
           value: name,
-          label: `${name} (${c.phone || "No phone"})`,
-          subLabel: `${c.city || "Pakistan"} • NTN: ${c.ntn || "N/A"}`,
+          label: name,
+          subLabel: sub,
           meta: c,
         });
       }
@@ -1328,22 +1337,24 @@ export default function NewBiltyPage() {
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, dispatchMode: "Normal" })}
-                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                className={cn(
+                  "py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center",
                   formData.dispatchMode === "Normal"
-                    ? "bg-slate-800 text-white border-slate-800 shadow-sm"
+                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold shadow-xs"
                     : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
-                }`}
+                )}
               >
                 Normal
               </button>
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, dispatchMode: "Urgent" })}
-                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                className={cn(
+                  "py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center",
                   formData.dispatchMode === "Urgent"
-                    ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold shadow-xs"
                     : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
-                }`}
+                )}
               >
                 ⚡ Urgent
               </button>
@@ -1355,15 +1366,44 @@ export default function NewBiltyPage() {
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
               Payment Type *
             </Label>
-            <select
-              value={formData.amountType}
-              onChange={(e) => setFormData({ ...formData, amountType: e.target.value as any })}
-              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-            >
-              <option value="Paid">Paid (Cash / Advance)</option>
-              <option value="To Pay">To Pay (At Destination)</option>
-              <option value="To Be Billed">To Be Billed (Credit Account)</option>
-            </select>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, amountType: "To Pay" })}
+                className={cn(
+                  "py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center",
+                  formData.amountType === "To Pay"
+                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold shadow-xs"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
+                )}
+              >
+                To Pay
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, amountType: "Paid" })}
+                className={cn(
+                  "py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center",
+                  formData.amountType === "Paid"
+                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold shadow-xs"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
+                )}
+              >
+                Paid
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, amountType: "To Be Billed" })}
+                className={cn(
+                  "py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center",
+                  formData.amountType === "To Be Billed"
+                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold shadow-xs"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
+                )}
+              >
+                To Be Billed
+              </button>
+            </div>
           </div>
 
           {/* Bill To Selector */}
@@ -1375,22 +1415,24 @@ export default function NewBiltyPage() {
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, billTo: "Sender" })}
-                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                className={cn(
+                  "py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center",
                   formData.billTo === "Sender"
-                    ? "bg-blue-900 text-white border-blue-900 shadow-sm"
+                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold shadow-xs"
                     : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
-                }`}
+                )}
               >
                 Sender
               </button>
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, billTo: "Receiver" })}
-                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                className={cn(
+                  "py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center",
                   formData.billTo === "Receiver"
-                    ? "bg-red-700 text-white border-red-700 shadow-sm"
+                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold shadow-xs"
                     : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-50"
-                }`}
+                )}
               >
                 Receiver
               </button>
@@ -1792,6 +1834,33 @@ export default function NewBiltyPage() {
             </Button>
           </div>
 
+          {/* Customer Agreed Rate Notice Banner */}
+          {selectedSenderCustomer && (selectedSenderCustomer.currentRate || selectedSenderCustomer.agreedRate) && (
+            <div className="p-3.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-300 dark:border-sky-800 flex items-center justify-between flex-wrap gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-800 dark:text-sky-300 flex items-center justify-center font-bold">
+                  <Percent className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-black text-sky-900 dark:text-sky-200 block">
+                    Contract Special Rate Available for {selectedSenderCustomer.name || selectedSenderCustomer.companyName}
+                  </span>
+                  <span className="text-[11px] text-sky-700 dark:text-sky-300 font-semibold">
+                    Agreed Rate: <span className="font-mono font-black">₨ {selectedSenderCustomer.currentRate || selectedSenderCustomer.agreedRate}</span> ({selectedSenderCustomer.rateBasis || "Per KG"})
+                  </span>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => handleApplyAgreedRate(selectedSenderCustomer.currentRate || selectedSenderCustomer.agreedRate, selectedSenderCustomer.rateBasis)}
+                className="h-8 text-xs font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white gap-1.5 shadow-xs"
+              >
+                <span>Apply Agreed Rate</span>
+              </Button>
+            </div>
+          )}
+
           {/* Dynamic Rows */}
           <div className="space-y-3">
             {items.map((item, index) => (
@@ -1848,17 +1917,69 @@ export default function NewBiltyPage() {
                         className="rounded-xl h-8 text-xs font-medium bg-white dark:bg-slate-900 mt-1"
                       />
                     )}
+                    {/* Item-Specific Specification Prompts */}
+                    {item.detail?.toLowerCase().includes("bag") && (
+                      <div className="mt-1.5 space-y-1">
+                        <Label className="text-[10px] font-bold text-sky-700 dark:text-sky-300">
+                          Bag Spec: Weight per bag &amp; Material (e.g. 50kg PP Woven)
+                        </Label>
+                        <Input
+                          value={item.bagSpec || ""}
+                          placeholder="e.g. 50 kg PP Woven Bags"
+                          onChange={(e) => handleItemChange(index, "bagSpec", e.target.value)}
+                          className="rounded-xl h-8 text-xs font-semibold bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-800"
+                        />
+                      </div>
+                    )}
                     {item.detail?.toLowerCase().includes("bundle") && (
                       <div className="mt-1.5 space-y-1">
                         <Label className="text-[10px] font-bold text-red-700 dark:text-red-400">
-                          Bundle Description / Bundle Kis Cheez Ka Hai (e.g. Steel / Fabric / Paper) *
+                          Bundle Spec: Material &amp; Dimensions (e.g. Steel Bars / 10 pcs, 6m)
                         </Label>
                         <Input
-                          required
                           value={item.bundleDescription || ""}
                           placeholder="e.g. Steel Bars, Fabric Rolls, Paper Bundles"
                           onChange={(e) => handleItemChange(index, "bundleDescription", e.target.value)}
                           className="rounded-xl h-8 text-xs font-semibold bg-white dark:bg-slate-900 border-red-300 dark:border-red-800"
+                        />
+                      </div>
+                    )}
+                    {item.detail?.toLowerCase().includes("carton") && (
+                      <div className="mt-1.5 space-y-1">
+                        <Label className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                          Carton Spec: Dimensions (L x W x H) &amp; Unit Weight
+                        </Label>
+                        <Input
+                          value={item.cartonSpec || ""}
+                          placeholder="e.g. 24x18x12 in, 15 kg/ctn"
+                          onChange={(e) => handleItemChange(index, "cartonSpec", e.target.value)}
+                          className="rounded-xl h-8 text-xs font-semibold bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-800"
+                        />
+                      </div>
+                    )}
+                    {item.detail?.toLowerCase().includes("container") && (
+                      <div className="mt-1.5 space-y-1">
+                        <Label className="text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                          Container Spec: Size &amp; Seal Number (e.g. 40ft HQ, Seal # 98213)
+                        </Label>
+                        <Input
+                          value={item.containerSpec || ""}
+                          placeholder="e.g. 40ft High Cube, Seal # 88219"
+                          onChange={(e) => handleItemChange(index, "containerSpec", e.target.value)}
+                          className="rounded-xl h-8 text-xs font-semibold bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-800"
+                        />
+                      </div>
+                    )}
+                    {(item.detail?.toLowerCase().includes("drum") || item.detail?.toLowerCase().includes("can")) && (
+                      <div className="mt-1.5 space-y-1">
+                        <Label className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                          Drum / Can Spec: Volume (Liters) &amp; Fluid Type
+                        </Label>
+                        <Input
+                          value={item.drumSpec || ""}
+                          placeholder="e.g. 200L Steel Drum, Industrial Oil"
+                          onChange={(e) => handleItemChange(index, "drumSpec", e.target.value)}
+                          className="rounded-xl h-8 text-xs font-semibold bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-800"
                         />
                       </div>
                     )}

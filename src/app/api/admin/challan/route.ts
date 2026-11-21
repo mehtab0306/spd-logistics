@@ -203,6 +203,15 @@ export async function POST(request: Request) {
       otherExpenses = 0,
       estimatedProfit = 0,
       notes,
+      deliveryStops = [],
+      priority = "NORMAL",
+      expectedArrivalDate,
+      expectedArrivalTime,
+      driverCnic,
+      driverSecondaryPhone,
+      activeDriverPhone = "PRIMARY",
+      loadingPhotos = [],
+      loadedQuantities = {},
     } = body;
 
     const consignmentIds = (Array.isArray(rawConsignmentIds) && rawConsignmentIds.length > 0)
@@ -288,9 +297,39 @@ export async function POST(request: Request) {
         brokerAdvance: parseFloat(String(body.brokerAdvance || 0)) || 0,
         brokerBalance: parseFloat(String(body.brokerBalance || 0)) || 0,
         hiringMode: body.hiringMode || (body.brokerName ? 'MARKET_BROKER' : 'COMPANY_VEHICLE'),
+        deliveryStops: Array.isArray(deliveryStops) ? deliveryStops : [],
+        priority: priority || "NORMAL",
+        expectedArrivalDate: expectedArrivalDate || null,
+        expectedArrivalTime: expectedArrivalTime || null,
+        driverCnic: driverCnic || null,
+        driverSecondaryPhone: driverSecondaryPhone || null,
+        activeDriverPhone: activeDriverPhone || "PRIMARY",
+        loadingPhotos: Array.isArray(loadingPhotos) ? loadingPhotos : [],
+        loadedQuantities: loadedQuantities || {},
         consignments: selectedBilties,
       };
       saveCentralRecord('challans', enrichedChallan);
+
+      if (isSupabaseConfigured) {
+        try {
+          await safeUpsertChallan({
+            id: challan.id,
+            challan_number: challanNumber,
+            vehicle_number: truckNumber,
+            driver_name: driverName,
+            driver_phone: driverPhone || null,
+            status: 'In Transit',
+            dispatch_date: new Date(challan.date).toISOString(),
+            created_at: new Date(challan.createdAt).toISOString(),
+          });
+          if (consignmentIds.length > 0) {
+            await supabase.from("bilties").update({ status: "In Transit" }).in("id", consignmentIds);
+            await supabase.from("bilties").update({ status: "In Transit" }).in("bilty_number", consignmentIds);
+          }
+        } catch (sbErr) {
+          console.warn('Supabase sync notice:', sbErr);
+        }
+      }
 
       return NextResponse.json({
         success: true,
@@ -320,6 +359,15 @@ export async function POST(request: Request) {
         brokerFreight: parseFloat(String(body.brokerFreight || 0)) || 0,
         brokerAdvance: parseFloat(String(body.brokerAdvance || 0)) || 0,
         brokerBalance: parseFloat(String(body.brokerBalance || 0)) || 0,
+        deliveryStops: Array.isArray(deliveryStops) ? deliveryStops : [],
+        priority: priority || "NORMAL",
+        expectedArrivalDate: expectedArrivalDate || null,
+        expectedArrivalTime: expectedArrivalTime || null,
+        driverCnic: driverCnic || null,
+        driverSecondaryPhone: driverSecondaryPhone || null,
+        activeDriverPhone: activeDriverPhone || "PRIMARY",
+        loadingPhotos: Array.isArray(loadingPhotos) ? loadingPhotos : [],
+        loadedQuantities: loadedQuantities || {},
         totalAmount,
         truckFreight: parseFloat(String(truckFreight)) || 0,
         advancePaidToDriver: parseFloat(String(advancePaidToDriver)) || 0,
@@ -346,6 +394,10 @@ export async function POST(request: Request) {
           });
           if (sbData?.id) {
             mockChallan.id = sbData.id;
+          }
+          if (consignmentIds.length > 0) {
+            await supabase.from("bilties").update({ status: "In Transit" }).in("id", consignmentIds);
+            await supabase.from("bilties").update({ status: "In Transit" }).in("bilty_number", consignmentIds);
           }
         } catch (sbErr) {
           console.warn('Supabase challan upsert notice:', sbErr);

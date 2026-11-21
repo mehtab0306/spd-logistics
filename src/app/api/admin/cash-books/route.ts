@@ -181,9 +181,9 @@ export async function GET(request: Request) {
 
     // 2. LIST ALL CASH BOOKS
     const statusWhere = isDeletedQuery ? 'DELETED' : { not: 'DELETED' };
-    let cashBooks: any[] = [];
+    let prismaBooks: any[] = [];
     try {
-      cashBooks = await prisma.cashBook.findMany({
+      prismaBooks = await prisma.cashBook.findMany({
         where: { status: statusWhere },
         include: {
           transactions: {
@@ -199,23 +199,38 @@ export async function GET(request: Request) {
       console.warn('DB error fetching cash books (serving fallback):', dbErr);
     }
 
-    const centralBooks = (getCentralCollection('cashBooks') || []) as any[];
-
-    if (!cashBooks || cashBooks.length === 0) {
-      const activeCentral = centralBooks.filter((b) =>
-        isDeletedQuery ? b.status === 'DELETED' : b.status !== 'DELETED'
-      );
-      return NextResponse.json({
-        success: true,
-        data: activeCentral.length > 0 ? activeCentral : DEFAULT_CASH_BOOKS,
-      });
+    // Load custom cash books from Supabase system_settings to persist renames & additions
+    let supabaseCustomBooks: any[] = [];
+    if (isSupabaseConfigured) {
+      try {
+        const { data: settingsRow } = await supabase
+          .from('system_settings')
+          .select('*')
+          .eq('key', 'custom_cash_books')
+          .maybeSingle();
+        if (settingsRow?.value) {
+          try {
+            const parsed = JSON.parse(settingsRow.value);
+            if (Array.isArray(parsed)) {
+              supabaseCustomBooks = parsed;
+            }
+          } catch {}
+        }
+      } catch (sbErr) {
+        console.warn('Supabase get custom_cash_books warning:', sbErr);
+      }
     }
 
-    const summary = cashBooks.map((cb) => {
+    const centralBooks = (getCentralCollection('cashBooks') || []) as any[];
+
+    // Pool all candidates: Prisma books + Supabase custom books + central books + default books
+    const candidateList: any[] = [];
+
+    prismaBooks.forEach((cb) => {
       const totalCredits = cb.transactions.reduce((acc: number, t: any) => acc + (t.credit || 0), 0);
       const totalDebits = cb.transactions.reduce((acc: number, t: any) => acc + (t.debit || 0), 0);
       const currentBalance = (cb.openingBalance || 0) + totalCredits - totalDebits;
-      return {
+      candidateList.push({
         id: cb.id,
         name: cb.name,
         city: cb.city,
@@ -227,20 +242,49 @@ export async function GET(request: Request) {
         transactionCount: cb._count?.transactions || 0,
         status: cb.status,
         updatedAt: cb.updatedAt,
-      };
+      });
     });
 
-    // Merge any central books not already in Prisma
-    const existingIds = new Set(summary.map((s) => s.id));
-    for (const cb of centralBooks) {
-      if (!existingIds.has(cb.id)) {
-        if (isDeletedQuery ? cb.status === 'DELETED' : cb.status !== 'DELETED') {
-          summary.push(cb);
-        }
+    supabaseCustomBooks.forEach((scb) => {
+      if (scb && scb.id) {
+        candidateList.push({
+          id: scb.id,
+          name: scb.name,
+          city: scb.city || 'Lahore',
+          description: scb.description || `Operating cash book for ${scb.city || 'Lahore'}`,
+          openingBalance: scb.openingBalance || 0,
+          totalCredits: 0,
+          totalDebits: 0,
+          currentBalance: scb.openingBalance || 0,
+          transactionCount: 0,
+          status: scb.status || 'ACTIVE',
+          updatedAt: scb.updatedAt || new Date().toISOString(),
+        });
       }
+    });
+
+    centralBooks.forEach((cb) => candidateList.push(cb));
+    DEFAULT_CASH_BOOKS.forEach((db) => candidateList.push(db));
+
+    // Deduplicate by BOTH ID and Normalized Name (prevents duplicate "Hammad Cash Book (Lahore)")
+    const dedupedList: any[] = [];
+    const seenIds = new Set<string>();
+    const seenNormalizedNames = new Set<string>();
+
+    for (const b of candidateList) {
+      if (!b || !b.id || !b.name) continue;
+      const idKey = String(b.id).trim().toLowerCase();
+      const normName = String(b.name).trim().toLowerCase();
+
+      if (isDeletedQuery ? b.status !== 'DELETED' : b.status === 'DELETED') continue;
+      if (seenIds.has(idKey) || seenNormalizedNames.has(normName)) continue;
+
+      seenIds.add(idKey);
+      seenNormalizedNames.add(normName);
+      dedupedList.push(b);
     }
 
-    return NextResponse.json({ success: true, data: summary });
+    return NextResponse.json({ success: true, data: dedupedList });
   } catch (error: any) {
     console.error('Error fetching cash books:', error);
     const centralBooks = (getCentralCollection('cashBooks') || []) as any[];
@@ -267,14 +311,38 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, error: 'Name and city are required' }, { status: 400 });
       }
 
+      const cleanName = String(name).trim();
+      const normName = cleanName.toLowerCase();
       const openBal = parseFloat(String(openingBalance)) || 0;
-      let newBook: any = null;
 
+      // 1. Check if a book with the same normalized name already exists to prevent duplication
+      const centralBooks = (getCentralCollection('cashBooks') || []) as any[];
+      const existingInCentral = centralBooks.find((b: any) => String(b.name || '').trim().toLowerCase() === normName);
+      if (existingInCentral && existingInCentral.status !== 'DELETED') {
+        return NextResponse.json({
+          success: true,
+          message: 'Cash book with this name already exists',
+          data: existingInCentral,
+        });
+      }
+
+      let newBook: any = null;
       try {
+        const existingInPrisma = await prisma.cashBook.findFirst({
+          where: { name: { equals: cleanName }, status: { not: 'DELETED' } },
+        });
+        if (existingInPrisma) {
+          return NextResponse.json({
+            success: true,
+            message: 'Cash book with this name already exists',
+            data: existingInPrisma,
+          });
+        }
+
         newBook = await prisma.cashBook.create({
           data: {
-            name,
-            city,
+            name: cleanName,
+            city: String(city).trim(),
             description: description || `Operating cash book for ${city}`,
             openingBalance: openBal,
             status: 'ACTIVE',
@@ -294,8 +362,8 @@ export async function POST(request: Request) {
           }
         : {
             id: `cb-${Date.now()}`,
-            name,
-            city,
+            name: cleanName,
+            city: String(city).trim(),
             description: description || `Operating cash book for ${city}`,
             openingBalance: openBal,
             totalCredits: 0,
@@ -308,6 +376,34 @@ export async function POST(request: Request) {
           };
 
       saveCentralRecord('cashBooks', bookToSave);
+
+      // Persist in Supabase system_settings custom_cash_books
+      if (isSupabaseConfigured) {
+        try {
+          const { data: existingSettings } = await supabase
+            .from('system_settings')
+            .select('*')
+            .eq('key', 'custom_cash_books')
+            .maybeSingle();
+
+          let booksList: any[] = [];
+          if (existingSettings?.value) {
+            try {
+              booksList = JSON.parse(existingSettings.value);
+            } catch {}
+          }
+          if (!booksList.some((b: any) => String(b.name || '').trim().toLowerCase() === normName)) {
+            booksList.push(bookToSave);
+            await supabase.from('system_settings').upsert({
+              key: 'custom_cash_books',
+              value: JSON.stringify(booksList),
+              updated_at: new Date().toISOString(),
+            });
+          }
+        } catch (sbErr) {
+          console.warn('Supabase cashBook save to system_settings warning:', sbErr);
+        }
+      }
 
       return NextResponse.json({
         success: true,

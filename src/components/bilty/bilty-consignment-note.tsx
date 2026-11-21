@@ -22,7 +22,10 @@ export function BiltyConsignmentNote({
 
   const biltyNumber = bilty.biltyNumber || "BLT-PENDING";
   const trackingId = bilty.trackingId || bilty.biltyNumber || bilty.id;
-  const trackingUrl = `https://spd-logistics-live.netlify.app/tracking?id=${encodeURIComponent(bilty.biltyNumber || bilty.id || trackingId)}`;
+  const baseUrl = (typeof window !== "undefined" && window.location.origin.includes("spdlogistics.pk"))
+    ? "https://spdlogistics.pk"
+    : (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("netlify") ? process.env.NEXT_PUBLIC_APP_URL : "https://spdlogistics.pk");
+  const trackingUrl = `${baseUrl.replace(/\/$/, '')}/tracking?id=${encodeURIComponent(bilty.biltyNumber || bilty.id || trackingId)}`;
 
   // Parse items
   const items: any[] = Array.isArray(bilty.items) && bilty.items.length > 0

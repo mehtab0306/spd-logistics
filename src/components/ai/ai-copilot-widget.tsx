@@ -386,29 +386,20 @@ export function AiCopilotWidget() {
 
   return (
     <>
-      {/* Floating Trigger Pill (Bottom-Right) */}
-      <div className="fixed bottom-4 right-4 md:bottom-5 md:right-5 z-50 select-none pb-[env(safe-area-inset-bottom)] pr-[env(safe-area-inset-right)]">
+      {/* Tiny Floating Trigger Icon (Bottom-Right) */}
+      <div className="fixed bottom-3 right-3 md:bottom-4 md:right-4 z-40 select-none pb-[env(safe-area-inset-bottom)] pr-[env(safe-area-inset-right)]">
         {!isOpen && (
           <button
             onClick={() => setIsOpen(true)}
-            aria-label="Open SPD Voice AI Operations Copilot"
-            className="flex items-center justify-center md:justify-start w-12 h-12 md:w-auto md:h-auto p-0 md:px-4 md:py-3 rounded-full bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-red-500/30 group"
+            aria-label="SPD AI Copilot"
+            title="SPD AI Voice & Operations Copilot"
+            className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-900/90 hover:bg-red-700 text-white shadow-lg hover:scale-110 active:scale-95 transition-all duration-200 border border-slate-700/60 group"
           >
             <div className="relative flex items-center justify-center">
-              <Bot className="w-5 h-5 text-white" />
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white" />
+              <Bot className="w-4 h-4 text-white group-hover:text-red-200" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-75" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500" />
             </div>
-            <div className="hidden md:block text-left ml-2.5">
-              <span className="text-xs font-black tracking-wide block leading-tight flex items-center gap-1">
-                SPD Voice AI Copilot
-                <Mic className="w-3 h-3 text-red-300" />
-              </span>
-              <span className="text-[10px] text-red-200 block font-semibold leading-tight">
-                Gemini 1.5 Flash &bull; Urdu / English Voice
-              </span>
-            </div>
-            <Sparkles className="hidden md:block w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform ml-1.5" />
           </button>
         )}
       </div>

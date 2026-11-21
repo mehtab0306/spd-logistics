@@ -1484,7 +1484,7 @@ export default function BiltyPage() {
                   key={c.id || c.biltyNumber}
                   className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3"
                 >
-                  {/* Card Header: Bilty #, Tracking & Status */}
+                  {/* Card Header: Bilty #, Tracking, PO/BL & Status */}
                   <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-2.5">
                     <div>
                       <Link
@@ -1494,12 +1494,22 @@ export default function BiltyPage() {
                       >
                         {c.biltyNumber || c.id || "-"}
                       </Link>
+                      {c.poNumber && (
+                        <p className="text-[10.5px] text-amber-700 dark:text-amber-400 font-mono font-bold">
+                          PO: {c.poNumber}
+                        </p>
+                      )}
+                      {c.blNumber && (
+                        <p className="text-[10.5px] text-indigo-700 dark:text-indigo-400 font-mono font-bold">
+                          BL: {c.blNumber}
+                        </p>
+                      )}
                       <p className="text-[11px] text-slate-500 font-mono font-bold">{c.trackingId || "-"}</p>
                       <p className="text-[10px] text-slate-400">
                         {c.bookingDate ? formatDate(c.bookingDate) : c.date ? formatDate(c.date) : "-"}
                       </p>
                     </div>
-                    <div>
+                    <div className="flex flex-col items-end gap-1">
                       {isPaid ? (
                         <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-300">
                           PAID
@@ -1511,6 +1521,15 @@ export default function BiltyPage() {
                       ) : (
                         <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-400 border border-red-300">
                           TO-PAY
+                        </span>
+                      )}
+                      {c.dispatchMode === "Urgent" ? (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-400">
+                          ⚡ Urgent
+                        </span>
+                      ) : (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300">
+                          🚚 Normal
                         </span>
                       )}
                     </div>
@@ -1534,23 +1553,41 @@ export default function BiltyPage() {
                     </span>
                   </div>
 
-                  {/* Parties Info */}
-                  <div className="text-xs space-y-1 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <p className="text-slate-900 dark:text-white font-bold truncate">
-                      <span className="text-slate-400 font-normal">Sender: </span>
-                      {c.senderName || c.customer?.companyName || c.customer?.name || "-"}
-                      {c.senderPhone && <span className="text-slate-500 font-normal"> ({c.senderPhone})</span>}
-                    </p>
-                    <p className="text-slate-700 dark:text-slate-300 truncate">
-                      <span className="text-slate-400 font-normal">Receiver: </span>
-                      {c.receiverName || "-"}
-                      {c.receiverPhone && <span className="text-slate-500 font-normal"> ({c.receiverPhone})</span>}
-                    </p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                      <span className="text-slate-400 font-normal">Cargo: </span>
-                      {cargoDesc} ({pkgsCount} pkgs &bull; {cargoWeight})
-                    </p>
-                  </div>
+                  {/* Parties Info (Billed party highlighted, phone hidden) */}
+                  {(() => {
+                    const isSenderBilled = c.billTo === "Sender" || (!c.billTo && (c.paymentMode === "PAID" || c.amountType === "Paid"));
+                    const isReceiverBilled = c.billTo === "Receiver" || (!c.billTo && (c.paymentMode === "TO-PAY" || c.amountType === "To Pay"));
+                    return (
+                      <div className="text-xs space-y-1 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className={cn("truncate", isSenderBilled ? "text-slate-900 dark:text-white font-black text-xs" : "text-slate-600 dark:text-slate-400 font-normal text-[11px]")}>
+                            <span className="text-slate-400 font-normal">Sender: </span>
+                            {c.senderName || c.customer?.companyName || c.customer?.name || "-"}
+                          </p>
+                          {isSenderBilled && (
+                            <span className="text-[8px] font-bold text-sky-800 dark:text-sky-300 bg-sky-500/20 border border-sky-400 px-1 py-0.2 rounded shrink-0">
+                              Bill To
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-1">
+                          <p className={cn("truncate", isReceiverBilled ? "text-slate-900 dark:text-white font-black text-xs" : "text-slate-600 dark:text-slate-400 font-normal text-[11px]")}>
+                            <span className="text-slate-400 font-normal">Receiver: </span>
+                            {c.receiverName || "-"}
+                          </p>
+                          {isReceiverBilled && (
+                            <span className="text-[8px] font-bold text-sky-800 dark:text-sky-300 bg-sky-500/20 border border-sky-400 px-1 py-0.2 rounded shrink-0">
+                              Bill To
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate pt-0.5">
+                          <span className="text-slate-400 font-normal">Cargo: </span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">{cargoDesc}</span> ({pkgsCount} pkgs &bull; {cargoWeight})
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   {/* Fleet & Financials */}
                   <div className="grid grid-cols-2 gap-2 text-xs pt-1">
@@ -1679,10 +1716,10 @@ export default function BiltyPage() {
               <Table className="min-w-[1100px]">
                 <TableHeader className="bg-slate-50/70 dark:bg-slate-800/50">
                   <TableRow>
-                    <TableHead className="text-xs font-bold whitespace-nowrap">Bilty # / Order (PO) #</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Bilty # / Order / BL #</TableHead>
                     <TableHead className="text-xs font-bold whitespace-nowrap">Booking Date</TableHead>
                     <TableHead className="text-xs font-bold whitespace-nowrap">Sender & Receiver</TableHead>
-                    <TableHead className="text-xs font-bold whitespace-nowrap">Route & Status</TableHead>
+                    <TableHead className="text-xs font-bold whitespace-nowrap">Route, Hub & Priority</TableHead>
                     <TableHead className="text-xs font-bold whitespace-nowrap">Cargo Items & Pkgs</TableHead>
                     <TableHead className="text-xs font-bold whitespace-nowrap">Gross Weight & CBM</TableHead>
                     <TableHead className="text-xs font-bold whitespace-nowrap">Total Freight & Terms</TableHead>
@@ -1702,6 +1739,9 @@ export default function BiltyPage() {
                       ? `${Number(c.weight).toLocaleString()} KG`
                       : (c.items && c.items[0]?.weight ? `${c.items[0].weight} KG` : "-");
 
+                    const isSenderBilled = c.billTo === "Sender" || (!c.billTo && (c.paymentMode === "PAID" || c.amountType === "Paid"));
+                    const isReceiverBilled = c.billTo === "Receiver" || (!c.billTo && (c.paymentMode === "TO-PAY" || c.amountType === "To Pay"));
+
                     return (
                       <TableRow
                         key={c.id || c.biltyNumber}
@@ -1712,7 +1752,7 @@ export default function BiltyPage() {
                           highlightClass(c.id) || highlightClass(c.biltyNumber)
                         )}
                       >
-                        {/* 1. Bilty # & Order # / Tracking */}
+                        {/* 1. Bilty # & Order # / BL # / Tracking */}
                         <TableCell>
                           <div>
                             <Link
@@ -1727,6 +1767,11 @@ export default function BiltyPage() {
                                 PO: {c.poNumber}
                               </p>
                             )}
+                            {c.blNumber && (
+                              <p className="text-[10px] text-indigo-700 dark:text-indigo-400 font-mono font-bold">
+                                BL: {c.blNumber}
+                              </p>
+                            )}
                             <p className="text-[9.5px] text-slate-500 font-mono">{c.trackingId || "-"}</p>
                           </div>
                         </TableCell>
@@ -1738,38 +1783,46 @@ export default function BiltyPage() {
                           </span>
                         </TableCell>
 
-                        {/* 3. Sender & Receiver (with Bill To indicator) */}
+                        {/* 3. Sender & Receiver (Billed party bolded, phones hidden) */}
                         <TableCell>
-                          <div className="space-y-0.5 max-w-[210px]">
-                            <div className="flex items-center gap-1">
-                              <span className="font-bold text-slate-900 dark:text-white truncate">
+                          <div className="space-y-1 max-w-[210px]">
+                            <div className="flex items-center gap-1.5">
+                              <span className={cn(
+                                "truncate",
+                                isSenderBilled
+                                  ? "font-black text-xs text-slate-900 dark:text-white"
+                                  : "font-normal text-[11px] text-slate-500 dark:text-slate-400"
+                              )}>
                                 <span className="text-slate-400 font-normal">Sender: </span>
                                 {c.senderName || c.customer?.companyName || c.customer?.name || "-"}
                               </span>
-                              {(c.billTo === "Sender" || (!c.billTo && (c.paymentMode === "PAID" || c.amountType === "Paid"))) && (
-                                <span className="text-[7.5px] font-bold text-red-700 bg-red-50 border border-red-200 px-1 rounded shrink-0">
+                              {isSenderBilled && (
+                                <span className="text-[8px] font-bold text-sky-800 dark:text-sky-300 bg-sky-500/20 border border-sky-400 px-1 py-0.2 rounded shrink-0">
                                   Bill To
                                 </span>
                               )}
                             </div>
-                            {c.senderPhone && <span className="text-[9.5px] text-slate-500 font-normal block truncate">({c.senderPhone})</span>}
 
-                            <div className="flex items-center gap-1 pt-0.5">
-                              <span className="text-slate-700 dark:text-slate-300 truncate font-semibold">
+                            <div className="flex items-center gap-1.5 pt-0.5">
+                              <span className={cn(
+                                "truncate",
+                                isReceiverBilled
+                                  ? "font-black text-xs text-slate-900 dark:text-white"
+                                  : "font-normal text-[11px] text-slate-500 dark:text-slate-400"
+                              )}>
                                 <span className="text-slate-400 font-normal">Receiver: </span>
                                 {c.receiverName || "-"}
                               </span>
-                              {(c.billTo === "Receiver" || (!c.billTo && (c.paymentMode === "TO-PAY" || c.amountType === "To Pay"))) && (
-                                <span className="text-[7.5px] font-bold text-red-700 bg-red-50 border border-red-200 px-1 rounded shrink-0">
+                              {isReceiverBilled && (
+                                <span className="text-[8px] font-bold text-sky-800 dark:text-sky-300 bg-sky-500/20 border border-sky-400 px-1 py-0.2 rounded shrink-0">
                                   Bill To
                                 </span>
                               )}
                             </div>
-                            {c.receiverPhone && <span className="text-[9.5px] text-slate-500 font-normal block truncate">({c.receiverPhone})</span>}
                           </div>
                         </TableCell>
 
-                        {/* 4. Origin ➔ Destination & Accurate Status Workflow Badge */}
+                        {/* 4. Origin ➔ Destination, Priority & Accurate Status Workflow Badge */}
                         <TableCell>
                           <div>
                             <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
@@ -1778,6 +1831,15 @@ export default function BiltyPage() {
                               <span className="text-spd-blue">{c.destination || "-"}</span>
                             </div>
                             <div className="flex items-center gap-1 mt-1 flex-wrap">
+                              {c.dispatchMode === "Urgent" ? (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-400 shrink-0">
+                                  ⚡ Urgent
+                                </span>
+                              ) : (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 shrink-0">
+                                  🚚 Normal
+                                </span>
+                              )}
                               {(() => {
                                 const s = String(c.shipmentStatus || c.status || "BOOKED").toUpperCase().replace(/[\s-]+/g, "_");
                                 if (s === "DELIVERED") {
@@ -1846,14 +1908,14 @@ export default function BiltyPage() {
                           </div>
                         </TableCell>
 
-                        {/* 6. Gross Weight & CBM */}
+                        {/* 6. Gross Weight & CBM (Consistent font size) */}
                         <TableCell>
-                          <div>
-                            <span className="font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap block">
+                          <div className="space-y-0.5">
+                            <span className="font-bold text-xs text-slate-800 dark:text-slate-200 whitespace-nowrap block">
                               {cargoWeight}
                             </span>
                             {(c.cpm || (c.items && c.items[0]?.volume)) && (
-                              <span className="text-[9.5px] text-slate-500 font-mono block">
+                              <span className="font-bold text-xs text-slate-700 dark:text-slate-300 font-mono block">
                                 {c.cpm || c.items[0]?.volume} CBM
                               </span>
                             )}

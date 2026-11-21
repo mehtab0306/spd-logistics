@@ -225,6 +225,36 @@ const DEFAULT_SETTINGS: Record<
     category: 'THEME',
     description: 'Remember theme preference across sessions',
   },
+
+  // Cargo & Goods Specifications
+  customCargoTypes: {
+    value: JSON.stringify([
+      "General Commercial Merchandise",
+      "Carton",
+      "Carton / Box",
+      "Bags",
+      "Boray / Sacks",
+      "Bundle",
+      "Can",
+      "Coal",
+      "Container",
+      "Crate",
+      "Drum",
+      "Drums",
+      "Naag",
+      "Pallet",
+      "Roll",
+      "Shaft",
+      "Sheet",
+      "Small",
+      "Large",
+      "Tyre",
+      "Wooden Case",
+      "Other / Custom",
+    ]),
+    category: 'CARGO',
+    description: 'Configured cargo and goods classification categories',
+  },
 };
 
 export async function GET(request: Request) {
@@ -334,6 +364,8 @@ export async function PUT(request: Request) {
   }
 }
 
+export const POST = PUT;
+
 export async function DELETE(request: Request) {
   try {
     const auth = await validateAdminSession(request, ['SUPER_ADMIN', 'ADMIN', 'STAFF']);
@@ -350,7 +382,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const validCategories = ['GENERAL', 'COMPANY', 'BILLING', 'TRACKING', 'NOTIFICATIONS', 'THEME'];
+    const validCategories = ['GENERAL', 'COMPANY', 'BILLING', 'TRACKING', 'NOTIFICATIONS', 'THEME', 'CARGO'];
     const catUpper = category.toUpperCase();
 
     if (!validCategories.includes(catUpper)) {

@@ -20,7 +20,21 @@ import {
   ArrowRight,
   Package,
   FileSpreadsheet,
+  Activity,
+  History,
+  Send,
+  Building,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { PrintableChallan } from "@/components/challan/printable-challan";
 import { BatchChallanPrint } from "@/components/challan/batch-challan-print";
@@ -53,6 +67,115 @@ export default function ChallanInTransitPage() {
   const [printChallan, setPrintChallan] = useState<any>(null);
   // Batch Challan Print modal
   const [printBatchManifests, setPrintBatchManifests] = useState(false);
+
+  // Location Tracking & Checkpoint Modal state
+  const [trackingModalChallan, setTrackingModalChallan] = useState<any>(null);
+  const [checkpointForm, setCheckpointForm] = useState({
+    location: "",
+    status: "Moving",
+    notes: "",
+  });
+  const [loggingCheckpoint, setLoggingCheckpoint] = useState(false);
+
+  // Helper to calculate Arrival Status and Late Alerts
+  const getArrivalStatus = (c: any) => {
+    if (!c.expectedArrivalDate) return null;
+    try {
+      const timeStr = c.expectedArrivalTime || "23:59";
+      const targetDate = new Date(`${c.expectedArrivalDate}T${timeStr}:00`);
+      const now = new Date();
+      const diffMs = targetDate.getTime() - now.getTime();
+      const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffMs < 0) {
+        const lateHours = Math.abs(diffHours);
+        return {
+          isLate: true,
+          label: lateHours > 24 ? `⚠️ LATE: ${Math.floor(lateHours / 24)}d behind schedule` : `⚠️ LATE: ${lateHours}h behind schedule`,
+        };
+      } else if (diffDays <= 0 || diffHours <= 12) {
+        return {
+          isLate: false,
+          label: `Arriving Today (${c.expectedArrivalTime || "evening"})`,
+        };
+      } else if (diffDays === 1) {
+        return {
+          isLate: false,
+          label: `Arriving Tomorrow`,
+        };
+      } else {
+        return {
+          isLate: false,
+          label: `Arrives in ${diffDays} days`,
+        };
+      }
+    } catch {
+      return null;
+    }
+  };
+
+  // Log new location checkpoint
+  const handleLogCheckpoint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trackingModalChallan || !checkpointForm.location.trim()) {
+      toast.error("Please enter a checkpoint location");
+      return;
+    }
+
+    try {
+      setLoggingCheckpoint(true);
+      const newCheckpoint = {
+        id: `cp-${Date.now()}`,
+        location: checkpointForm.location.trim(),
+        status: checkpointForm.status,
+        notes: checkpointForm.notes.trim() || undefined,
+        timestamp: new Date().toISOString(),
+      };
+
+      const existingEvents = Array.isArray(trackingModalChallan.trackingEvents)
+        ? trackingModalChallan.trackingEvents
+        : [];
+      const updatedEvents = [newCheckpoint, ...existingEvents];
+
+      const updatedChallan = {
+        ...trackingModalChallan,
+        currentLocation: newCheckpoint.location,
+        trackingEvents: updatedEvents,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // 1. Update in local state & localStorage
+      setChallans((prev) =>
+        prev.map((c) => (c.id === trackingModalChallan.id ? updatedChallan : c))
+      );
+      setTrackingModalChallan(updatedChallan);
+      saveStoredChallan(updatedChallan);
+
+      // 2. Sync to Supabase
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from("challans")
+            .update({
+              tracking_events: updatedEvents,
+              current_location: newCheckpoint.location,
+            })
+            .eq("id", trackingModalChallan.id);
+        } catch (sbErr) {
+          console.warn("Supabase checkpoint sync notice:", sbErr);
+        }
+      }
+
+      // 3. Reset form
+      setCheckpointForm({ location: "", status: "Moving", notes: "" });
+      toast.success(`Checkpoint logged: ${newCheckpoint.location} (${newCheckpoint.status})`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to log checkpoint");
+    } finally {
+      setLoggingCheckpoint(false);
+    }
+  };
 
   // Helper to normalize transit status
   const isChallanInTransit = (c: any) => {
@@ -457,188 +580,396 @@ export default function ChallanInTransitPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 print:hidden">
           {filteredChallans.map((c) => {
             const bilties = c.consignments || [];
+            const activePhone = (c.activeDriverPhone === "secondary" && c.driverSecondaryPhone) ? c.driverSecondaryPhone : (c.driverPhone || c.driverSecondaryPhone);
             const waMsg = `Assalam-o-Alaikum ${c.driverName || "Driver"}, regarding Challan ${c.challanNumber} (${c.truckNumber}) on route ${c.origin} to ${c.destination}. Please provide current checkpoint update.`;
-            const waUrl = c.driverPhone ? buildWhatsAppUrl(c.driverPhone, waMsg) : "";
+            const waUrl = activePhone ? buildWhatsAppUrl(activePhone, waMsg) : "";
+            const arrivalStatus = getArrivalStatus(c);
+            const isUrgent = c.priority === "Urgent" || c.dispatchMode === "Urgent";
+            const isMarket = Boolean(c.isMarketVehicle || c.vehicleSource === "market");
 
             return (
-              <div
-                key={c.id}
-                id={`record-${c.id}`}
-                data-record-id={c.id}
-                className={cn(
-                  "trip-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs p-5 space-y-4 hover:shadow-md transition-all print:hidden",
-                  highlightClass(c.id) || highlightClass(c.challanNumber)
-                )}
-              >
-                {/* Trip Card Top Bar */}
-                <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-black text-slate-900 dark:text-white font-mono">
-                        {c.challanNumber}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                        {c.status}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Dispatched {formatDate(c.dispatchDate || c.createdAt)}</span>
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPrintChallan(c)}
-                    className="h-8 px-2.5 rounded-xl text-xs font-bold gap-1.5 border-slate-300 dark:border-slate-700"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Print Manifest</span>
-                  </Button>
-                </div>
-
-                {/* Route & Truck Details */}
-                <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                      Corridor Route
-                    </span>
-                    <span className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-1">
-                      {c.origin} <ArrowRight className="w-3 h-3 text-emerald-600" /> {c.destination}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                      Assigned Truck #
-                    </span>
-                    <span className="font-black text-slate-800 dark:text-slate-100 font-mono">
-                      {c.truckNumber}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                      Driver Personnel
-                    </span>
-                    <span className="font-bold text-slate-800 dark:text-slate-100">
-                      {c.driverName || "Assigned Driver"}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono block">
-                      {c.driverPhone || "No phone"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                      Payload Manifest
-                    </span>
-                    <span className="font-bold text-slate-800 dark:text-slate-100">
-                      {bilties.length} Bilties &bull; {c.totalWeight || 0} kg
-                    </span>
-                  </div>
-                </div>
-
-                {/* Financial Summary */}
-                <div className="flex items-center justify-between text-xs px-1">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">
-                      Customer Freight
-                    </span>
-                    <span className="font-black text-emerald-600 font-mono">
-                      {formatCurrency(c.totalBiltyFreight || 0)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">
-                      Truck Cost
-                    </span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 font-mono">
-                      {formatCurrency(c.truckFreight || 0)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">
-                      Advance Paid
-                    </span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 font-mono">
-                      {formatCurrency(c.advancePaidToDriver || 0)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">
-                      Net Profit
-                    </span>
-                    <span className="font-black text-slate-900 dark:text-white font-mono">
-                      {formatCurrency(c.netProfit || 0)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Action Buttons: WhatsApp / Call Driver + Mark Arrived */}
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  {c.driverPhone && (
-                    <>
-                      <a
-                        href={`tel:${c.driverPhone}`}
-                        className="flex-1"
-                      >
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-full h-9 rounded-xl text-xs font-bold gap-1.5 border-slate-300 dark:border-slate-700"
-                        >
-                          <Phone className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Call Driver</span>
-                        </Button>
-                      </a>
-                      <a
-                        href={waUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1"
-                      >
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-full h-9 rounded-xl text-xs font-bold gap-1.5 text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5" />
-                          <span>WhatsApp</span>
-                        </Button>
-                      </a>
-                    </>
-                  )}
-
-                  <Button
-                    type="button"
-                    disabled={actionLoading === c.id}
-                    onClick={() => handleMarkArrived(c)}
-                    className="flex-1 h-9 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5"
-                  >
-                    {actionLoading === c.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-3.5 h-3.5" />
+                  <div
+                    key={c.id}
+                    id={`record-${c.id}`}
+                    data-record-id={c.id}
+                    className={cn(
+                      "trip-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs p-5 space-y-4 hover:shadow-md transition-all print:hidden",
+                      highlightClass(c.id) || highlightClass(c.challanNumber)
                     )}
-                    <span>Record Arrival</span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleDeleteTrip(c)}
-                    className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-slate-200 dark:border-slate-700 shrink-0"
-                    title="Move Trip to Recycle Bin"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+                    {/* Trip Card Top Bar with Priority, Vehicle Type & Late Alert */}
+                    <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-base font-black text-slate-900 dark:text-white font-mono">
+                            {c.challanNumber}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            {c.status}
+                          </span>
+                          {isUrgent ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-400">
+                              ⚡ Urgent
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300">
+                              🚚 Normal
+                            </span>
+                          )}
+                          {isMarket ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                              Market Truck
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              Company Fleet
+                            </span>
+                          )}
+                          {arrivalStatus && (
+                            <span
+                              className={cn(
+                                "px-2 py-0.5 rounded-full text-[10px] font-black",
+                                arrivalStatus.isLate
+                                  ? "bg-red-500/20 text-red-700 dark:text-red-300 border border-red-400 animate-pulse"
+                                  : "bg-sky-500/10 text-sky-800 dark:text-sky-300 border border-sky-300"
+                              )}
+                            >
+                              {arrivalStatus.label}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Dispatched {formatDate(c.dispatchDate || c.createdAt)}</span>
+                          {c.currentLocation && (
+                            <span className="text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1 pl-1">
+                              &bull; <MapPin className="w-3 h-3 text-red-600 inline" /> Last at {c.currentLocation}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPrintChallan(c)}
+                        className="h-8 px-2.5 rounded-xl text-xs font-bold gap-1.5 border-slate-300 dark:border-slate-700 shrink-0"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>Print Manifest</span>
+                      </Button>
+                    </div>
+
+                    {/* Route & Truck Details */}
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
+                      <div className="col-span-2 sm:col-span-1">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          Corridor Route
+                        </span>
+                        <div className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-1 flex-wrap">
+                          <span>{c.origin}</span>
+                          {Array.isArray(c.deliveryStops) && c.deliveryStops.filter(Boolean).length > 0 ? (
+                            c.deliveryStops.filter(Boolean).map((stop: string, sIdx: number) => (
+                              <React.Fragment key={sIdx}>
+                                <ArrowRight className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span className="text-amber-800 dark:text-amber-300 font-bold">{stop}</span>
+                              </React.Fragment>
+                            ))
+                          ) : null}
+                          <ArrowRight className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span className="text-spd-blue">{c.destination}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          Assigned Truck #
+                        </span>
+                        <span className="font-black text-slate-800 dark:text-slate-100 font-mono">
+                          {c.truckNumber}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          Driver Personnel
+                        </span>
+                        <span className="font-bold text-slate-800 dark:text-slate-100">
+                          {c.driverName || "Assigned Driver"}
+                        </span>
+                        {activePhone && (
+                          <span className="text-[10px] text-slate-500 font-mono block">
+                            Phone: {activePhone}
+                          </span>
+                        )}
+                        {c.driverCnic && (
+                          <span className="text-[9.5px] text-slate-400 font-mono block">
+                            CNIC: {c.driverCnic}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          Payload Manifest
+                        </span>
+                        <span className="font-bold text-slate-800 dark:text-slate-100">
+                          {bilties.length} Bilties &bull; {c.totalWeight || 0} kg
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Financial Summary */}
+                    <div className="flex items-center justify-between text-xs px-1 flex-wrap gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                          Customer Freight
+                        </span>
+                        <span className="font-black text-emerald-600 font-mono">
+                          {formatCurrency(c.totalBiltyFreight || 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                          Truck Cost
+                        </span>
+                        <span className="font-bold text-slate-700 dark:text-slate-300 font-mono">
+                          {formatCurrency(c.truckFreight || 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                          Advance Paid
+                        </span>
+                        <span className="font-bold text-slate-700 dark:text-slate-300 font-mono">
+                          {formatCurrency(c.advancePaidToDriver || 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                          Net Profit
+                        </span>
+                        <span className="font-black text-slate-900 dark:text-white font-mono">
+                          {formatCurrency(c.netProfit || 0)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons: Checkpoint / WhatsApp / Call Driver + Mark Arrived */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setTrackingModalChallan(c)}
+                        className="h-9 px-3 rounded-xl text-xs font-bold gap-1.5 border-slate-300 hover:bg-slate-50 text-slate-700 dark:text-slate-300 shrink-0"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-red-600" />
+                        <span>Tracking History</span>
+                      </Button>
+
+                      {activePhone && (
+                        <>
+                          <a
+                            href={`tel:${activePhone}`}
+                            className="flex-1 min-w-[100px]"
+                          >
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full h-9 rounded-xl text-xs font-bold gap-1.5 border-slate-300 dark:border-slate-700"
+                            >
+                              <Phone className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Call</span>
+                            </Button>
+                          </a>
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 min-w-[100px]"
+                          >
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full h-9 rounded-xl text-xs font-bold gap-1.5 text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>WhatsApp</span>
+                            </Button>
+                          </a>
+                        </>
+                      )}
+
+                      <Button
+                        type="button"
+                        disabled={actionLoading === c.id}
+                        onClick={() => handleMarkArrived(c)}
+                        className="flex-1 min-w-[120px] h-9 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5"
+                      >
+                        {actionLoading === c.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        )}
+                        <span>Record Arrival</span>
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleDeleteTrip(c)}
+                        className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-slate-200 dark:border-slate-700 shrink-0"
+                        title="Move Trip to Recycle Bin"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
         </div>
       )}
+
+      {/* Location Tracking & Checkpoint History Modal */}
+      <Dialog
+        open={Boolean(trackingModalChallan)}
+        onOpenChange={(open) => {
+          if (!open) setTrackingModalChallan(null);
+        }}
+      >
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-red-600" />
+              <span>Location Tracking &amp; Journey History</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Challan #{trackingModalChallan?.challanNumber} &bull; Truck {trackingModalChallan?.truckNumber} &bull; {trackingModalChallan?.origin} to {trackingModalChallan?.destination}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Log New Checkpoint Form */}
+            <form onSubmit={handleLogCheckpoint} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Activity className="w-4 h-4 text-emerald-600" />
+                <span>Log Current Highway Checkpoint (Twice Daily)</span>
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Location Name *
+                  </Label>
+                  <Input
+                    required
+                    value={checkpointForm.location}
+                    placeholder="e.g. Hyderabad Bypass, Rahim Yar Khan"
+                    onChange={(e) => setCheckpointForm({ ...checkpointForm, location: e.target.value })}
+                    className="h-9 text-xs font-medium rounded-xl bg-white dark:bg-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Vehicle Movement Status *
+                  </Label>
+                  <select
+                    value={checkpointForm.status}
+                    onChange={(e) => setCheckpointForm({ ...checkpointForm, status: e.target.value })}
+                    className="w-full h-9 px-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="Moving">Moving on Highway</option>
+                    <option value="Stopped / Rest Break">Stopped / Rest Break</option>
+                    <option value="Intermediate Stop">Intermediate Delivery Stop</option>
+                    <option value="Traffic Jam">Traffic Jam / Highway Delay</option>
+                    <option value="Maintenance / Breakdown">Maintenance / Mechanical Breakdown</option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2 space-y-1">
+                  <Label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Delay Reason / Driver Notes (Optional)
+                  </Label>
+                  <Input
+                    value={checkpointForm.notes}
+                    placeholder="e.g. Heavy fog near Sukkur, tyre puncture delayed 45 mins"
+                    onChange={(e) => setCheckpointForm({ ...checkpointForm, notes: e.target.value })}
+                    className="h-9 text-xs font-medium rounded-xl bg-white dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <Button
+                  type="submit"
+                  disabled={loggingCheckpoint}
+                  className="h-8 px-4 rounded-xl text-xs font-bold bg-spd-blue hover:bg-spd-blueHover text-white gap-1.5 shadow-xs"
+                >
+                  {loggingCheckpoint ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  <span>Save Checkpoint</span>
+                </Button>
+              </div>
+            </form>
+
+            {/* Checkpoint Chronological History */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <History className="w-4 h-4 text-blue-600" />
+                <span>Recorded Journey History</span>
+              </h4>
+
+              {Array.isArray(trackingModalChallan?.trackingEvents) && trackingModalChallan.trackingEvents.length > 0 ? (
+                <div className="space-y-2">
+                  {trackingModalChallan.trackingEvents.map((event: any, idx: number) => (
+                    <div
+                      key={event.id || idx}
+                      className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs flex items-start justify-between gap-3 shadow-2xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-red-600 inline" />
+                            {event.location}
+                          </span>
+                          <span
+                            className={cn(
+                              "px-2 py-0.2 rounded-full text-[9.5px] font-bold",
+                              event.status === "Moving"
+                                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                : event.status?.includes("Maintenance") || event.status?.includes("Jam")
+                                ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                : "bg-slate-100 text-slate-700 border border-slate-300"
+                            )}
+                          >
+                            {event.status}
+                          </span>
+                        </div>
+                        {event.notes && (
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                            {event.notes}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-[10.5px] text-slate-400 font-mono whitespace-nowrap">
+                        {event.timestamp ? formatDate(event.timestamp) : "Recent"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-400 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                  No checkpoints recorded yet. Use the form above to log location checkpoints.
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

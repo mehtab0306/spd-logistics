@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { CARGO_DESCRIPTION_OPTIONS } from "@/lib/constants";
 import { PageHeader } from "@/components/shared/page-header";
 import { LogisticsFormSkeleton } from "@/components/shared/logistics-loader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -47,6 +48,9 @@ import {
   Truck,
   KeyRound,
   Lock,
+  Package,
+  Plus,
+  Trash2,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -71,6 +75,62 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Cargo & Goods Specifications state
+  const [cargoTypes, setCargoTypes] = useState<string[]>(CARGO_DESCRIPTION_OPTIONS);
+  const [newCargoInput, setNewCargoInput] = useState("");
+  const [savingCargo, setSavingCargo] = useState(false);
+
+  const handleAddCargoType = () => {
+    const val = newCargoInput.trim();
+    if (!val) return;
+    if (cargoTypes.some((t) => t.toLowerCase() === val.toLowerCase())) {
+      setFeedback({ type: "error", message: `Cargo category "${val}" already exists.` });
+      return;
+    }
+    const updated = [...cargoTypes, val];
+    setCargoTypes(updated);
+    setNewCargoInput("");
+    setSettings((prev) => ({ ...prev, customCargoTypes: JSON.stringify(updated) }));
+  };
+
+  const handleRemoveCargoType = (item: string) => {
+    if (cargoTypes.length <= 1) return;
+    const updated = cargoTypes.filter((t) => t !== item);
+    setCargoTypes(updated);
+    setSettings((prev) => ({ ...prev, customCargoTypes: JSON.stringify(updated) }));
+  };
+
+  const handleSaveCargoSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingCargo(true);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: "cargo",
+          settings: {
+            customCargoTypes: JSON.stringify(cargoTypes),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to save cargo settings");
+      }
+      setFeedback({
+        type: "success",
+        message: "Cargo categories and specification prompts saved successfully.",
+      });
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Failed to save cargo settings." });
+    } finally {
+      setSavingCargo(false);
+    }
+  };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,6 +220,16 @@ export default function SettingsPage() {
         setSettings(data.data);
         if (data.data.companyLogo) {
           setLogoPreview(data.data.companyLogo);
+        }
+        if (data.data.customCargoTypes) {
+          try {
+            const parsed = JSON.parse(data.data.customCargoTypes);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setCargoTypes(parsed);
+            }
+          } catch (e) {
+            // Ignore parse error, use existing cargoTypes
+          }
         }
       } else {
         throw new Error(data.error || "Could not load settings from server.");
@@ -388,7 +458,7 @@ export default function SettingsPage() {
 
       {/* Tabs Layout */}
       <Tabs defaultValue="general" className="w-full space-y-6">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 h-auto p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 gap-1">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 h-auto p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 gap-1">
           <TabsTrigger
             value="general"
             className="rounded-xl py-2.5 text-xs font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-spd-red shadow-none data-[state=active]:shadow-sm"
@@ -403,6 +473,14 @@ export default function SettingsPage() {
           >
             <Building2 className="w-3.5 h-3.5" />
             <span>Company</span>
+          </TabsTrigger>
+
+          <TabsTrigger
+            value="cargo"
+            className="rounded-xl py-2.5 text-xs font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-amber-600 shadow-none data-[state=active]:shadow-sm"
+          >
+            <Package className="w-3.5 h-3.5 text-amber-600" />
+            <span>Cargo Specs</span>
           </TabsTrigger>
 
           <TabsTrigger
@@ -1553,6 +1631,164 @@ export default function SettingsPage() {
                     <CheckCircle2 className="w-3.5 h-3.5" />
                   )}
                   <span>Update Password</span>
+                </Button>
+              </CardFooter>
+            </form>
+          </Card>
+        </TabsContent>
+
+        {/* 8. CARGO & GOODS SPECIFICATIONS */}
+        <TabsContent value="cargo" className="space-y-4">
+          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 shadow-sm">
+            <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-800/80">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Package className="w-5 h-5 text-amber-600" />
+                    Cargo Items & Goods Specifications
+                  </CardTitle>
+                  <CardDescription className="text-xs text-slate-500 mt-0.5">
+                    Configure standard package categories and intelligent specification prompts for consignment booking.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200">
+                  {cargoTypes.length} Configured Types
+                </Badge>
+              </div>
+            </CardHeader>
+
+            <form onSubmit={handleSaveCargoSettings}>
+              <CardContent className="p-6 space-y-6">
+                {/* Add New Cargo Type Bar */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Add New Cargo / Packaging Type
+                  </Label>
+                  <div className="flex gap-2 max-w-md">
+                    <Input
+                      type="text"
+                      placeholder="e.g. Steel Coils, Wooden Pallets, Jerry Cans..."
+                      value={newCargoInput}
+                      onChange={(e) => setNewCargoInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddCargoType();
+                        }
+                      }}
+                      className="rounded-xl h-10 text-xs bg-slate-50 dark:bg-slate-800/60"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAddCargoType}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl gap-1.5 h-10 px-4 shrink-0 shadow-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add</span>
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Press Enter or click Add to append a new category to the booking dropdown.
+                  </p>
+                </div>
+
+                {/* Active Cargo Categories List */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Active Booking Cargo Categories
+                  </Label>
+                  <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-wrap gap-2 min-h-[100px] items-start">
+                    {cargoTypes.map((cargoItem) => (
+                      <div
+                        key={cargoItem}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 shadow-xs group hover:border-amber-400 transition-colors"
+                      >
+                        <Package className="w-3.5 h-3.5 text-amber-500" />
+                        <span>{cargoItem}</span>
+                        {cargoTypes.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCargoType(cargoItem)}
+                            className="ml-1 text-slate-400 hover:text-red-600 p-0.5 rounded transition-colors"
+                            title={`Remove ${cargoItem}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Intelligent Specifications Guide */}
+                <div className="space-y-3 pt-2">
+                  <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Smart Goods Specifications Configured in Booking
+                  </Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="p-3.5 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-950/20 space-y-1">
+                      <p className="text-xs font-bold text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
+                        <span>🛍️ Bags & Sacks Spec</span>
+                      </p>
+                      <p className="text-[11px] text-blue-700/80 dark:text-blue-400 leading-relaxed">
+                        Prompts for weight per bag (e.g. 25kg, 50kg) and material (PP, Jute, Cotton).
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl border border-amber-100 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20 space-y-1">
+                      <p className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                        <span>📦 Cartons & Boxes Spec</span>
+                      </p>
+                      <p className="text-[11px] text-amber-700/80 dark:text-amber-400 leading-relaxed">
+                        Prompts for dimensions (L × W × H inches) and individual piece count per carton.
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl border border-purple-100 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20 space-y-1">
+                      <p className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                        <span>🚢 Container Freight Spec</span>
+                      </p>
+                      <p className="text-[11px] text-purple-700/80 dark:text-purple-400 leading-relaxed">
+                        Prompts for container size (20ft standard / 40ft high-cube) and security seal number.
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-1">
+                      <p className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                        <span>🛢️ Drums & Cans Spec</span>
+                      </p>
+                      <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400 leading-relaxed">
+                        Prompts for capacity (liters / US gallons) and liquid/hazardous cargo classification.
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 space-y-1">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <span>🏗️ Bundles & Naag Spec</span>
+                      </p>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Prompts for bundle dimensions, tie count, and metal/plastic strapping details.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+
+              <CardFooter className="p-6 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">
+                  Custom cargo categories are saved to system settings and available across all booking forms.
+                </span>
+                <Button
+                  type="submit"
+                  disabled={savingCargo}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md gap-2 px-5 h-9"
+                >
+                  {savingCargo ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>Save Cargo Settings</span>
                 </Button>
               </CardFooter>
             </form>

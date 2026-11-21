@@ -827,14 +827,20 @@ export async function POST(request: Request) {
           bilty_number: targetBiltyNum,
           manual_bilty_number: consignment.manualBiltyNumber || body.manualBiltyNumber || targetBiltyNum,
           sender_name: (consignment.senderName || 'Walk-in Shipper').trim(),
+          sender_phone: consignment.senderPhone || body.senderPhone || null,
           receiver_name: (consignment.receiverName || 'Consignee').trim(),
+          receiver_phone: consignment.receiverPhone || body.receiverPhone || null,
           origin_station: (consignment.origin || 'Karachi').trim(),
           destination_station: (consignment.destination || 'Lahore').trim(),
+          total_packages: Number(consignment.packagesCount || consignment.quantity || body.packagesCount || body.quantity) || 1,
+          actual_weight: Number(consignment.weight || body.weight) || 0,
+          charged_weight: Number(consignment.weight || body.weight) || 0,
           freight_amount: Number(consignment.totalAmount || consignment.freightAmount || consignment.freight) || 0,
           advance_paid: Number(consignment.paidAmount) || 0,
           remaining_balance: Math.max(0, (Number(consignment.totalAmount || consignment.freightAmount || consignment.freight) || 0) - (Number(consignment.paidAmount) || 0)),
           status: consignment.shipmentStatus || 'Booked',
           payment_mode: consignment.paymentMode || 'TO-PAY',
+          booking_date: consignment.bookingDate || (consignment.date ? String(consignment.date).slice(0, 10) : new Date().toISOString().split("T")[0]),
         };
 
         // Check if bilty already exists in Supabase by the exact client ID (idempotent submission)

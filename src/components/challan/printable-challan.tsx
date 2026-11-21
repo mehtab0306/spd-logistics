@@ -56,6 +56,15 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
             <span>📄 Dispatch Manifest Preview (Challan #{challanNo})</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 cursor-pointer select-none px-2.5 py-1.5 rounded-lg border border-slate-600 transition-colors">
+              <input
+                type="checkbox"
+                checked={hideFreight}
+                onChange={(e) => setHideFreight(e.target.checked)}
+                className="rounded text-spd-red w-3.5 h-3.5"
+              />
+              <span className="hidden sm:inline">Hide Freight</span>
+            </label>
             <Link
               href={`/admin/challan/${challan.id || challanNo}/print`}
               target="_blank"
@@ -249,10 +258,21 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
               </thead>
               <tbody>
                 {bilties.map((b: any, idx: number) => {
-                  const bDate = formatDate(b.date || b.createdAt);
-                  const bAmount = b.remainingBalance !== undefined ? b.remainingBalance : (b.freight || b.totalAmount || 0);
-                  const isReceiverBilled = b.billTo === "Receiver" || b.billTo === "Consignee" || (!b.billTo && (b.freightAsPer === "To Pay" || b.paymentMode === "To Pay"));
+                  const bDate = formatDate(b.date || b.bookingDate || b.createdAt);
+                  const bAmount = b.remainingBalance !== undefined ? b.remainingBalance : (b.freight || b.totalAmount || b.totalFreight || 0);
+                  const isReceiverBilled = b.billTo === "Receiver" || b.billTo === "Consignee" || (!b.billTo && (b.freightAsPer === "To Pay" || b.paymentMode === "To Pay" || b.paymentMode === "TO-PAY"));
                   const isSenderBilled = b.billTo === "Sender" || b.billTo === "Consignor" || (!b.billTo && !isReceiverBilled);
+
+                  const bookedCargo = (Array.isArray(b.items) && b.items.length > 0
+                    ? b.items.map((i: any) => [i.detail, i.bagSpec || i.cartonSpec || i.containerSpec || i.drumSpec || i.bundleDescription].filter(Boolean).join(" - ")).filter(Boolean).join(" • ")
+                    : "") || b.packageDetails || b.itemDescription || b.description || "Commercial Cargo";
+
+                  const bookedWeight = (b.weight !== null && b.weight !== undefined && Number(b.weight) > 0)
+                    ? `${b.weight} kg`
+                    : (b.items && b.items[0]?.weight ? `${b.items[0].weight} kg` : "—");
+
+                  const bookedQuantity = b.quantity || b.packagesCount || (b.items && b.items[0]?.quantity) || 1;
+
                   return (
                     <tr key={b.id || idx}>
                       <td className="p-1 border border-black text-center font-mono font-bold">{idx + 1}</td>
@@ -284,11 +304,11 @@ export function PrintableChallan({ challan, onClose, isFullPage = false }: Print
                         </div>
                         {b.receiverPhone && <span className="text-[7.5px] text-slate-500 font-mono block truncate">{b.receiverPhone}</span>}
                       </td>
-                      <td className="p-1 border border-black truncate">
-                        <span className="font-bold text-black">{b.quantity || b.packagesCount || 1} Pkgs</span> - {b.packageDetails || b.description || b.itemDescription || "Commercial Cargo"}
+                      <td className="p-1 border border-black truncate" title={bookedCargo}>
+                        <span className="font-bold text-black">{bookedQuantity} Pkgs</span> - {bookedCargo}
                       </td>
                       <td className="p-1 border border-black text-center font-mono whitespace-nowrap truncate">
-                        {b.weight ? `${b.weight} kg` : "—"}
+                        {bookedWeight}
                       </td>
                       <td className="p-1 border border-black text-center font-bold uppercase text-[8.5px] truncate">
                         {b.freightAsPer || b.amountType || b.paymentStatus || "To Pay"}

@@ -66,7 +66,7 @@ export default function ChallanPage() {
 
   // Search & Filter for left column
   const [biltySearch, setBiltySearch] = useState("");
-  const [warehouseFilter, setWarehouseFilter] = useState("KARACHI");
+  const [warehouseFilter, setWarehouseFilter] = useState("");
 
   // Printable Challan modal
   const [printedChallan, setPrintedChallan] = useState<any>(null);
@@ -78,6 +78,10 @@ export default function ChallanPage() {
     warehouse: "KARACHI",
     origin: "Karachi",
     destination: "Lahore",
+    deliveryStops: [] as string[],
+    priority: "NORMAL" as "NORMAL" | "URGENT",
+    expectedArrivalDate: "",
+    expectedArrivalTime: "",
 
     hiringMode: "COMPANY_FLEET" as "COMPANY_FLEET" | "MARKET_BROKER",
     brokerId: "",
@@ -90,14 +94,32 @@ export default function ChallanPage() {
     truckNumber: "",
     driverId: "",
     driverName: "",
+    driverCnic: "",
     driverPhone: "",
+    driverSecondaryPhone: "",
+    activeDriverPhone: "PRIMARY" as "PRIMARY" | "SECONDARY",
 
     truckFreight: "",
     advancePaidToDriver: "",
     notes: "",
+    loadingPhotos: [] as string[],
+    partialLoading: {} as Record<string, number>,
   });
 
-  // Load available warehouse bilties directly on client mount
+  // Helper for bilty age badge
+  const getDaysOldLabel = (dateStr?: string) => {
+    if (!dateStr) return { text: "Recent", color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" };
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return { text: "Recent", color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" };
+    const diffMs = Date.now() - d.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (days <= 0) return { text: "Today", color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/40" };
+    if (days === 1) return { text: "1 Day Old", color: "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-300/40" };
+    if (days <= 3) return { text: `${days} Days Old`, color: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/40 font-semibold" };
+    return { text: `${days} Days Old`, color: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300/40 font-bold" };
+  };
+
+  // Load available warehouse bilties directly on client mount (sorted oldest first)
   useEffect(() => {
     try {
       const raw =
@@ -116,7 +138,13 @@ export default function ChallanPage() {
               !String(b.id || "").startsWith("cust-")
           );
           if (unassigned.length > 0) {
-            setAvailableBilties(unassigned);
+            // Sort oldest first (FIFO dispatching)
+            const sorted = [...unassigned].sort((a: any, b: any) => {
+              const tA = new Date(a.date || a.createdAt || a.created_at || 0).getTime();
+              const tB = new Date(b.date || b.createdAt || b.created_at || 0).getTime();
+              return tA - tB;
+            });
+            setAvailableBilties(sorted);
           }
         }
       }
@@ -252,7 +280,12 @@ export default function ChallanPage() {
         }
         return true;
       });
-      setAvailableBilties(unassigned);
+      const sortedUnassigned = unassigned.sort((a: any, b: any) => {
+        const tA = new Date(a.date || a.createdAt || a.created_at || 0).getTime();
+        const tB = new Date(b.date || b.createdAt || b.created_at || 0).getTime();
+        return tA - tB;
+      });
+      setAvailableBilties(sortedUnassigned);
 
       const localDrivers = getStoredDrivers();
       const combinedActiveDrivers = supabaseDrivers.length > 0
@@ -299,7 +332,12 @@ export default function ChallanPage() {
         const normStatus = String(b.shipmentStatus || b.status || "").toUpperCase().replace(/[\s-]+/g, "_");
         return normStatus !== "IN_TRANSIT" && normStatus !== "DISPATCHED" && normStatus !== "DELIVERED" && normStatus !== "DELETED" && normStatus !== "OUT_FOR_DELIVERY";
       });
-      setAvailableBilties(localUnassigned);
+      const sortedLocal = localUnassigned.sort((a: any, b: any) => {
+        const tA = new Date(a.date || a.createdAt || a.created_at || 0).getTime();
+        const tB = new Date(b.date || b.createdAt || b.created_at || 0).getTime();
+        return tA - tB;
+      });
+      setAvailableBilties(sortedLocal);
       setVehicles(getStoredVehicles());
       setDrivers(getStoredDrivers());
       setBrokers(getStoredBrokers());
@@ -479,15 +517,52 @@ export default function ChallanPage() {
       const finalChallanNo =
         challanData.challanNumber.trim() || `CHL-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      const updatedConsignments = selectedBiltiesList.map((b) => ({
-        ...b,
-        challanId: uniqueId,
-        shipmentStatus: "IN_TRANSIT",
-        vehicleId: challanData.vehicleId || b.vehicleId,
-        vehicleNumber: challanData.truckNumber,
-        driverId: challanData.driverId || b.driverId,
-        driverName: challanData.driverName,
-      }));
+      const updatedConsignments = selectedBiltiesList.map((b) => {
+        const fullQty = Number(b.quantity) || 1;
+        const loadedQty = challanData.partialLoading[b.id] !== undefined
+          ? Math.max(1, Math.min(fullQty, challanData.partialLoading[b.id]))
+          : fullQty;
+        return {
+          ...b,
+          challanId: uniqueId,
+          shipmentStatus: "IN_TRANSIT",
+          vehicleId: challanData.vehicleId || b.vehicleId,
+          vehicleNumber: challanData.truckNumber,
+          driverId: challanData.driverId || b.driverId,
+          driverName: challanData.driverName,
+          quantity: loadedQty,
+          partialNote: loadedQty < fullQty ? `Loaded ${loadedQty} of ${fullQty} packages` : undefined,
+        };
+      });
+
+      // Generate remainder bilties for warehouse if partial loading occurred
+      const remainderBilties: any[] = [];
+      selectedBiltiesList.forEach((b) => {
+        const fullQty = Number(b.quantity) || 1;
+        const loadedQty = challanData.partialLoading[b.id] !== undefined
+          ? Math.max(1, Math.min(fullQty, challanData.partialLoading[b.id]))
+          : fullQty;
+        if (loadedQty < fullQty) {
+          const remCount = fullQty - loadedQty;
+          const remId = `${b.id}-rem-${Date.now()}`;
+          const remBilty = {
+            ...b,
+            id: remId,
+            biltyNumber: `${b.biltyNumber}-R`,
+            quantity: remCount,
+            freight: 0,
+            totalAmount: 0,
+            remainingBalance: 0,
+            challanId: null,
+            shipmentStatus: "BOOKED",
+            status: "Booked",
+            packageDetails: `${b.packageDetails || b.description || 'General Cargo'} (Remaining ${remCount} pkgs)`,
+            createdAt: timestamp,
+          };
+          remainderBilties.push(remBilty);
+          saveStoredBilty(remBilty);
+        }
+      });
 
       const newChallanRecord = {
         id: uniqueId,
@@ -497,6 +572,10 @@ export default function ChallanPage() {
         warehouse: challanData.warehouse || "KARACHI",
         origin: challanData.origin || "Karachi",
         destination: challanData.destination || "Lahore",
+        deliveryStops: challanData.deliveryStops,
+        priority: challanData.priority,
+        expectedArrivalDate: challanData.expectedArrivalDate || null,
+        expectedArrivalTime: challanData.expectedArrivalTime || null,
         hiringMode: challanData.hiringMode,
         brokerId: isBroker ? challanData.brokerId || null : null,
         brokerName: isBroker ? challanData.brokerName || null : null,
@@ -508,7 +587,10 @@ export default function ChallanPage() {
         truckNumber: challanData.truckNumber.trim(),
         driverId: challanData.driverId || null,
         driverName: challanData.driverName.trim(),
+        driverCnic: challanData.driverCnic || null,
         driverPhone: challanData.driverPhone.trim() || null,
+        driverSecondaryPhone: challanData.driverSecondaryPhone.trim() || null,
+        activeDriverPhone: challanData.activeDriverPhone,
         totalAmount: totalGrossFreight,
         truckFreight: truckFreightCost,
         advancePaidToDriver: driverAdvancePaid,
@@ -516,85 +598,63 @@ export default function ChallanPage() {
         estimatedProfit: netTripProfit,
         status: "IN_TRANSIT",
         notes: challanData.notes.trim() || null,
+        loadingPhotos: challanData.loadingPhotos,
         consignments: updatedConsignments,
         isLocal: true,
         createdAt: timestamp,
       };
 
-      // 1. Enforce Cloud Database Persistence via schema-safe upsert
+      // 1. Direct Supabase write (fast path)
       let savedSuccessfully = false;
       let lastErrorMessage = "";
 
       if (isSupabaseConfigured) {
-        const { success: sbOk, data: sbData, error: sbErr } = await safeUpsertChallan({
-          id: uniqueId,
-          challan_number: finalChallanNo,
-          vehicle_number: newChallanRecord.truckNumber || null,
-          driver_name: newChallanRecord.driverName || null,
-          driver_phone: newChallanRecord.driverPhone || null,
-          status: "In Transit",
-          dispatch_date: newChallanRecord.date,
-          created_at: timestamp,
-        });
+        try {
+          const { success: sbOk, data: sbData, error: sbErr } = await safeUpsertChallan({
+            id: uniqueId,
+            challan_number: finalChallanNo,
+            vehicle_number: newChallanRecord.truckNumber || null,
+            driver_name: newChallanRecord.driverName || null,
+            driver_phone: newChallanRecord.driverPhone || null,
+            status: "In Transit",
+            dispatch_date: newChallanRecord.date,
+            created_at: timestamp,
+          });
 
-        if (!sbOk || sbErr) {
-          lastErrorMessage = `Supabase write failed: ${sbErr?.message || JSON.stringify(sbErr)}`;
-        } else {
-          savedSuccessfully = true;
-          if (sbData?.id) {
-            newChallanRecord.id = sbData.id;
+          if (sbOk && !sbErr) {
+            savedSuccessfully = true;
+            if (sbData?.id) {
+              newChallanRecord.id = sbData.id;
+            }
+
+            // Update linked bilties status in Supabase
+            if (selectedBiltyIds.length > 0) {
+              await supabase
+                .from("bilties")
+                .update({ status: "In Transit", challan_id: finalChallanNo })
+                .in("id", selectedBiltyIds);
+
+              await supabase
+                .from("bilties")
+                .update({ status: "In Transit", challan_id: finalChallanNo })
+                .in("bilty_number", selectedBiltyIds);
+            }
+          } else {
+            console.warn("Direct Supabase write notice, initiating server fallback:", sbErr);
           }
-
-          // Update linked bilties status in Supabase (schema-safe: omit unmapped vehicle/driver columns)
-          if (selectedBiltyIds.length > 0) {
-            await supabase
-              .from("bilties")
-              .update({ status: "In Transit" })
-              .in("id", selectedBiltyIds);
-
-            await supabase
-              .from("bilties")
-              .update({ status: "In Transit" })
-              .in("bilty_number", selectedBiltyIds);
-          }
-
-          // Immediately remove dispatched bilties from local available warehouse state
-          setAvailableBilties((prev) =>
-            prev.filter((b) => !selectedBiltyIds.includes(b.id) && !selectedBiltyIds.includes(b.biltyNumber))
-          );
-
-          // Synchronize locally only after affirmative database write
-          const allSavedChallans = saveStoredChallan(newChallanRecord);
-          if (typeof window !== "undefined") {
-            sessionStorage.setItem("spd_challans", JSON.stringify(allSavedChallans));
-            setCookieCache("spd_challans_cache", JSON.stringify(allSavedChallans));
-          }
-          for (const updatedBilty of updatedConsignments) {
-            saveStoredBilty(updatedBilty);
-          }
+        } catch (sbEx: any) {
+          console.warn("Direct Supabase exception, initiating server fallback:", sbEx);
         }
+      }
 
-        // Notify API in background for notifications
-        fetch("/api/admin/challan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...challanData,
-            challanNumber: finalChallanNo,
-            truckFreight: truckFreightCost,
-            advancePaidToDriver: driverAdvancePaid,
-            brokerFreight: isBroker ? truckFreightCost : 0,
-            brokerAdvance: isBroker ? driverAdvancePaid : 0,
-            selectedBiltyIds,
-          }),
-        }).catch(() => {});
-      } else {
-        // Supabase not configured — try server API
+      // 2. Resilient Server API Fallback (runs if direct Supabase failed, timed out, or unconfigured)
+      if (!savedSuccessfully) {
         try {
           const apiRes = await fetch("/api/admin/challan", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              id: uniqueId,
               ...challanData,
               challanNumber: finalChallanNo,
               truckFreight: truckFreightCost,
@@ -602,36 +662,53 @@ export default function ChallanPage() {
               brokerFreight: isBroker ? truckFreightCost : 0,
               brokerAdvance: isBroker ? driverAdvancePaid : 0,
               selectedBiltyIds,
+              deliveryStops: challanData.deliveryStops,
+              priority: challanData.priority,
+              expectedArrivalDate: challanData.expectedArrivalDate,
+              expectedArrivalTime: challanData.expectedArrivalTime,
+              driverCnic: challanData.driverCnic,
+              driverSecondaryPhone: challanData.driverSecondaryPhone,
+              activeDriverPhone: challanData.activeDriverPhone,
+              loadingPhotos: challanData.loadingPhotos,
+              loadedQuantities: challanData.partialLoading,
             }),
           });
           const apiJson = await apiRes.json().catch(() => null);
           if (apiRes.ok && apiJson?.success) {
             savedSuccessfully = true;
-            const allSavedChallans = saveStoredChallan(newChallanRecord);
-            if (typeof window !== "undefined") {
-              sessionStorage.setItem("spd_challans", JSON.stringify(allSavedChallans));
-              setCookieCache("spd_challans_cache", JSON.stringify(allSavedChallans));
-            }
-            for (const updatedBilty of updatedConsignments) {
-              saveStoredBilty(updatedBilty);
+            if (apiJson.data?.id || apiJson.challan?.id) {
+              newChallanRecord.id = apiJson.data?.id || apiJson.challan?.id;
             }
           } else {
-            lastErrorMessage = apiJson?.error || "Database setup incomplete. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be added in Vercel Settings -> Environment Variables.";
+            lastErrorMessage = apiJson?.error || "Server could not persist challan.";
           }
         } catch (apiErr: any) {
-          lastErrorMessage = apiErr?.message || "Cloud database is disconnected. Please configure Supabase keys in Vercel.";
+          lastErrorMessage = apiErr?.message || "Server network error";
         }
       }
 
       if (!savedSuccessfully) {
         throw new Error(
           lastErrorMessage ||
-          "Database Save Failed: Cloud database is not connected. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel Settings."
+          "Database Save Failed: Could not persist Challan. Please check connection."
         );
       }
 
-      // Update local UI state
-      setAvailableBilties((prev) => prev.filter((b) => !selectedBiltyIds.includes(b.id)));
+      // Synchronize locally only after affirmative database write
+      const allSavedChallans = saveStoredChallan(newChallanRecord);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("spd_challans", JSON.stringify(allSavedChallans));
+        setCookieCache("spd_challans_cache", JSON.stringify(allSavedChallans));
+      }
+      for (const updatedBilty of updatedConsignments) {
+        saveStoredBilty(updatedBilty);
+      }
+
+      // Immediately remove dispatched bilties from local available warehouse state, add remainder bilties
+      setAvailableBilties((prev) => {
+        const remaining = prev.filter((b) => !selectedBiltyIds.includes(b.id) && !selectedBiltyIds.includes(b.biltyNumber));
+        return [...remainderBilties, ...remaining];
+      });
       setSelectedBiltyIds([]);
 
       setSuccessMsg(`Record created successfully! Challan ${finalChallanNo} generated and dispatched.`);
@@ -791,9 +868,9 @@ export default function ChallanPage() {
                   onChange={(e) => setWarehouseFilter(e.target.value)}
                   className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 w-full sm:w-auto"
                 >
+                  <option value="">All Stations</option>
                   <option value="KARACHI">Karachi</option>
                   <option value="LAHORE">Lahore</option>
-                  <option value="">All Stations</option>
                 </select>
                 <Button
                   type="button"
@@ -826,31 +903,37 @@ export default function ChallanPage() {
                         className="rounded accent-spd-red w-4 h-4 cursor-pointer"
                       />
                     </th>
-                    <th className="p-3">Bilty #</th>
+                    <th className="p-3">Bilty # & Age</th>
                     <th className="p-3">Route</th>
-                    <th className="p-3">Goods / Item</th>
-                    <th className="p-3">Shipper / Receiver</th>
+                    <th className="p-3">Goods / Items</th>
+                    <th className="p-3">Shipper / Receiver (Bill To)</th>
+                    <th className="p-3 text-center">Priority</th>
                     <th className="p-3 text-right">Weight & CBM</th>
                     <th className="p-3 text-right">Freight</th>
-                    <th className="p-3 text-center">Pay Status</th>
+                    <th className="p-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {loading ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                      <td colSpan={9} className="p-8 text-center text-slate-400">
                         <LogisticsLoader size="sm" subtitle="Loading Warehouse Consignments..." />
                       </td>
                     </tr>
                   ) : filteredBilties.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                      <td colSpan={9} className="p-8 text-center text-slate-400">
                         No consignments waiting in warehouse. Click &apos;New Consignment Bilty&apos; to add one.
                       </td>
                     </tr>
                   ) : (
                     filteredBilties.map((b) => {
                       const isSelected = selectedBiltyIds.includes(b.id);
+                      const daysOld = getDaysOldLabel(b.date || b.created_at || b.createdAt);
+                      const isSenderBilled = (b.billTo || b.billedParty || "").toLowerCase().includes("sender") ||
+                        (b.paymentMode === "PAID" && !(b.billTo || b.billedParty || "").toLowerCase().includes("receiver"));
+                      const loadedQty = challanData.partialLoading[b.id] ?? (Number(b.quantity) || 1);
+
                       return (
                         <tr
                           key={b.id}
@@ -870,44 +953,101 @@ export default function ChallanPage() {
                             />
                           </td>
                           <td className="p-3">
-                            <span className="font-bold font-mono text-red-600 block">
+                            <span className="font-black font-mono text-red-600 block text-xs">
                               {b.biltyNumber}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              {b.trackingId}
+                            <span className="text-[10px] text-slate-500 block font-mono">
+                              {b.date ? new Date(b.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}
+                            </span>
+                            <span className={cn("inline-block text-[9px] px-1.5 py-0.2 rounded mt-0.5", daysOld.color)}>
+                              {daysOld.text}
                             </span>
                           </td>
                           <td className="p-3">
                             <span className="font-semibold block text-slate-800 dark:text-slate-200">
                               {b.origin} → {b.destination}
                             </span>
-                            <span className="text-[10px] text-slate-400">{b.warehouse || "Karachi"}</span>
+                            <span className="text-[10px] text-slate-400">{b.warehouse || b.origin || "Origin Hub"}</span>
                           </td>
                           <td className="p-3">
                             <span className="font-semibold block text-slate-800 dark:text-slate-200">
                               {b.packageDetails || b.description || "General Cargo"}
                             </span>
-                            <span className="text-[10px] text-slate-500 block">
-                              {b.quantity ? `${b.quantity} Pkg${b.quantity > 1 ? "s" : ""}` : "1 Pkg"}
-                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                              <span className="text-[10px] text-slate-500">
+                                {b.quantity ? `${b.quantity} Pkg${b.quantity > 1 ? "s" : ""}` : "1 Pkg"}
+                              </span>
+                              {isSelected && (
+                                <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-300/40">
+                                  <span className="text-[9px] text-amber-800 dark:text-amber-300 font-bold">Load:</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={Number(b.quantity) || 1}
+                                    value={loadedQty}
+                                    onChange={(e) => {
+                                      const maxQ = Number(b.quantity) || 1;
+                                      const val = Math.max(1, Math.min(maxQ, parseInt(e.target.value) || 1));
+                                      setChallanData(prev => ({
+                                        ...prev,
+                                        partialLoading: { ...prev.partialLoading, [b.id]: val }
+                                      }));
+                                    }}
+                                    className="w-12 h-5 text-[10px] font-bold text-center rounded border border-amber-400 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                  />
+                                  {loadedQty < (Number(b.quantity) || 1) && (
+                                    <span className="text-[9px] text-rose-600 font-bold">
+                                      (Rem: {(Number(b.quantity) || 1) - loadedQty})
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="p-3">
-                            <span className="font-semibold block text-slate-800 dark:text-slate-200">
-                              {b.senderName}
-                            </span>
-                            <span className="text-[10px] text-slate-500 block">
-                              To: {b.receiverName}
-                            </span>
+                            {isSenderBilled ? (
+                              <>
+                                <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1">
+                                  <span>{b.senderName}</span>
+                                  <span className="text-[9px] px-1 py-0.2 bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300 rounded font-bold uppercase">Bill To</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-normal">
+                                  To: {b.receiverName}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-[10px] text-slate-500 font-normal">
+                                  From: {b.senderName}
+                                </div>
+                                <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1">
+                                  <span>{b.receiverName}</span>
+                                  <span className="text-[9px] px-1 py-0.2 bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300 rounded font-bold uppercase">Bill To</span>
+                                </div>
+                              </>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {b.priority === 'URGENT' || b.isUrgent ? (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-400/40 whitespace-nowrap">
+                                ⚡ Urgent
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 whitespace-nowrap">
+                                🚚 Normal
+                              </span>
+                            )}
                           </td>
                           <td className="p-3 text-right font-mono font-semibold whitespace-nowrap">
-                            <span className="block text-slate-900 dark:text-white">
-                              {b.weight
-                                ? `${b.weight} kg | ${b.cbm || b.volume || (Math.round((Number(b.weight) / 330) * 10) / 10).toFixed(1)} CBM`
-                                : "—"}
+                            <span className="block text-slate-900 dark:text-white text-xs">
+                              {b.weight ? `${Number(b.weight).toLocaleString()} kg` : "—"}
+                            </span>
+                            <span className="block text-slate-400 text-[10px]">
+                              {b.cbm || b.volume || (b.weight ? (Math.round((Number(b.weight) / 330) * 10) / 10).toFixed(1) : "0")} CBM
                             </span>
                           </td>
                           <td className="p-3 text-right font-mono font-black text-slate-900 dark:text-white">
-                            {formatCurrency(b.freight || 0)}
+                            {formatCurrency(b.freight || b.totalAmount || 0)}
                           </td>
                           <td className="p-3 text-center">
                             <span
@@ -1010,12 +1150,121 @@ export default function ChallanPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                  To (Delivery Station) *
+                  To (Primary Destination Station) *
                 </Label>
                 <HybridCombobox
                   value={challanData.destination}
                   onChange={(val) => setChallanData({ ...challanData, destination: val })}
                   options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
+                />
+              </div>
+
+              {/* Multi-Delivery Stations / Via Stops */}
+              <div className="col-span-1 sm:col-span-2 space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Additional Delivery Stops ({challanData.deliveryStops.length} / 5)
+                  </Label>
+                  {challanData.deliveryStops.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setChallanData((prev) => ({
+                          ...prev,
+                          deliveryStops: [...prev.deliveryStops, ""],
+                        }))
+                      }
+                      className="text-[11px] font-bold text-spd-blue hover:underline"
+                    >
+                      + Add Delivery Stop
+                    </button>
+                  )}
+                </div>
+                {challanData.deliveryStops.map((stop, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 w-14 shrink-0">
+                      Stop {idx + 1}:
+                    </span>
+                    <div className="flex-1">
+                      <HybridCombobox
+                        value={stop}
+                        onChange={(val) => {
+                          const updated = [...challanData.deliveryStops];
+                          updated[idx] = val;
+                          setChallanData({ ...challanData, deliveryStops: updated });
+                        }}
+                        options={PAKISTAN_CITIES.map((c) => ({ value: c, label: c }))}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = challanData.deliveryStops.filter((_, i) => i !== idx);
+                        setChallanData({ ...challanData, deliveryStops: updated });
+                      }}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400 text-xs font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Dispatch Priority Toggle */}
+              <div className="col-span-1 sm:col-span-2 space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                  Trip Priority
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setChallanData((prev) => ({ ...prev, priority: "NORMAL" }))}
+                    className={cn(
+                      "flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                      challanData.priority === "NORMAL"
+                        ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold shadow-xs"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                    )}
+                  >
+                    <span>🚚 Normal Transit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChallanData((prev) => ({ ...prev, priority: "URGENT" }))}
+                    className={cn(
+                      "flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all border",
+                      challanData.priority === "URGENT"
+                        ? "bg-amber-500/20 text-amber-900 dark:text-amber-300 border-amber-400 font-black shadow-xs"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                    )}
+                  >
+                    <span>⚡ Urgent / Express</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Expected Arrival Scheduling */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                  Expected Arrival Date
+                </Label>
+                <Input
+                  type="date"
+                  value={challanData.expectedArrivalDate}
+                  onChange={(e) => setChallanData({ ...challanData, expectedArrivalDate: e.target.value })}
+                  className="rounded-xl h-10 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                  Expected Arrival Time
+                </Label>
+                <Input
+                  type="time"
+                  value={challanData.expectedArrivalTime}
+                  onChange={(e) => setChallanData({ ...challanData, expectedArrivalTime: e.target.value })}
+                  className="rounded-xl h-10 text-xs"
                 />
               </div>
             </FormSectionCard>
@@ -1114,16 +1363,76 @@ export default function ChallanPage() {
 
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                      Driver Phone
+                      Driver CNIC
                     </Label>
                     <Input
-                      placeholder=""
+                      placeholder="e.g. 42101-1234567-1"
+                      value={challanData.driverCnic}
+                      onChange={(e) =>
+                        setChallanData({ ...challanData, driverCnic: e.target.value })
+                      }
+                      className="rounded-xl h-10 text-xs font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Primary Phone (WhatsApp) *
+                    </Label>
+                    <Input
+                      placeholder="03xx-xxxxxxx"
                       value={challanData.driverPhone}
                       onChange={(e) =>
                         setChallanData({ ...challanData, driverPhone: e.target.value })
                       }
                       className="rounded-xl h-10 text-xs font-mono"
                     />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Secondary Phone
+                    </Label>
+                    <Input
+                      placeholder="03xx-xxxxxxx"
+                      value={challanData.driverSecondaryPhone}
+                      onChange={(e) =>
+                        setChallanData({ ...challanData, driverSecondaryPhone: e.target.value })
+                      }
+                      className="rounded-xl h-10 text-xs font-mono"
+                    />
+                  </div>
+
+                  <div className="col-span-1 sm:col-span-2 space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                      Active Phone For Journey Tracking
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setChallanData((prev) => ({ ...prev, activeDriverPhone: "PRIMARY" }))}
+                        className={cn(
+                          "py-1.5 px-3 rounded-lg text-xs font-bold border transition-all text-center",
+                          challanData.activeDriverPhone === "PRIMARY"
+                            ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold"
+                            : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                        )}
+                      >
+                        Primary Phone
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChallanData((prev) => ({ ...prev, activeDriverPhone: "SECONDARY" }))}
+                        className={cn(
+                          "py-1.5 px-3 rounded-lg text-xs font-bold border transition-all text-center",
+                          challanData.activeDriverPhone === "SECONDARY"
+                            ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400 font-bold"
+                            : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                        )}
+                      >
+                        Secondary Phone
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
@@ -1222,6 +1531,75 @@ export default function ChallanPage() {
                   </div>
                 </>
               )}
+            </FormSectionCard>
+
+            {/* Cargo Loading Photos */}
+            <FormSectionCard
+              title="Loading Photos & Vehicle Verification"
+              badge="Photos"
+              description="Upload up to 4 photos of vehicle loading and seal for security & verification"
+            >
+              <div className="col-span-1 sm:col-span-2 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Loading Photos ({challanData.loadingPhotos.length} / 4)
+                  </Label>
+                  {challanData.loadingPhotos.length < 4 && (
+                    <label className="cursor-pointer text-xs font-bold text-spd-blue hover:underline bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-900">
+                      <span>+ Add Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const base64 = event.target?.result as string;
+                              if (base64) {
+                                setChallanData((prev) => ({
+                                  ...prev,
+                                  loadingPhotos: [...prev.loadingPhotos.slice(0, 3), base64],
+                                }));
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {challanData.loadingPhotos.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {challanData.loadingPhotos.map((photo, pIdx) => (
+                      <div key={pIdx} className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-video bg-slate-100 dark:bg-slate-800">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={photo} alt={`Loading Photo ${pIdx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setChallanData((prev) => ({
+                              ...prev,
+                              loadingPhotos: prev.loadingPhotos.filter((_, i) => i !== pIdx),
+                            }));
+                          }}
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold shadow-md hover:bg-red-700"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-center text-xs text-slate-400">
+                    No loading photos attached. Tap &apos;+ Add Photo&apos; to capture or select loading pictures.
+                  </div>
+                )}
+              </div>
             </FormSectionCard>
 
             {/* Trip Expenses & Profit Calculator (Matching Reference Formula) */}

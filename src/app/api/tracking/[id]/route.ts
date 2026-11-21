@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCentralCollection } from '@/lib/server-store';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, isValidUUID } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,10 +98,20 @@ export async function GET(
     // Query Supabase bilties table for live production consignments
     if (isSupabaseConfigured) {
       try {
+        const orConditions = [
+          `bilty_number.eq.${trackingQuery}`,
+          `bilty_number.eq.${cleanUpper}`,
+          `manual_bilty_number.eq.${trackingQuery}`,
+          `manual_bilty_number.eq.${cleanUpper}`,
+        ];
+        if (isValidUUID(trackingQuery)) {
+          orConditions.push(`id.eq.${trackingQuery}`);
+        }
+
         const { data: sbBilties, error: sbErr } = await supabase
           .from('bilties')
           .select('*')
-          .or(`bilty_number.eq.${trackingQuery},bilty_number.eq.${cleanUpper},manual_bilty_number.eq.${trackingQuery},id.eq.${trackingQuery}`)
+          .or(orConditions.join(','))
           .limit(1);
 
         const sbMatch = sbBilties && sbBilties.length > 0 ? sbBilties[0] : null;
