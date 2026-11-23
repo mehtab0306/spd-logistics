@@ -44,6 +44,7 @@ import {
   Filter,
   Clock,
   ArrowRight,
+  ArrowLeft,
   X,
   CreditCard,
   ChevronRight,
@@ -62,6 +63,8 @@ interface CashBookItem {
   name: string;
   city: string;
   station?: string;
+  operatorName?: string;
+  officeAddress?: string;
   description?: string;
   openingBalance: number;
   totalCredits: number;
@@ -111,22 +114,28 @@ const CASH_IN_CATEGORIES = [
   "Capital Inflow",
   "Advance Received",
   "Refund / Claim",
+  "Inter-Cash-Book Transfer In",
   "Other Income",
 ];
 
 const CASH_OUT_CATEGORIES = [
   "Diesel / Fuel",
-  "Driver Advance",
+  "Driver Advance / Trip Expense",
+  "Driver Salary",
+  "Employee Salary",
+  "Transporter Payment",
+  "Broker Payment",
+  "Vehicle Maintenance / Repair",
+  "Labour / Loading / Unloading",
+  "Lifter / Crane Charges",
+  "Local Delivery Expense",
+  "Bilty Specific Expense",
   "Challan Trip Expense",
-  "Labour / Loading",
-  "Vehicle Maintenance",
-  "Toll & Tax",
-  "Tyre & Spare Parts",
-  "Police / Chungi",
-  "Office Expense",
+  "Inter-Cash-Book Transfer",
+  "Toll & Tax / Chungi",
+  "Office Expense / Utility",
   "Bank Deposit",
-  "Salary / Wages",
-  "Other Expense",
+  "Other Operational Expense",
 ];
 
 export default function CashBooksPage() {
@@ -189,6 +198,8 @@ function CashBooksContent() {
   const [savingBookName, setSavingBookName] = useState(false);
   const [deleteBookOpen, setDeleteBookOpen] = useState(false);
   const [deletingBook, setDeletingBook] = useState(false);
+  const [deleteBookPassword, setDeleteBookPassword] = useState("");
+  const [deleteBookPasswordError, setDeleteBookPasswordError] = useState("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -196,6 +207,8 @@ function CashBooksContent() {
   const [newBookData, setNewBookData] = useState({
     name: "",
     city: "Lahore",
+    operatorName: "",
+    officeAddress: "",
     description: "",
     openingBalance: "",
   });
@@ -345,7 +358,7 @@ function CashBooksContent() {
           localStorage.setItem("spd_cash_books", JSON.stringify(combined));
         } catch {}
 
-        // Retain current selection, or honor bookIdParam, or pick first
+        // Retain current selection or honor bookIdParam, otherwise null to show All Cash Books cards first (PDF Page 38)
         setSelectedBook((prev) => {
           if (bookIdParam) {
             const paramMatch = combined.find((b: any) => b.id === bookIdParam);
@@ -355,7 +368,7 @@ function CashBooksContent() {
             const currentMatch = combined.find((b: any) => b.id === prev.id);
             if (currentMatch) return currentMatch;
           }
-          return combined[0] || null;
+          return null;
         });
       }
     } catch (err) {
@@ -844,6 +857,8 @@ function CashBooksContent() {
     setNewBookData({
       name: "",
       city: "Lahore",
+      operatorName: "",
+      officeAddress: "",
       description: "",
       openingBalance: "",
     });
@@ -963,9 +978,21 @@ function CashBooksContent() {
     }
   };
 
-  // Permanent Delete Cash Book (checks for existing transactions)
+  // Permanent Delete Cash Book (checks for existing transactions and requires admin password)
   const handleDeleteBook = async () => {
     if (!selectedBook) return;
+    if (!deleteBookPassword.trim()) {
+      setDeleteBookPasswordError("Admin password is required to delete a Cash Book.");
+      return;
+    }
+    const valid = ["admin", "admin123", "spdadmin", "superadmin", "spd2026"].includes(
+      deleteBookPassword.trim().toLowerCase()
+    );
+    if (!valid) {
+      setDeleteBookPasswordError("Incorrect Admin Password. Deletion unauthorized.");
+      return;
+    }
+
     try {
       setDeletingBook(true);
       const res = await fetch(`/api/admin/cash-books?cashBookId=${selectedBook.id}`, {
@@ -978,6 +1005,8 @@ function CashBooksContent() {
 
       setDeleteBookOpen(false);
       setArchiveBookOpen(false);
+      setDeleteBookPassword("");
+      setDeleteBookPasswordError("");
       setFeedback({ type: "success", message: `"${selectedBook.name}" deleted successfully.` });
       toast.success(`"${selectedBook.name}" deleted successfully.`);
 
@@ -986,7 +1015,7 @@ function CashBooksContent() {
         try {
           localStorage.setItem("spd_cash_books", JSON.stringify(remaining));
         } catch {}
-        setSelectedBook(remaining[0] || null);
+        setSelectedBook(null);
         return remaining;
       });
       await fetchCashBooks();
@@ -1174,69 +1203,250 @@ function CashBooksContent() {
       )}
 
       {/* ======================================================== */}
-      {/* TOP HEADER: CASH BOOK SWITCHER & ACTIONS */}
+      {/* VIEW 1: ALL CASH BOOKS OVERVIEW (PDF PAGE 38 REQUIREMENT) */}
       {/* ======================================================== */}
-      <div className="print:hidden space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-spd-blue/10 dark:bg-spd-blue/20 text-spd-blue">
-                <Wallet className="h-6 w-6" />
-              </div>
+      {!selectedBook && (
+        <div className="print:hidden space-y-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                Cash Book & Day Ledger
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Real-time transport cash flow, station ledgers, and operational expenses.
-              </p>
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-spd-blue/10 dark:bg-spd-blue/20 text-spd-blue">
+                  <Wallet className="h-6 w-6" />
+                </div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                    Cash Books & Station Registers
+                  </h1>
+                  <p className="text-xs text-muted-foreground">
+                    Interactive station and terminal cash books with live balances and transaction ledgers.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchCashBooks}
+                className="rounded-xl text-xs h-9 font-bold"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", loading && "animate-spin")} />
+                Sync
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={() => setCreateBookOpen(true)}
+                className="bg-spd-blue hover:bg-blue-800 text-white rounded-xl text-xs h-9 font-bold gap-1.5 shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Create New Cash Book
+              </Button>
             </div>
           </div>
+
+          {/* 4 Combined KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <div className="bg-slate-900 text-white border border-slate-800 rounded-2xl p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-300">Total Cash in Hand</p>
+              <p className="text-xl font-black text-amber-300 mt-1 font-mono">
+                Rs {cashBooks.reduce((sum, b) => sum + (Number(b.currentBalance) || 0), 0).toLocaleString()}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Combined across all active stations</p>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Total Cash IN (آمد)</p>
+              <p className="text-xl font-black text-emerald-700 mt-1 font-mono">
+                +Rs {cashBooks.reduce((sum, b) => sum + (Number(b.totalCredits) || 0), 0).toLocaleString()}
+              </p>
+              <p className="text-[10px] text-emerald-600 mt-0.5">Total station receipts & collections</p>
+            </div>
+
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-rose-800">Total Cash OUT (خرچہ)</p>
+              <p className="text-xl font-black text-rose-700 mt-1 font-mono">
+                -Rs {cashBooks.reduce((sum, b) => sum + (Number(b.totalDebits) || 0), 0).toLocaleString()}
+              </p>
+              <p className="text-[10px] text-rose-600 mt-0.5">Operational expenses & driver advances</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Active Cash Books</p>
+              <p className="text-xl font-black text-slate-900 dark:text-white mt-1 font-mono">
+                {cashBooks.length} Stations
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Karachi, Lahore & terminals</p>
+            </div>
+          </div>
+
+          {/* Grid of Interactive Cash Book Cards (Page 38) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {cashBooks.map((b) => (
+              <div
+                key={b.id}
+                onClick={() => setSelectedBook(b)}
+                className="bg-card border-2 border-slate-200 dark:border-slate-800 hover:border-spd-blue rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-black uppercase bg-spd-blue/10 text-spd-blue border border-spd-blue/20">
+                      {b.city || "Branch"} Station
+                    </span>
+                    <span className="text-[11px] font-mono text-muted-foreground">
+                      {b.transactionCount || 0} entries
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-black text-foreground group-hover:text-spd-blue transition-colors">
+                    {b.name}
+                  </h3>
+                  {b.operatorName && (
+                    <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                      In-Charge: <span className="font-bold text-foreground">{b.operatorName}</span>
+                    </p>
+                  )}
+                  {b.officeAddress && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
+                      {b.officeAddress}
+                    </p>
+                  )}
+
+                  {/* 3-column breakdown */}
+                  <div className="grid grid-cols-3 gap-2 p-3 my-4 bg-muted/40 rounded-xl text-center">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block font-bold">Opening</span>
+                      <span className="text-xs font-mono font-bold text-foreground">
+                        Rs {(b.openingBalance || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-emerald-600 block font-bold">Total IN</span>
+                      <span className="text-xs font-mono font-bold text-emerald-600">
+                        +{(b.totalCredits || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-rose-600 block font-bold">Total OUT</span>
+                      <span className="text-xs font-mono font-bold text-rose-600">
+                        -{(b.totalDebits || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Current Balance Highlight Box */}
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-300 block">Current Cash Balance</span>
+                      <span className="text-xl font-black font-mono text-amber-300">
+                        Rs {(b.currentBalance || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <Wallet className="h-6 w-6 text-amber-400 opacity-80" />
+                  </div>
+                </div>
+
+                {/* Footer Action */}
+                <div className="mt-4 pt-3 border-t border-border">
+                  <Button
+                    size="sm"
+                    className="w-full bg-spd-blue hover:bg-blue-800 text-white font-bold text-xs rounded-xl gap-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedBook(b);
+                    }}
+                  >
+                    <span>Open Day Book Ledger</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchCashBooks}
-            className="rounded-xl text-xs h-9 font-bold"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", loading && "animate-spin")} />
-            Sync
-          </Button>
+      {/* ======================================================== */}
+      {/* VIEW 2: SPECIFIC CASH BOOK DAY LEDGER */}
+      {/* ======================================================== */}
+      {selectedBook && (
+        <div className="print:hidden space-y-6">
+          {/* Top Bar with "← Back to All Cash Books" */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-4 rounded-2xl border">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedBook(null)}
+                className="font-bold text-xs rounded-xl gap-1.5 border-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <ArrowLeft className="w-4 h-4 text-spd-red" />
+                <span>← Back to All Cash Books</span>
+              </Button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-black text-foreground">{selectedBook.name}</h1>
+                  <Badge variant="outline" className="text-xs font-bold">{selectedBook.city}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{selectedBook.description || "Daily station transactions and balance ledger"}</p>
+              </div>
+            </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportExcel}
-            disabled={!filteredTransactions.length}
-            className="rounded-xl text-xs h-9 font-bold bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 shadow-xs"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-            Export Excel
-          </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchCashBooks}
+                className="rounded-xl text-xs h-9 font-bold"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", loading && "animate-spin")} />
+                Sync
+              </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handlePrint}
-            disabled={!selectedBook}
-            className="rounded-xl text-xs h-9 font-bold"
-          >
-            <Printer className="w-3.5 h-3.5 mr-1.5" />
-            Print Day Book
-          </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportExcel}
+                disabled={!filteredTransactions.length}
+                className="rounded-xl text-xs h-9 font-bold bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-xs"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+                Export Excel
+              </Button>
 
-          <Button
-            size="sm"
-            onClick={() => setCreateBookOpen(true)}
-            className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:hover:bg-slate-200 dark:text-slate-900 rounded-xl text-xs h-9 font-bold"
-          >
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            New Book
-          </Button>
-        </div>
-      </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                className="rounded-xl text-xs h-9 font-bold"
+              >
+                <Printer className="w-3.5 h-3.5 mr-1.5" />
+                Print Day Book
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={openEditBook}
+                className="text-xs text-spd-blue hover:bg-spd-blue/10 h-9 font-bold"
+              >
+                <Pencil className="w-3.5 h-3.5 mr-1" />
+                Rename
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteBookOpen(true)}
+                className="text-xs text-rose-600 hover:bg-rose-50 h-9 font-bold"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                Delete
+              </Button>
+            </div>
+          </div>
 
       {/* ======================================================== */}
       {/* CASH BOOK TABS SELECTOR */}
@@ -1804,6 +2014,7 @@ function CashBooksContent() {
         )}
       </div>
       </div>
+      )}
 
       {/* ======================================================== */}
       {/* DEDICATED A4 PRINTABLE CASH BOOK DAY LEDGER */}
@@ -1817,9 +2028,17 @@ function CashBooksContent() {
       >
         <PrintHeader
           title={`Cash Book & Day Ledger: ${selectedBook?.name || "General Cash Book"}`}
-          subtitle="Real-Time Station Cash Receipts, Operational Expenses & Ledger Balance"
+          subtitle={
+            (selectedBook?.city || selectedBook?.name || "").toLowerCase().includes("karachi")
+              ? "Plot # 9, Gate No 1, Street No 4, Truck Stand, Hawksbay Road, Karachi, Pakistan. Tel: 021-32354575 / 0300-8266299"
+              : "Saggian Bypass, Near Ravi Toll Plaza, Lahore, Pakistan. Tel: 042-37145789 / 0306-4444001"
+          }
           documentNumber={selectedBook?.id}
-          station={selectedBook?.station || selectedBook?.city || "Head Office Station (Lahore)"}
+          station={
+            (selectedBook?.city || selectedBook?.name || "").toLowerCase().includes("karachi")
+              ? "Karachi Head Office — Hawksbay Truck Stand"
+              : "Lahore Office — Saggian Bypass"
+          }
         />
 
         {/* Financial Summary Box */}
@@ -2594,7 +2813,7 @@ function CashBooksContent() {
               <Label className="text-xs font-bold">Cash Book Name *</Label>
               <Input
                 required
-                placeholder=""
+                placeholder="e.g. Lahore Cash Book / Hammad"
                 value={newBookData.name}
                 onChange={(e) => setNewBookData({ ...newBookData, name: e.target.value })}
                 className="h-9 text-xs mt-1"
@@ -2606,7 +2825,7 @@ function CashBooksContent() {
                 <Label className="text-xs font-bold">City / Station *</Label>
                 <Input
                   required
-                  placeholder=""
+                  placeholder="e.g. Lahore / Karachi"
                   value={newBookData.city}
                   onChange={(e) => setNewBookData({ ...newBookData, city: e.target.value })}
                   className="h-9 text-xs mt-1"
@@ -2614,13 +2833,35 @@ function CashBooksContent() {
               </div>
 
               <div>
+                <Label className="text-xs font-bold">Operator / Manager Name</Label>
+                <Input
+                  placeholder="e.g. Hammad / Station In-charge"
+                  value={newBookData.operatorName}
+                  onChange={(e) => setNewBookData({ ...newBookData, operatorName: e.target.value })}
+                  className="h-9 text-xs mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <Label className="text-xs font-bold">Opening Balance (PKR)</Label>
                 <Input
                   type="number"
-                  placeholder=""
+                  placeholder="0"
                   value={newBookData.openingBalance}
                   onChange={(e) => setNewBookData({ ...newBookData, openingBalance: e.target.value })}
                   className="h-9 text-xs mt-1 font-mono"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold">Station / Office Address</Label>
+                <Input
+                  placeholder="e.g. Saggian Bypass / Hawksbay"
+                  value={newBookData.officeAddress}
+                  onChange={(e) => setNewBookData({ ...newBookData, officeAddress: e.target.value })}
+                  className="h-9 text-xs mt-1"
                 />
               </div>
             </div>
@@ -2628,7 +2869,7 @@ function CashBooksContent() {
             <div>
               <Label className="text-xs font-bold">Description / Purpose</Label>
               <Input
-                placeholder=""
+                placeholder="e.g. Operational cash book for station day expenses"
                 value={newBookData.description}
                 onChange={(e) => setNewBookData({ ...newBookData, description: e.target.value })}
                 className="h-9 text-xs mt-1"
@@ -2808,6 +3049,23 @@ function CashBooksContent() {
             <p className="text-[11px] leading-relaxed">
               If this Cash Book contains any recorded financial transactions, deletion will be blocked to maintain complete audit history. Only empty Cash Books can be deleted.
             </p>
+          </div>
+
+          <div className="space-y-1.5 pt-1">
+            <Label className="text-xs font-bold text-rose-700">Enter Admin Password to Authorize Deletion *</Label>
+            <Input
+              type="password"
+              placeholder="Enter Admin Password"
+              value={deleteBookPassword}
+              onChange={(e) => {
+                setDeleteBookPassword(e.target.value);
+                setDeleteBookPasswordError("");
+              }}
+              className="h-9 text-xs border-rose-300 focus-visible:ring-rose-500"
+            />
+            {deleteBookPasswordError && (
+              <p className="text-[11px] text-rose-600 font-bold">{deleteBookPasswordError}</p>
+            )}
           </div>
 
           <DialogFooter className="pt-2">

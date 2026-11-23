@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -75,7 +75,108 @@ import { supabase, isSupabaseConfigured, generateUUID } from "@/lib/supabase";
 
 export default function BiltyPage() {
   const router = useRouter();
-  const [consignments, setConsignments] = useState<any[]>([]);
+  const [allRawConsignments, setAllRawConsignments] = useState<any[]>([]);
+  const [headlineFilter, setHeadlineFilter] = useState<"ALL" | "UNDELIVERED" | "IN_WAREHOUSES" | "IN_TRANSIT" | "DELIVERED">("ALL");
+  const [dateFilterPreset, setDateFilterPreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "THIS_WEEK" | "THIS_MONTH" | "CUSTOM">("ALL");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+
+  const setConsignments = (updater: any[] | ((prev: any[]) => any[])) => {
+    if (typeof updater === "function") {
+      setAllRawConsignments(updater);
+    } else {
+      setAllRawConsignments(updater);
+    }
+  };
+
+  // Filtered consignments dynamically derived
+  const consignments = useMemo(() => {
+    let list = allRawConsignments;
+
+    // 1. Headline card filter
+    if (headlineFilter === "UNDELIVERED") {
+      list = list.filter((b) => {
+        const s = String(b.shipmentStatus || b.status || "").toUpperCase();
+        return s !== "DELIVERED" && s !== "CANCELLED";
+      });
+    } else if (headlineFilter === "IN_WAREHOUSES") {
+      list = list.filter((b) => {
+        const s = String(b.shipmentStatus || b.status || "").toUpperCase();
+        return ["BOOKED", "BOOKING_RECEIVED", "PICKUP_PENDING", "PICKED_UP", "WAREHOUSE", "AT_ORIGIN", "RECEIVED"].includes(s) || (!s.includes("TRANSIT") && !s.includes("DELIVER"));
+      });
+    } else if (headlineFilter === "IN_TRANSIT") {
+      list = list.filter((b) => {
+        const s = String(b.shipmentStatus || b.status || "").toUpperCase();
+        return ["IN_TRANSIT", "DRIVER_ON_THE_WAY", "ON_THE_WAY", "OUT_FOR_DELIVERY", "ARRIVED_AT_DESTINATION"].includes(s);
+      });
+    } else if (headlineFilter === "DELIVERED") {
+      list = list.filter((b) => {
+        const s = String(b.shipmentStatus || b.status || "").toUpperCase();
+        return s === "DELIVERED";
+      });
+    }
+
+    // 2. Date presets
+    const today = new Date().toISOString().slice(0, 10);
+    if (dateFilterPreset === "TODAY") {
+      list = list.filter((b) => {
+        const d = (b.bookingDate || b.date || b.created_at || "").slice(0, 10);
+        return d === today;
+      });
+    } else if (dateFilterPreset === "YESTERDAY") {
+      const yDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      list = list.filter((b) => {
+        const d = (b.bookingDate || b.date || b.created_at || "").slice(0, 10);
+        return d === yDate;
+      });
+    } else if (dateFilterPreset === "THIS_WEEK") {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+      list = list.filter((b) => {
+        const d = (b.bookingDate || b.date || b.created_at || "").slice(0, 10);
+        return d >= sevenDaysAgo && d <= today;
+      });
+    } else if (dateFilterPreset === "THIS_MONTH") {
+      const curMonth = today.slice(0, 7);
+      list = list.filter((b) => {
+        const d = (b.bookingDate || b.date || b.created_at || "").slice(0, 7);
+        return d === curMonth;
+      });
+    } else if (dateFilterPreset === "CUSTOM") {
+      list = list.filter((b) => {
+        const d = (b.bookingDate || b.date || b.created_at || "").slice(0, 10);
+        if (customStartDate && d < customStartDate) return false;
+        if (customEndDate && d > customEndDate) return false;
+        return true;
+      });
+    }
+
+    return list;
+  }, [allRawConsignments, headlineFilter, dateFilterPreset, customStartDate, customEndDate]);
+
+  const undeliveredItems = useMemo(() => allRawConsignments.filter((b) => {
+    const s = String(b.shipmentStatus || b.status || "").toUpperCase();
+    return s !== "DELIVERED" && s !== "CANCELLED";
+  }), [allRawConsignments]);
+
+  const warehouseItems = useMemo(() => allRawConsignments.filter((b) => {
+    const s = String(b.shipmentStatus || b.status || "").toUpperCase();
+    return ["BOOKED", "BOOKING_RECEIVED", "PICKUP_PENDING", "PICKED_UP", "WAREHOUSE", "AT_ORIGIN", "RECEIVED"].includes(s) || (!s.includes("TRANSIT") && !s.includes("DELIVER"));
+  }), [allRawConsignments]);
+
+  const transitItems = useMemo(() => allRawConsignments.filter((b) => {
+    const s = String(b.shipmentStatus || b.status || "").toUpperCase();
+    return ["IN_TRANSIT", "DRIVER_ON_THE_WAY", "ON_THE_WAY", "OUT_FOR_DELIVERY", "ARRIVED_AT_DESTINATION"].includes(s);
+  }), [allRawConsignments]);
+
+  const deliveredItems = useMemo(() => allRawConsignments.filter((b) => {
+    const s = String(b.shipmentStatus || b.status || "").toUpperCase();
+    return s === "DELIVERED";
+  }), [allRawConsignments]);
+
+  const undeliveredFreight = useMemo(() => undeliveredItems.reduce((acc, b) => acc + (b.totalFreight || b.totalAmount || b.freight || 0), 0), [undeliveredItems]);
+  const warehouseFreight = useMemo(() => warehouseItems.reduce((acc, b) => acc + (b.totalFreight || b.totalAmount || b.freight || 0), 0), [warehouseItems]);
+  const transitFreight = useMemo(() => transitItems.reduce((acc, b) => acc + (b.totalFreight || b.totalAmount || b.freight || 0), 0), [transitItems]);
+  const deliveredFreight = useMemo(() => deliveredItems.reduce((acc, b) => acc + (b.totalFreight || b.totalAmount || b.freight || 0), 0), [deliveredItems]);
   const { highlightClass } = useSmartHighlight(consignments);
   const [customers, setCustomers] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
@@ -1395,6 +1496,174 @@ export default function BiltyPage() {
         </div>
       )}
 
+      {/* TOP 4 SUMMARY FILTER HEADLINE CARDS (PDF p. 16) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Card 1: Undelivered */}
+        <button
+          type="button"
+          onClick={() => setHeadlineFilter((prev) => (prev === "UNDELIVERED" ? "ALL" : "UNDELIVERED"))}
+          className={cn(
+            "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group shadow-2xs cursor-pointer",
+            headlineFilter === "UNDELIVERED"
+              ? "bg-amber-50 dark:bg-amber-950/40 border-amber-400 ring-2 ring-amber-400"
+              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-700"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-amber-800 dark:text-amber-300">Undelivered</span>
+            <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+          </div>
+          <div className="mt-2">
+            <span className="text-2xl font-black text-slate-900 dark:text-white">{undeliveredItems.length}</span>
+            <span className="text-xs text-slate-500 ml-1.5 font-bold">Bilties</span>
+          </div>
+          <p className="text-xs font-mono font-bold text-amber-700 dark:text-amber-400 mt-1">
+            {formatCurrency(undeliveredFreight)}
+          </p>
+          {headlineFilter === "UNDELIVERED" && (
+            <span className="inline-block mt-2 text-[10px] font-bold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 rounded-full">
+              Active Filter &times;
+            </span>
+          )}
+        </button>
+
+        {/* Card 2: In Warehouses */}
+        <button
+          type="button"
+          onClick={() => setHeadlineFilter((prev) => (prev === "IN_WAREHOUSES" ? "ALL" : "IN_WAREHOUSES"))}
+          className={cn(
+            "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group shadow-2xs cursor-pointer",
+            headlineFilter === "IN_WAREHOUSES"
+              ? "bg-blue-50 dark:bg-blue-950/40 border-blue-400 ring-2 ring-blue-400"
+              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-blue-800 dark:text-blue-300">In Warehouses</span>
+            <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+          </div>
+          <div className="mt-2">
+            <span className="text-2xl font-black text-slate-900 dark:text-white">{warehouseItems.length}</span>
+            <span className="text-xs text-slate-500 ml-1.5 font-bold">Bilties</span>
+          </div>
+          <p className="text-xs font-mono font-bold text-blue-700 dark:text-blue-400 mt-1">
+            {formatCurrency(warehouseFreight)}
+          </p>
+          {headlineFilter === "IN_WAREHOUSES" && (
+            <span className="inline-block mt-2 text-[10px] font-bold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 rounded-full">
+              Active Filter &times;
+            </span>
+          )}
+        </button>
+
+        {/* Card 3: In Transit */}
+        <button
+          type="button"
+          onClick={() => setHeadlineFilter((prev) => (prev === "IN_TRANSIT" ? "ALL" : "IN_TRANSIT"))}
+          className={cn(
+            "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group shadow-2xs cursor-pointer",
+            headlineFilter === "IN_TRANSIT"
+              ? "bg-purple-50 dark:bg-purple-950/40 border-purple-400 ring-2 ring-purple-400"
+              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-300 dark:hover:border-purple-700"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-purple-800 dark:text-purple-300">In Transit</span>
+            <Truck className="w-4 h-4 text-purple-600 shrink-0" />
+          </div>
+          <div className="mt-2">
+            <span className="text-2xl font-black text-slate-900 dark:text-white">{transitItems.length}</span>
+            <span className="text-xs text-slate-500 ml-1.5 font-bold">Bilties</span>
+          </div>
+          <p className="text-xs font-mono font-bold text-purple-700 dark:text-purple-400 mt-1">
+            {formatCurrency(transitFreight)}
+          </p>
+          {headlineFilter === "IN_TRANSIT" && (
+            <span className="inline-block mt-2 text-[10px] font-bold text-purple-800 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/60 px-2 py-0.5 rounded-full">
+              Active Filter &times;
+            </span>
+          )}
+        </button>
+
+        {/* Card 4: Delivered / Closed */}
+        <button
+          type="button"
+          onClick={() => setHeadlineFilter((prev) => (prev === "DELIVERED" ? "ALL" : "DELIVERED"))}
+          className={cn(
+            "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group shadow-2xs cursor-pointer",
+            headlineFilter === "DELIVERED"
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 ring-2 ring-emerald-400"
+              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-emerald-800 dark:text-emerald-300">Delivered / Closed</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          </div>
+          <div className="mt-2">
+            <span className="text-2xl font-black text-slate-900 dark:text-white">{deliveredItems.length}</span>
+            <span className="text-xs text-slate-500 ml-1.5 font-bold">Bilties</span>
+          </div>
+          <p className="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400 mt-1">
+            {formatCurrency(deliveredFreight)}
+          </p>
+          {headlineFilter === "DELIVERED" && (
+            <span className="inline-block mt-2 text-[10px] font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full">
+              Active Filter &times;
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* QUICK DATE FILTER PRESETS STRIP (PDF p. 17) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" /> Presets:
+          </span>
+          {[
+            { label: "All Time", value: "ALL" },
+            { label: "Today", value: "TODAY" },
+            { label: "Yesterday", value: "YESTERDAY" },
+            { label: "This Week", value: "THIS_WEEK" },
+            { label: "This Month", value: "THIS_MONTH" },
+            { label: "Custom Range", value: "CUSTOM" },
+          ].map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              onClick={() => setDateFilterPreset(preset.value as any)}
+              className={cn(
+                "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                dateFilterPreset === preset.value
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        {dateFilterPreset === "CUSTOM" && (
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              className="h-8 text-xs rounded-lg w-36"
+            />
+            <span className="text-xs text-slate-400 font-bold">to</span>
+            <Input
+              type="date"
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              className="h-8 text-xs rounded-lg w-36"
+            />
+          </div>
+        )}
+      </div>
+
       {/* Filter Bar */}
       <div className="p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
         <div className="relative w-full md:w-80">
@@ -1753,7 +2022,7 @@ export default function BiltyPage() {
                         )}
                       >
                         {/* 1. Bilty # & Order # / BL # / Tracking */}
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           <div>
                             <Link
                               href={`/admin/bilty/${encodeURIComponent(c.id || c.biltyNumber)}`}
@@ -1762,6 +2031,11 @@ export default function BiltyPage() {
                             >
                               {c.biltyNumber || c.id || "-"}
                             </Link>
+                            {(c.invoiceNumber || c.invoice_number) && (
+                              <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono font-bold">
+                                Inv: {c.invoiceNumber || c.invoice_number}
+                              </p>
+                            )}
                             {c.poNumber && (
                               <p className="text-[10px] text-amber-700 dark:text-amber-400 font-mono font-bold">
                                 PO: {c.poNumber}
@@ -1776,15 +2050,25 @@ export default function BiltyPage() {
                           </div>
                         </TableCell>
 
-                        {/* 2. Booking Date */}
-                        <TableCell>
-                          <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                        {/* 2. Booking Date & Status under it (PDF p. 14, 15) */}
+                        <TableCell className="py-2.5">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap block">
                             {c.bookingDate ? formatDate(c.bookingDate) : c.date ? formatDate(c.date) : "-"}
+                          </span>
+                          <span className={cn(
+                            "text-[9px] px-2 py-0.5 rounded-full font-bold inline-block mt-1",
+                            String(c.shipmentStatus || "").toUpperCase() === "DELIVERED"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-300"
+                              : String(c.shipmentStatus || "").toUpperCase() === "IN_TRANSIT"
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-300"
+                              : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-300"
+                          )}>
+                            {String(c.shipmentStatus || "BOOKED").replace(/_/g, " ")}
                           </span>
                         </TableCell>
 
                         {/* 3. Sender & Receiver (Billed party bolded, phones hidden) */}
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           <div className="space-y-1 max-w-[210px]">
                             <div className="flex items-center gap-1.5">
                               <span className={cn(
@@ -1823,7 +2107,7 @@ export default function BiltyPage() {
                         </TableCell>
 
                         {/* 4. Origin ➔ Destination, Priority & Accurate Status Workflow Badge */}
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           <div>
                             <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
                               <span>{c.origin || "-"}</span>
@@ -1897,19 +2181,19 @@ export default function BiltyPage() {
                         </TableCell>
 
                         {/* 5. Cargo Items & Packages Count */}
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           <div className="space-y-0.5 max-w-[190px]">
                             <p className="font-bold text-slate-800 dark:text-slate-200 truncate" title={cargoDesc}>
                               {cargoDesc}
                             </p>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                              {pkgsCount !== "-" ? `${pkgsCount} ${c.packagingType || "pkgs"}` : "1 Pkg"}
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                              {pkgsCount !== "-" ? `${pkgsCount} ${c.packagingType || c.unit || "pkgs"}` : "1 Pkg"}
                             </p>
                           </div>
                         </TableCell>
 
                         {/* 6. Gross Weight & CBM (Consistent font size) */}
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           <div className="space-y-0.5">
                             <span className="font-bold text-xs text-slate-800 dark:text-slate-200 whitespace-nowrap block">
                               {cargoWeight}
@@ -1923,7 +2207,7 @@ export default function BiltyPage() {
                         </TableCell>
 
                         {/* 7. Total Freight & Payment Status Badge */}
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           <div className="space-y-1">
                             <p className="font-black text-slate-900 dark:text-white whitespace-nowrap">
                               {formatCurrency(c.totalFreight ?? c.totalAmount ?? c.freightAmount ?? c.freight ?? 0)}
@@ -1947,7 +2231,7 @@ export default function BiltyPage() {
                         </TableCell>
 
                         {/* 8. Actions */}
-                        <TableCell className="text-right">
+                        <TableCell className="text-right py-2.5">
                           <div className="flex items-center justify-end gap-1.5 flex-wrap">
                             <Button
                               size="sm"

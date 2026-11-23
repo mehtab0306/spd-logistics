@@ -56,6 +56,8 @@ export default function DeliveryPage() {
     receivedBy: "",
     receiverCnic: "",
     deliveryDate: new Date().toISOString().slice(0, 10),
+    deliveredQuantity: 1,
+    totalQuantity: 1,
     collectRemainingAmount: true,
     deliveryNotes: "",
   });
@@ -235,11 +237,14 @@ export default function DeliveryPage() {
   };
 
   const handleOpenDelivery = (bilty: any) => {
+    const totalPkgs = Number(bilty.packages || bilty.packageCount || bilty.quantity) || 1;
     setDeliveryModalBilty(bilty);
     setDeliveryData({
       receivedBy: bilty.receiverName || bilty.customer?.name || "",
       receiverCnic: bilty.receiverCnic || "",
       deliveryDate: new Date().toISOString().slice(0, 10),
+      deliveredQuantity: totalPkgs,
+      totalQuantity: totalPkgs,
       collectRemainingAmount: (bilty.remainingBalance || 0) > 0,
       deliveryNotes: "",
     });
@@ -258,12 +263,22 @@ export default function DeliveryPage() {
         : deliveryModalBilty.paidAmount || 0;
       const newRemaining = willCollect ? 0 : remaining;
 
+      const isPartial = Number(deliveryData.deliveredQuantity) < Number(deliveryData.totalQuantity);
+      const deliveryStatus = isPartial ? "PARTIAL_DELIVERY" : "DELIVERED";
+      const remainingPkgs = Math.max(0, Number(deliveryData.totalQuantity) - Number(deliveryData.deliveredQuantity));
+
       const timestamp = new Date().toISOString();
+      const eventNote = isPartial
+        ? `Partial Handover: ${deliveryData.deliveredQuantity} of ${deliveryData.totalQuantity} pkgs delivered to ${deliveryData.receivedBy}. Remaining ${remainingPkgs} pkgs in queue. ${deliveryData.deliveryNotes}`
+        : `Consignment delivered to ${deliveryData.receivedBy} on ${deliveryData.deliveryDate}. ${deliveryData.deliveryNotes}`;
+
       const updatedItem = {
         ...deliveryModalBilty,
-        shipmentStatus: "DELIVERED",
-        deliveryStatus: "DELIVERED",
+        shipmentStatus: deliveryStatus,
+        deliveryStatus: deliveryStatus,
         deliveredDate: deliveryData.deliveryDate || timestamp,
+        deliveredQuantity: Number(deliveryData.deliveredQuantity),
+        remainingPackages: remainingPkgs,
         receivedBy: deliveryData.receivedBy,
         receiverCnic: deliveryData.receiverCnic,
         deliveryNotes: deliveryData.deliveryNotes,
@@ -274,9 +289,9 @@ export default function DeliveryPage() {
           ...(Array.isArray(deliveryModalBilty.trackingEvents) ? deliveryModalBilty.trackingEvents : []),
           {
             id: `evt-${Date.now()}`,
-            status: "DELIVERED",
+            status: deliveryStatus,
             location: deliveryModalBilty.destination || "Destination Terminal",
-            notes: `Consignment delivered to ${deliveryData.receivedBy} on ${deliveryData.deliveryDate}. ${deliveryData.deliveryNotes}`,
+            notes: eventNote,
             timestamp,
           },
         ],
@@ -292,7 +307,7 @@ export default function DeliveryPage() {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            shipmentStatus: "DELIVERED",
+            shipmentStatus: deliveryStatus,
             paidAmount: newPaid,
             remainingBalance: newRemaining,
             notes: updatedItem.deliveryNotes,
@@ -310,7 +325,7 @@ export default function DeliveryPage() {
           await supabase
             .from("bilties")
             .update({
-              status: "Delivered",
+              status: isPartial ? "Partial Delivery" : "Delivered",
               remaining_balance: newRemaining,
               advance_paid: newPaid,
             })
@@ -763,6 +778,43 @@ export default function DeliveryPage() {
                   className="rounded-xl h-10 text-xs font-mono"
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Delivering Pkgs *
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={Number(deliveryData.totalQuantity) || 1}
+                    value={deliveryData.deliveredQuantity}
+                    onChange={(e) =>
+                      setDeliveryData({
+                        ...deliveryData,
+                        deliveredQuantity: Number(e.target.value) || 1,
+                      })
+                    }
+                    className="rounded-xl h-10 text-xs font-bold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    Total Consignment Pkgs
+                  </Label>
+                  <Input
+                    disabled
+                    value={deliveryData.totalQuantity}
+                    className="rounded-xl h-10 text-xs bg-slate-100 dark:bg-slate-800 font-bold"
+                  />
+                </div>
+              </div>
+
+              {Number(deliveryData.deliveredQuantity) < Number(deliveryData.totalQuantity) && (
+                <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-300 text-xs font-medium">
+                  <strong>Partial Delivery:</strong> {Number(deliveryData.totalQuantity) - Number(deliveryData.deliveredQuantity)} packages will remain pending in the warehouse/delivery queue.
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">

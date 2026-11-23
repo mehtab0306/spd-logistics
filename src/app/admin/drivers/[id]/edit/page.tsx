@@ -41,6 +41,9 @@ export default function EditDriverPage() {
   const [formData, setFormData] = useState({
     id: "",
     name: "",
+    designation: "Fleet Driver",
+    salary: "",
+    salaryBasis: "Monthly Salary",
     phone: "",
     cnic: "",
     licenseNumber: "",
@@ -95,6 +98,9 @@ export default function EditDriverPage() {
           setFormData({
             id: found.id,
             name: found.name || "",
+            designation: found.designation || "Fleet Driver",
+            salary: found.salary ? String(found.salary) : "",
+            salaryBasis: found.salaryBasis || found.salary_basis || "Monthly Salary",
             phone: found.phone || found.contact || "",
             cnic: found.cnic || "",
             licenseNumber: found.licenseNumber || "",
@@ -213,6 +219,9 @@ export default function EditDriverPage() {
             cnic: payload.cnic || null,
             license_number: payload.licenseNumber || null,
             vehicle_number: payload.vehicleNumber || null,
+            designation: payload.designation,
+            salary: payload.salary ? Number(payload.salary) : null,
+            salary_basis: payload.salaryBasis,
             status: payload.status || "Active",
             avatar_url: finalPhotoUrl || null,
           });
@@ -415,6 +424,53 @@ export default function EditDriverPage() {
                 required
                 value={formData.cnic}
                 onChange={(e) => setFormData({ ...formData, cnic: e.target.value })}
+                className="rounded-xl h-10 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                Staff Designation / Role *
+              </Label>
+              <select
+                value={formData.designation}
+                onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold"
+              >
+                <option value="Fleet Driver">Fleet Driver</option>
+                <option value="Branch Manager">Branch Manager</option>
+                <option value="Cashier / Accountant">Cashier / Accountant</option>
+                <option value="Labour / Loader">Labour / Loader</option>
+                <option value="Thekadar">Thekadar</option>
+                <option value="Market Staff">Market Staff</option>
+                <option value="Office Staff">Office Staff</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                Salary Basis / Type
+              </Label>
+              <select
+                value={formData.salaryBasis}
+                onChange={(e) => setFormData({ ...formData, salaryBasis: e.target.value })}
+                className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold"
+              >
+                <option value="Monthly Salary">Monthly Salary</option>
+                <option value="Per Trip Commission">Per Trip Commission</option>
+                <option value="Daily Wage">Daily Wage</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                Fixed Salary / Trip Rate (PKR)
+              </Label>
+              <Input
+                type="number"
+                placeholder="e.g. 45000"
+                value={formData.salary}
+                onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
                 className="rounded-xl h-10 text-xs"
               />
             </div>

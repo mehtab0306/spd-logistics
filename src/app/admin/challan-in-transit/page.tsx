@@ -24,6 +24,7 @@ import {
   History,
   Send,
   Building,
+  DollarSign,
 } from "lucide-react";
 import {
   Dialog,
@@ -76,6 +77,64 @@ export default function ChallanInTransitPage() {
     notes: "",
   });
   const [loggingCheckpoint, setLoggingCheckpoint] = useState(false);
+
+  // Challan Trip P&L Modal State (PDF Page 42)
+  const [pnlModalChallan, setPnlModalChallan] = useState<any>(null);
+  const [pnlData, setPnlData] = useState<any>(null);
+  const [loadingPnl, setLoadingPnl] = useState(false);
+
+  const handleOpenPnL = async (c: any) => {
+    setPnlModalChallan(c);
+    setLoadingPnl(true);
+    setPnlData(null);
+    try {
+      const res = await fetch(`/api/admin/challan/pnl?challanId=${c.id || c.challanNumber}`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        setPnlData(data.data);
+      } else {
+        const bilties = c.consignments || [];
+        const grossFreight = bilties.reduce((sum: number, b: any) => sum + (Number(b.freightAmount || b.totalAmount || 0)), 0);
+        const truckHire = Number(c.truckFreight || 0);
+        const advPaid = Number(c.advancePaidToDriver || 0);
+        const brokerPay = Number(c.brokerFreight || 0);
+        const totalExp = truckHire + brokerPay;
+        const netProfit = grossFreight - totalExp;
+        setPnlData({
+          challanId: c.id,
+          challanNumber: c.challanNumber,
+          vehicleNumber: c.truckNumber || "Pending",
+          driverName: c.driverName || "Pending",
+          driverPhone: c.driverPhone,
+          brokerName: c.brokerName,
+          origin: c.origin || "Karachi",
+          destination: c.destination || "Lahore",
+          dispatchDate: c.dispatchDate || c.createdAt,
+          status: c.status || "IN_TRANSIT",
+          associatedBiltiesCount: bilties.length,
+          associatedBilties: bilties,
+          grossBiltyFreight: grossFreight,
+          netCompanyFreightRevenue: grossFreight,
+          salesTaxAmount: 0,
+          truckHireCost: truckHire,
+          driverAdvancePaid: advPaid,
+          brokerPayment: brokerPay,
+          dieselExpense: 0,
+          labourExpense: 0,
+          lifterExpense: 0,
+          localDeliveryExpense: 0,
+          otherOperationalExpenses: 0,
+          totalOperationalExpenses: totalExp,
+          netTripProfit: netProfit,
+          cashBookBreakdown: { "Operating Cash Book": advPaid },
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to fetch PnL:", e);
+    } finally {
+      setLoadingPnl(false);
+    }
+  };
 
   // Helper to calculate Arrival Status and Late Alerts
   const getArrivalStatus = (c: any) => {
@@ -751,8 +810,19 @@ export default function ChallanInTransitPage() {
                       </div>
                     </div>
 
-                    {/* Action Buttons: Checkpoint / WhatsApp / Call Driver + Mark Arrived */}
+                    {/* Action Buttons: P&L / Checkpoint / WhatsApp / Call Driver + Mark Arrived */}
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenPnL(c)}
+                        className="h-9 px-3 rounded-xl text-xs font-bold gap-1.5 border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 shrink-0 shadow-2xs"
+                      >
+                        <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Trip P&L</span>
+                      </Button>
+
                       <Button
                         type="button"
                         variant="outline"
@@ -968,6 +1038,185 @@ export default function ChallanInTransitPage() {
               )}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Challan Trip Profit & Loss Modal (PDF Page 42) */}
+      <Dialog
+        open={Boolean(pnlModalChallan)}
+        onOpenChange={(open) => {
+          if (!open) setPnlModalChallan(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto rounded-2xl p-6">
+          <DialogHeader className="pb-3 border-b border-border">
+            <DialogTitle className="text-lg font-black flex items-center gap-2 text-foreground">
+              <DollarSign className="w-5 h-5 text-emerald-600" />
+              <span>Challan Profit &amp; Loss — #{pnlModalChallan?.challanNumber}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Truck {pnlModalChallan?.truckNumber} &bull; Driver: {pnlModalChallan?.driverName} {pnlModalChallan?.driverPhone ? `(${pnlModalChallan.driverPhone})` : ""} &bull; Route: {pnlModalChallan?.origin} &rarr; {pnlModalChallan?.destination}
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingPnl ? (
+            <div className="py-8 text-center space-y-2">
+              <Loader2 className="w-6 h-6 animate-spin text-emerald-600 mx-auto" />
+              <p className="text-xs text-muted-foreground font-medium">Calculating Trip P&amp;L, associated bilties freight, and operational cash book expenses...</p>
+            </div>
+          ) : pnlData ? (
+            <div className="space-y-4 pt-2">
+              {/* Top 3 KPI Cards */}
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="p-3 bg-muted/40 rounded-xl">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Net Freight Revenue</span>
+                  <span className="text-base font-black text-foreground font-mono">
+                    Rs {(pnlData.netCompanyFreightRevenue || 0).toLocaleString()}
+                  </span>
+                  <span className="text-[9px] text-muted-foreground block mt-0.5">Excludes Sales Tax</span>
+                </div>
+
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-xl">
+                  <span className="text-[10px] text-rose-700 dark:text-rose-400 uppercase font-bold block">Trip Expenses</span>
+                  <span className="text-base font-black text-rose-600 font-mono">
+                    -Rs {(pnlData.totalOperationalExpenses || 0).toLocaleString()}
+                  </span>
+                  <span className="text-[9px] text-rose-600 block mt-0.5">Truck hire + diesel + ops</span>
+                </div>
+
+                <div className={`p-3 rounded-xl border ${
+                  pnlData.netTripProfit >= 0
+                    ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900"
+                    : "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900"
+                }`}>
+                  <span className={`text-[10px] uppercase font-bold block ${
+                    pnlData.netTripProfit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"
+                  }`}>
+                    Net Trip {pnlData.netTripProfit >= 0 ? "Profit" : "Loss"}
+                  </span>
+                  <span className={`text-base font-black font-mono ${
+                    pnlData.netTripProfit >= 0 ? "text-emerald-600" : "text-red-600"
+                  }`}>
+                    Rs {(pnlData.netTripProfit || 0).toLocaleString()}
+                  </span>
+                  <span className={`text-[9px] font-bold block mt-0.5 ${
+                    pnlData.netTripProfit >= 0 ? "text-emerald-600" : "text-red-600"
+                  }`}>
+                    {pnlData.netTripProfit >= 0 ? "✓ Profitable Trip" : "⚠️ Loss on Route"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Detailed 2-Column Ledger */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {/* Revenue Breakdown */}
+                <div className="p-3.5 rounded-xl border bg-card space-y-2">
+                  <h4 className="font-black text-foreground uppercase tracking-wider text-[11px] pb-1 border-b">
+                    Gross Freight Earnings ({pnlData.associatedBiltiesCount || 0} Bilties)
+                  </h4>
+                  <div className="space-y-1.5 text-muted-foreground">
+                    <div className="flex justify-between">
+                      <span>Total Bilty Freight:</span>
+                      <span className="font-mono font-bold text-foreground">Rs {(pnlData.grossBiltyFreight || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-amber-600">
+                      <span>Sales Tax Excluded:</span>
+                      <span className="font-mono font-bold">-Rs {(pnlData.salesTaxAmount || 0).toLocaleString()}</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      * Sales Tax is not company revenue; it is collected for government submission.
+                    </p>
+                    <div className="flex justify-between border-t pt-1 font-bold text-foreground">
+                      <span>Net Company Transport Revenue:</span>
+                      <span className="font-mono text-emerald-600 font-black">Rs {(pnlData.netCompanyFreightRevenue || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Operational Expenses Breakdown */}
+                <div className="p-3.5 rounded-xl border bg-card space-y-2">
+                  <h4 className="font-black text-foreground uppercase tracking-wider text-[11px] pb-1 border-b">
+                    Trip Operational Expenses
+                  </h4>
+                  <div className="space-y-1.5 text-muted-foreground">
+                    <div className="flex justify-between">
+                      <span>Truck Hire / Freight Cost:</span>
+                      <span className="font-mono font-bold text-foreground">Rs {(pnlData.truckHireCost || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Driver Advance Paid:</span>
+                      <span className="font-mono font-bold text-foreground">Rs {(pnlData.driverAdvancePaid || 0).toLocaleString()}</span>
+                    </div>
+                    {pnlData.brokerPayment > 0 && (
+                      <div className="flex justify-between">
+                        <span>Broker Commission / Pay:</span>
+                        <span className="font-mono font-bold text-foreground">Rs {pnlData.brokerPayment.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {pnlData.dieselExpense > 0 && (
+                      <div className="flex justify-between">
+                        <span>Diesel &amp; Fuel Expense:</span>
+                        <span className="font-mono font-bold text-foreground">Rs {pnlData.dieselExpense.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {(pnlData.labourExpense > 0 || pnlData.lifterExpense > 0) && (
+                      <div className="flex justify-between">
+                        <span>Labour &amp; Lifter Charges:</span>
+                        <span className="font-mono font-bold text-foreground">Rs {(pnlData.labourExpense + pnlData.lifterExpense).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {pnlData.localDeliveryExpense > 0 && (
+                      <div className="flex justify-between">
+                        <span>Local Delivery &amp; Gate Pass:</span>
+                        <span className="font-mono font-bold text-foreground">Rs {pnlData.localDeliveryExpense.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t pt-1 font-bold text-foreground">
+                      <span>Total Trip Expenses:</span>
+                      <span className="font-mono text-rose-600 font-black">Rs {(pnlData.totalOperationalExpenses || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cash Book Sources */}
+              {pnlData.cashBookBreakdown && Object.keys(pnlData.cashBookBreakdown).length > 0 && (
+                <div className="p-3 bg-muted/30 rounded-xl text-xs space-y-1">
+                  <span className="font-bold text-foreground uppercase tracking-wider text-[10px] block">
+                    Cash Book Settlement Accounts
+                  </span>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {Object.entries(pnlData.cashBookBreakdown).map(([book, amt]) => (
+                      <span key={book} className="px-2 py-0.5 rounded-lg bg-card border text-[11px] font-mono">
+                        <span className="font-bold text-foreground">{book}:</span> Rs {Number(amt).toLocaleString()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          <DialogFooter className="pt-2 border-t border-border flex items-center justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPnlModalChallan(null)}
+              className="rounded-xl text-xs font-semibold"
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => window.print()}
+              className="bg-spd-blue hover:bg-blue-800 text-white rounded-xl text-xs font-bold gap-1.5 shadow-sm"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print Trip P&amp;L</span>
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

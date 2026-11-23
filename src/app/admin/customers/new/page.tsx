@@ -44,6 +44,9 @@ export default function NewCustomerPage() {
     openingBalance: "0",
     currentRate: "",
     rateBasis: "Per KG",
+    kgRate: "",
+    cbmRate: "",
+    effectiveDate: new Date().toISOString().slice(0, 10),
     photo: "",
     notes: "",
   });
@@ -158,11 +161,16 @@ export default function NewCustomerPage() {
         openingBalance: openBal,
         currentRate: formData.currentRate ? Number(formData.currentRate) : null,
         rateBasis: formData.rateBasis || "Per KG",
+        kgRate: formData.kgRate ? Number(formData.kgRate) : (formData.currentRate && formData.rateBasis === "Per KG" ? Number(formData.currentRate) : null),
+        cbmRate: formData.cbmRate ? Number(formData.cbmRate) : (formData.currentRate && formData.rateBasis === "Per CBM" ? Number(formData.currentRate) : null),
+        effectiveDate: formData.effectiveDate || timestamp.slice(0, 10),
         rateHistory: [
           {
-            effectiveDate: timestamp.slice(0, 10),
+            effectiveDate: formData.effectiveDate || timestamp.slice(0, 10),
             previousRate: 0,
             newRate: formData.currentRate ? Number(formData.currentRate) : 0,
+            kgRate: formData.kgRate ? Number(formData.kgRate) : null,
+            cbmRate: formData.cbmRate ? Number(formData.cbmRate) : null,
             rateBasis: formData.rateBasis || "Per KG",
             reason: "Initial registration rate agreement",
             notes: formData.notes.trim() || "Base agreed linehaul tariff",
@@ -594,21 +602,47 @@ export default function NewCustomerPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
-                Agreed Freight Rate (Contract PKR)
+                Rate per KG (Contract PKR)
               </Label>
               <Input
                 type="number"
                 step="any"
-                value={formData.currentRate}
-                placeholder="e.g. 15 or 5000"
-                onChange={(e) => setFormData({ ...formData, currentRate: e.target.value })}
+                value={formData.kgRate}
+                placeholder="e.g. 15"
+                onChange={(e) => setFormData({ ...formData, kgRate: e.target.value })}
                 className="rounded-xl h-10 text-xs font-mono font-bold"
               />
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
-                Agreed Rate Basis
+                Rate per CBM (Contract PKR)
+              </Label>
+              <Input
+                type="number"
+                step="any"
+                value={formData.cbmRate}
+                placeholder="e.g. 4500"
+                onChange={(e) => setFormData({ ...formData, cbmRate: e.target.value })}
+                className="rounded-xl h-10 text-xs font-mono font-bold"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
+                Rate Effective Date
+              </Label>
+              <Input
+                type="date"
+                value={formData.effectiveDate}
+                onChange={(e) => setFormData({ ...formData, effectiveDate: e.target.value })}
+                className="rounded-xl h-10 text-xs font-medium"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
+                Default Rate Basis
               </Label>
               <select
                 value={formData.rateBasis}

@@ -123,9 +123,9 @@ export default function VehiclesPage() {
               id: sv.id,
               vehicleNumber: sv.vehicle_number || sv.registration_number,
               registrationNumber: sv.registration_number || sv.vehicle_number,
-              type: sv.vehicle_type || "Heavy Truck (22-Wheeler)",
-              vehicleType: sv.vehicle_type || "Heavy Truck (22-Wheeler)",
-              capacity: sv.capacity || "35 Tons",
+              type: sv.vehicle_type || "22-Wheeler Container Carrier",
+              vehicleType: sv.vehicle_type || "22-Wheeler Container Carrier",
+              capacity: sv.capacity ? (String(sv.capacity).toLowerCase().includes("ton") ? sv.capacity : `${sv.capacity} Tons`) : "N/A",
               status: sv.status || "AVAILABLE",
               driverName: sv.driver_name,
               driverPhone: sv.driver_phone,
@@ -349,7 +349,9 @@ export default function VehiclesPage() {
         try {
           const { success, data: sbData } = await safeUpsertVehicle({
             vehicle_number: newVeh.vehicleNumber,
-            vehicle_type: newVeh.vehicleType || "Heavy Truck (22-Wheeler)",
+            registration_number: newVeh.registrationNumber || newVeh.vehicleNumber,
+            vehicle_type: newVeh.vehicleType || "22-Wheeler Container Carrier",
+            capacity: newVeh.capacity || null,
             driver_name: assignedDriver?.name || null,
             driver_phone: assignedDriver?.phone || null,
             status: newVeh.status || "AVAILABLE",

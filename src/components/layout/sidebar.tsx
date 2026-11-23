@@ -66,6 +66,32 @@ const iconMap: Record<string, React.ElementType> = {
   Megaphone,
 };
 
+const itemColorMap: Record<string, string> = {
+  "/admin": "text-blue-500 group-hover:text-blue-600",
+  "/admin/cash-books": "text-emerald-500 group-hover:text-emerald-600",
+  "/admin/receivables": "text-cyan-500 group-hover:text-cyan-600",
+  "/admin/payables": "text-rose-500 group-hover:text-rose-600",
+  "/admin/payments": "text-violet-500 group-hover:text-violet-600",
+  "/admin/accounts": "text-teal-500 group-hover:text-teal-600",
+  "/admin/bilty/new": "text-blue-600 group-hover:text-blue-700",
+  "/admin/bilty": "text-indigo-500 group-hover:text-indigo-600",
+  "/admin/challan": "text-amber-500 group-hover:text-amber-600",
+  "/admin/challan-in-transit": "text-sky-500 group-hover:text-sky-600",
+  "/admin/arrivals": "text-orange-500 group-hover:text-orange-600",
+  "/admin/delivery": "text-emerald-600 group-hover:text-emerald-700",
+  "/admin/vehicles": "text-blue-500 group-hover:text-blue-600",
+  "/admin/drivers": "text-teal-600 group-hover:text-teal-700",
+  "/admin/customers": "text-purple-500 group-hover:text-purple-600",
+  "/admin/brokers": "text-amber-600 group-hover:text-amber-700",
+  "/admin/marketing": "text-pink-500 group-hover:text-pink-600",
+  "/admin/tracking": "text-cyan-600 group-hover:text-cyan-700",
+  "/admin/trash": "text-rose-600 group-hover:text-rose-700",
+  "/admin/settings": "text-slate-500 group-hover:text-slate-700",
+  "/admin/reports": "text-indigo-600 group-hover:text-indigo-700",
+  "/admin/notifications": "text-amber-500 group-hover:text-amber-600",
+  "/admin/users": "text-purple-600 group-hover:text-purple-700",
+};
+
 interface SidebarProps {
   mobileOpen?: boolean;
   setMobileOpen?: (open: boolean) => void;
@@ -285,6 +311,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
               {section.items.map((item) => {
                 const Icon = iconMap[item.icon] || Package;
                 const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href + "/"));
+                const iconColor = isActive ? "text-spd-red" : (itemColorMap[item.href] || "text-slate-500");
 
                 return (
                   <Link
@@ -300,7 +327,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                     title={collapsed ? item.title : undefined}
                     onClick={() => setMobileOpen?.(false)}
                   >
-                    <Icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-spd-red")} />
+                    <Icon className={cn("h-5 w-5 flex-shrink-0 transition-colors", iconColor)} />
                     {!collapsed && <span>{item.title}</span>}
                   </Link>
                 );

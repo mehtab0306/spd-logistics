@@ -447,13 +447,20 @@ export default function PayablesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: selectedPayable.id,
+          vendorName: selectedPayable.vendorName,
+          category: selectedPayable.category,
+          reference: selectedPayable.reference,
+          vehicleNumber: selectedPayable.vehicleNumber,
+          driverName: selectedPayable.driverName,
+          description: selectedPayable.description,
+          totalAmount: selectedPayable.totalAmount,
           recordPayment: true,
           paymentAmount: num,
           paymentMethod: payMethod,
           cashBookId: payCashBookId || undefined,
           notes: payNotes,
         }),
-      }).catch((e) => console.warn("Background payment warning:", e));
+      }).then(() => fetchData()).catch((e) => console.warn("Background payment warning:", e));
     } catch (err: any) {
       setPayError(err.message || "Failed to record payout");
     } finally {

@@ -217,6 +217,9 @@ export interface DriverPayload {
   cnic?: string | null;
   license_number?: string | null;
   vehicle_number?: string | null;
+  designation?: string | null;
+  salary?: number | string | null;
+  salary_basis?: string | null;
   status?: string;
   avatar_url?: string | null;
   created_at?: string;
@@ -236,6 +239,11 @@ export async function safeUpsertDriver(
   if (payload.cnic?.trim()) fullPayload.cnic = payload.cnic.trim();
   if (payload.license_number?.trim()) fullPayload.license_number = payload.license_number.trim();
   if (payload.vehicle_number?.trim()) fullPayload.vehicle_number = payload.vehicle_number.trim();
+  if (payload.designation?.trim()) fullPayload.designation = payload.designation.trim();
+  if (payload.salary !== undefined && payload.salary !== null && payload.salary !== "") {
+    fullPayload.salary = Number(payload.salary) || 0;
+  }
+  if (payload.salary_basis?.trim()) fullPayload.salary_basis = payload.salary_basis.trim();
   if (payload.status) fullPayload.status = payload.status;
   if (payload.avatar_url?.trim()) fullPayload.avatar_url = payload.avatar_url.trim();
   if (payload.created_at) fullPayload.created_at = payload.created_at;
@@ -259,7 +267,7 @@ export async function safeUpsertDriver(
 
   if (!insError) return { success: true, data: insData };
 
-  // Attempt 3: Fallback omitting optional avatar_url and vehicle_number
+  // Attempt 3: Fallback omitting optional fields that might not exist in Supabase schema
   const corePayload: Record<string, any> = {
     name: payload.name.trim(),
     status: payload.status || 'Active',
@@ -267,6 +275,7 @@ export async function safeUpsertDriver(
   if (payload.phone?.trim()) corePayload.phone = payload.phone.trim();
   if (payload.cnic?.trim()) corePayload.cnic = payload.cnic.trim();
   if (payload.license_number?.trim()) corePayload.license_number = payload.license_number.trim();
+  if (payload.vehicle_number?.trim()) corePayload.vehicle_number = payload.vehicle_number.trim();
 
   const { data: coreData, error: coreError } = await supabase
     .from('drivers')
@@ -294,7 +303,13 @@ export async function safeUpsertDriver(
 export interface VehiclePayload {
   id?: string;
   vehicle_number: string;
+  registration_number?: string | null;
   vehicle_type?: string | null;
+  capacity?: string | number | null;
+  owner_type?: string | null;
+  owner_name?: string | null;
+  transporter_name?: string | null;
+  broker_reference?: string | null;
   driver_name?: string | null;
   driver_phone?: string | null;
   status?: string | null;
@@ -311,7 +326,15 @@ export async function safeUpsertVehicle(
   const fullPayload: Record<string, any> = {
     vehicle_number: payload.vehicle_number.trim().toUpperCase(),
   };
+  if (payload.registration_number?.trim()) fullPayload.registration_number = payload.registration_number.trim().toUpperCase();
   if (payload.vehicle_type) fullPayload.vehicle_type = payload.vehicle_type;
+  if (payload.capacity !== undefined && payload.capacity !== null && payload.capacity !== "") {
+    fullPayload.capacity = String(payload.capacity).trim();
+  }
+  if (payload.owner_type) fullPayload.owner_type = payload.owner_type;
+  if (payload.owner_name?.trim()) fullPayload.owner_name = payload.owner_name.trim();
+  if (payload.transporter_name?.trim()) fullPayload.transporter_name = payload.transporter_name.trim();
+  if (payload.broker_reference?.trim()) fullPayload.broker_reference = payload.broker_reference.trim();
   if (payload.driver_name?.trim()) fullPayload.driver_name = payload.driver_name.trim();
   if (payload.driver_phone?.trim()) fullPayload.driver_phone = payload.driver_phone.trim();
   if (payload.status) fullPayload.status = payload.status;
@@ -334,12 +357,15 @@ export async function safeUpsertVehicle(
 
   if (!insError) return { success: true, data: insData };
 
-  // Fallback: core vehicle columns
+  // Fallback: core vehicle columns (vehicle_number, vehicle_type, capacity, status)
   const corePayload: Record<string, any> = {
     vehicle_number: payload.vehicle_number.trim().toUpperCase(),
     status: payload.status || 'AVAILABLE',
   };
   if (payload.vehicle_type) corePayload.vehicle_type = payload.vehicle_type;
+  if (payload.capacity !== undefined && payload.capacity !== null && payload.capacity !== "") {
+    corePayload.capacity = String(payload.capacity).trim();
+  }
 
   const { data: coreData, error: coreError } = await supabase
     .from('vehicles')

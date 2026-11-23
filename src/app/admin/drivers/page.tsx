@@ -163,6 +163,9 @@ export default function DriversPage() {
             const mapped = data.map((d: any) => ({
               id: d.id,
               name: d.name,
+              designation: d.designation || "Fleet Driver",
+              salary: d.salary || null,
+              salaryBasis: d.salary_basis || d.salaryBasis || "Monthly Salary",
               phone: d.phone,
               contact: d.phone,
               email: d.email || `driver.${d.phone || d.id}@spdlogistics.com`,
@@ -674,7 +677,9 @@ export default function DriversPage() {
   const handleExportExcel = () => {
     if (!drivers.length) return;
     const data = drivers.map((d) => ({
-      "Driver Name": d.name || "",
+      "Staff / Driver Name": d.name || "",
+      "Designation / Role": d.designation || "Fleet Driver",
+      "Salary (PKR)": d.salary ? `${d.salary} (${d.salaryBasis || "Monthly Salary"})` : "-",
       "Phone / Contact": d.phone || d.contact || "",
       "CNIC": d.cnic || "",
       "License Number": d.licenseNumber || "",
@@ -833,8 +838,18 @@ export default function DriversPage() {
                         )}
                       </div>
                       <div>
-                        <p className="font-bold text-xs text-slate-900 dark:text-white">{d.name}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-bold text-xs text-slate-900 dark:text-white">{d.name}</p>
+                          <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-blue-50 text-spd-blue dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                            {d.designation || "Fleet Driver"}
+                          </span>
+                        </div>
                         <p className="text-[10px] text-slate-400 font-mono">{d.cnic || "No CNIC recorded"}</p>
+                        {d.salary && (
+                          <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            PKR {Number(d.salary).toLocaleString()} ({d.salaryBasis || "Monthly"})
+                          </p>
+                        )}
                       </div>
                     </div>
                   </TableCell>

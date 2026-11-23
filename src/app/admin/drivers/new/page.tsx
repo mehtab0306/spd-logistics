@@ -41,6 +41,9 @@ export default function NewDriverPage() {
 
   const [formData, setFormData] = useState({
     name: "",
+    designation: "Fleet Driver",
+    salary: "",
+    salaryBasis: "Monthly Salary",
     phone: "",
     email: "",
     password: "",
@@ -171,6 +174,9 @@ export default function NewDriverPage() {
       const newDriverRecord = {
         id: uniqueId,
         name: formData.name.trim(),
+        designation: formData.designation || "Fleet Driver",
+        salary: formData.salary ? Number(formData.salary) : null,
+        salaryBasis: formData.salaryBasis || "Monthly Salary",
         phone: cleanPhone,
         email: cleanEmail,
         loginPassword: finalPassword,
@@ -220,6 +226,9 @@ export default function NewDriverPage() {
           cnic: newDriverRecord.cnic || null,
           license_number: newDriverRecord.licenseNumber || null,
           vehicle_number: newDriverRecord.vehicleNumber || null,
+          designation: newDriverRecord.designation,
+          salary: newDriverRecord.salary,
+          salary_basis: newDriverRecord.salaryBasis,
           status: newDriverRecord.status || "Active",
           avatar_url: photoUrl || null,
         });
@@ -458,6 +467,53 @@ export default function NewDriverPage() {
               <Input
                 value={formData.cnic}
                 onChange={(e) => setFormData({ ...formData, cnic: e.target.value })}
+                className="rounded-xl h-10 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                Staff Designation / Role *
+              </Label>
+              <select
+                value={formData.designation}
+                onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200"
+              >
+                <option value="Fleet Driver">Fleet Driver</option>
+                <option value="Branch Manager">Branch Manager</option>
+                <option value="Cashier / Accountant">Cashier / Accountant</option>
+                <option value="Labour / Loader">Labour / Loader</option>
+                <option value="Thekadar">Thekadar</option>
+                <option value="Market Staff">Market Staff</option>
+                <option value="Office Staff">Office Staff</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                Salary Basis / Type
+              </Label>
+              <select
+                value={formData.salaryBasis}
+                onChange={(e) => setFormData({ ...formData, salaryBasis: e.target.value })}
+                className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200"
+              >
+                <option value="Monthly Salary">Monthly Salary</option>
+                <option value="Per Trip Commission">Per Trip Commission</option>
+                <option value="Daily Wage">Daily Wage</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                Fixed Salary / Trip Rate (PKR)
+              </Label>
+              <Input
+                type="number"
+                placeholder="e.g. 45000"
+                value={formData.salary}
+                onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
                 className="rounded-xl h-10 text-xs"
               />
             </div>

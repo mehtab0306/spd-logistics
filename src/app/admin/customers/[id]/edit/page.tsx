@@ -46,6 +46,9 @@ export default function EditCustomerPage() {
     creditLimit: "",
     currentRate: "",
     rateBasis: "Per KG",
+    kgRate: "",
+    cbmRate: "",
+    effectiveDate: "",
     photo: "",
     notes: "",
     status: "ACTIVE",
@@ -98,6 +101,9 @@ export default function EditCustomerPage() {
             creditLimit: found.creditLimit !== undefined && found.creditLimit !== null ? String(found.creditLimit) : "",
             currentRate: found.currentRate !== undefined && found.currentRate !== null ? String(found.currentRate) : "",
             rateBasis: found.rateBasis || "Per KG",
+            kgRate: found.kgRate ? String(found.kgRate) : "",
+            cbmRate: found.cbmRate ? String(found.cbmRate) : "",
+            effectiveDate: found.effectiveDate ? String(found.effectiveDate).slice(0, 10) : "",
             photo: photoUrl,
             notes: found.notes || "",
             status: found.status || "ACTIVE",
@@ -188,6 +194,9 @@ export default function EditCustomerPage() {
         creditLimit: credLim,
         currentRate: numRate,
         rateBasis: formData.rateBasis || "Per KG",
+        kgRate: formData.kgRate ? parseFloat(formData.kgRate) : (numRate && formData.rateBasis === "Per KG" ? numRate : null),
+        cbmRate: formData.cbmRate ? parseFloat(formData.cbmRate) : (numRate && formData.rateBasis === "Per CBM" ? numRate : null),
+        effectiveDate: formData.effectiveDate || null,
         photo: finalPhotoUrl || null,
       };
 
@@ -530,21 +539,47 @@ export default function EditCustomerPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
-                Agreed Freight Rate (PKR)
+                Rate per KG (Contract PKR)
               </Label>
               <Input
                 type="number"
                 step="any"
-                value={formData.currentRate}
-                placeholder="e.g. 15 or 5000"
-                onChange={(e) => setFormData({ ...formData, currentRate: e.target.value })}
+                value={formData.kgRate}
+                placeholder="e.g. 15"
+                onChange={(e) => setFormData({ ...formData, kgRate: e.target.value })}
                 className="rounded-xl h-10 text-xs font-mono font-bold"
               />
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
-                Agreed Rate Basis
+                Rate per CBM (Contract PKR)
+              </Label>
+              <Input
+                type="number"
+                step="any"
+                value={formData.cbmRate}
+                placeholder="e.g. 4500"
+                onChange={(e) => setFormData({ ...formData, cbmRate: e.target.value })}
+                className="rounded-xl h-10 text-xs font-mono font-bold"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
+                Rate Effective Date
+              </Label>
+              <Input
+                type="date"
+                value={formData.effectiveDate}
+                onChange={(e) => setFormData({ ...formData, effectiveDate: e.target.value })}
+                className="rounded-xl h-10 text-xs font-medium"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">
+                Default Rate Basis
               </Label>
               <select
                 value={formData.rateBasis}

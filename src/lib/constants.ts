@@ -193,12 +193,22 @@ export interface NavSection {
   items: NavItem[];
 }
 
-// Admin Sidebar Navigation (Organized according to standard transport operations)
+// Admin Sidebar Navigation (Organized according to PDF requirements into 7 business groups)
 export const ADMIN_NAV_SECTIONS: NavSection[] = [
   {
     title: 'OPERATIONS',
     items: [
       { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
+    ],
+  },
+  {
+    title: 'ACCOUNTING & CASH',
+    items: [
+      { title: 'Cash Books & Day Ledgers', href: '/admin/cash-books', icon: 'Wallet' },
+      { title: 'Receivables', href: '/admin/receivables', icon: 'ArrowDownLeft' },
+      { title: 'Payables', href: '/admin/payables', icon: 'ArrowUpRight' },
+      { title: 'Payments', href: '/admin/payments', icon: 'CreditCard' },
+      { title: 'Accounts Ledger', href: '/admin/accounts', icon: 'BookOpen' },
     ],
   },
   {
@@ -218,24 +228,12 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'CASH BOOKS',
-    items: [
-      { title: 'Cash Books & Day Ledgers', href: '/admin/cash-books', icon: 'Wallet' },
-    ],
-  },
-  {
-    title: 'MASTER ACCOUNTS',
-    items: [
-      { title: 'Customers', href: '/admin/customers', icon: 'Users' },
-      { title: 'Brokers', href: '/admin/brokers', icon: 'Handshake' },
-      { title: 'Accounts Ledger', href: '/admin/accounts', icon: 'BookOpen' },
-    ],
-  },
-  {
-    title: 'FLEET MANAGEMENT',
+    title: 'FLEET & MASTER',
     items: [
       { title: 'Vehicles', href: '/admin/vehicles', icon: 'Truck' },
-      { title: 'Drivers', href: '/admin/drivers', icon: 'UserCog' },
+      { title: 'Drivers & Staff', href: '/admin/drivers', icon: 'UserCog' },
+      { title: 'Customers', href: '/admin/customers', icon: 'Users' },
+      { title: 'Brokers', href: '/admin/brokers', icon: 'Handshake' },
     ],
   },
   {
@@ -245,24 +243,11 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'TRACKING & RECOVERY',
+    title: 'SYSTEM & RECOVERY',
     items: [
       { title: 'Tracking', href: '/admin/tracking', icon: 'MapPin' },
       { title: 'Recycle Bin', href: '/admin/trash', icon: 'Trash2' },
-    ],
-  },
-  {
-    title: 'SETTINGS',
-    items: [
       { title: 'Settings', href: '/admin/settings', icon: 'Settings' },
-    ],
-  },
-  {
-    title: 'FINANCE & REPORTS',
-    items: [
-      { title: 'Payments', href: '/admin/payments', icon: 'CreditCard' },
-      { title: 'Receivables', href: '/admin/receivables', icon: 'ArrowDownLeft' },
-      { title: 'Payables', href: '/admin/payables', icon: 'ArrowUpRight' },
       { title: 'Reports', href: '/admin/reports', icon: 'BarChart3' },
       { title: 'Notifications', href: '/admin/notifications', icon: 'Bell' },
       { title: 'Users', href: '/admin/users', icon: 'Shield' },
@@ -278,7 +263,7 @@ export const PAGINATION = {
   PAGE_SIZE_OPTIONS: [10, 25, 50, 100],
 } as const;
 
-// Clean Pakistan Transport Stations / Cities (NO "Hub" or "Terminal" technical jargon)
+// Clean Pakistan Transport Stations / Cities (Expanded with all regional hubs)
 export const PAKISTAN_CITIES = [
   'Karachi',
   'Lahore',
@@ -298,6 +283,55 @@ export const PAKISTAN_CITIES = [
   'D.G. Khan',
   'Bahawalpur',
   'Gujrat',
+  'Narowal',
+  'Sheikhupura',
+  'Kasur',
+  'Okara',
+  'Chiniot',
+  'Jhang',
+  'Mardan',
+  'Abbottabad',
+  'Kotri',
+  'Nawabshah',
+  'Larkana',
+  'Mirpur Khas',
+  'Hub',
+  'Gwadar',
+] as const;
+
+// Fleet Vehicle Types (PDF p. 6-7, 30)
+export const FLEET_VEHICLE_BODY_TYPES = [
+  '22-Wheeler Container Carrier',
+  '18-Wheeler',
+  '14-Wheeler',
+  'Bedford Truck',
+  'Open Trailer',
+  'Half Body Trailer',
+  'Mazda / Linehaul Truck',
+  'Shahzore / Pickup',
+  'Other / Custom Carrier',
+] as const;
+
+export const FLEET_OWNER_TYPES = [
+  'SPD Fleet (Own)',
+  'Market Vehicle / Third-Party Transporter',
+] as const;
+
+// Staff Designations & Salary Basis (PDF p. 29)
+export const STAFF_DESIGNATIONS = [
+  'Fleet Driver',
+  'Branch Manager',
+  'Cashier / Accountant',
+  'Labour / Loader',
+  'Thekadar',
+  'Market Staff',
+  'Office Staff',
+] as const;
+
+export const SALARY_BASIS_OPTIONS = [
+  'Monthly Salary',
+  'Per Trip Commission',
+  'Daily Wage',
 ] as const;
 
 export const CARGO_DESCRIPTION_OPTIONS: string[] = [

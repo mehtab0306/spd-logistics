@@ -101,6 +101,9 @@ export default function NewBiltyPage() {
     strn: "",
     currentRate: "",
     rateBasis: "Per KG",
+    kgRate: "",
+    cbmRate: "",
+    effectiveDate: new Date().toISOString().slice(0, 10),
     notes: "",
   });
   const [quickCustomerSubmitting, setQuickCustomerSubmitting] = useState(false);
@@ -142,6 +145,7 @@ export default function NewBiltyPage() {
     billTo: "Sender" as "Sender" | "Receiver",
     amountType: "To Pay" as "Paid" | "To Pay" | "To Be Billed",
     dispatchMode: "Normal" as "Normal" | "Urgent",
+    consignmentType: "LCL" as string,
     biltyNumber: "",
     manualBiltyNumber: "",
     trackingId: "",
@@ -201,13 +205,12 @@ export default function NewBiltyPage() {
   useEffect(() => {
     fetchPrerequisites();
     setFormData((prev) => {
-      const year = new Date().getFullYear();
       const updates: any = {};
       if (!prev.biltyNumber) {
         updates.biltyNumber = generateBiltyNumberCandidate(prev.origin || "Karachi");
       }
       if (!prev.trackingId) {
-        updates.trackingId = `SPD-${year}-${Math.floor(100000 + Math.random() * 900000)}`;
+        updates.trackingId = `SPD-${Math.floor(100000 + Math.random() * 900000)}`;
       }
       if (Object.keys(updates).length > 0) {
         return { ...prev, ...updates };
@@ -399,6 +402,9 @@ export default function NewBiltyPage() {
         strn: "",
         currentRate: "",
         rateBasis: "Per KG",
+        kgRate: "",
+        cbmRate: "",
+        effectiveDate: new Date().toISOString().slice(0, 10),
         notes: "",
       });
       return;
@@ -407,6 +413,11 @@ export default function NewBiltyPage() {
     setQuickCustomerSubmitting(true);
     try {
       const newCustId = generateUUID();
+      const effDate = quickCustomerData.effectiveDate || new Date().toISOString().slice(0, 10);
+      const agreedRate = quickCustomerData.currentRate
+        ? Number(quickCustomerData.currentRate)
+        : (quickCustomerData.kgRate ? Number(quickCustomerData.kgRate) : null);
+
       const newCust = {
         id: newCustId,
         name: quickCustomerData.name.trim(),
@@ -416,9 +427,22 @@ export default function NewBiltyPage() {
         address: quickCustomerData.address.trim() || null,
         ntn: quickCustomerData.ntn.trim() || null,
         strn: quickCustomerData.strn.trim() || null,
-        currentRate: quickCustomerData.currentRate ? Number(quickCustomerData.currentRate) : null,
+        currentRate: agreedRate,
         rateBasis: quickCustomerData.rateBasis || "Per KG",
+        kgRate: quickCustomerData.kgRate ? Number(quickCustomerData.kgRate) : (quickCustomerData.rateBasis === "Per KG" && agreedRate ? agreedRate : null),
+        cbmRate: quickCustomerData.cbmRate ? Number(quickCustomerData.cbmRate) : (quickCustomerData.rateBasis === "Per CBM" && agreedRate ? agreedRate : null),
+        effectiveDate: effDate,
         notes: quickCustomerData.notes || "",
+        rateHistory: [
+          {
+            date: effDate,
+            kgRate: quickCustomerData.kgRate || "",
+            cbmRate: quickCustomerData.cbmRate || "",
+            rate: agreedRate || "",
+            basis: quickCustomerData.rateBasis || "Per KG",
+            notes: quickCustomerData.notes || "Initial contract rate",
+          },
+        ],
         balance: 0,
         createdAt: new Date().toISOString(),
       };
@@ -472,6 +496,9 @@ export default function NewBiltyPage() {
         strn: "",
         currentRate: "",
         rateBasis: "Per KG",
+        kgRate: "",
+        cbmRate: "",
+        effectiveDate: new Date().toISOString().slice(0, 10),
         notes: "",
       });
     } catch (err) {
@@ -670,9 +697,10 @@ export default function NewBiltyPage() {
       billTo: "Sender",
       amountType: "To Pay",
       dispatchMode: "Normal",
+      consignmentType: "LCL",
       biltyNumber: nextBiltyNo,
       manualBiltyNumber: "",
-      trackingId: `SPD-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+      trackingId: `SPD-${Math.floor(100000 + Math.random() * 900000)}`,
       date: new Date().toISOString().slice(0, 10),
       warehouse: formData.origin?.toUpperCase().includes("LAHORE") ? "LAHORE" : "KARACHI",
       origin: formData.origin || "Karachi",
@@ -1359,6 +1387,26 @@ export default function NewBiltyPage() {
                 ⚡ Urgent
               </button>
             </div>
+          </div>
+
+          {/* Consignment Type (PDF p. 21) */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Consignment Type *
+            </Label>
+            <select
+              value={formData.consignmentType}
+              onChange={(e) => setFormData({ ...formData, consignmentType: e.target.value })}
+              className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200"
+            >
+              <option value="LCL">LCL (Less Than Container Load)</option>
+              <option value="FCL">FCL (Full Container Load)</option>
+              <option value="Export">Export</option>
+              <option value="Import">Import</option>
+              <option value="Inter City">Inter City</option>
+              <option value="By Road">By Road</option>
+              <option value="By Rail">By Rail</option>
+            </select>
           </div>
 
           {/* Payment Type */}
@@ -2409,66 +2457,6 @@ export default function NewBiltyPage() {
           </div>
         </FormSectionCard>
 
-        {/* FLEET ASSIGNMENT (OPTIONAL) */}
-        <FormSectionCard
-          title="Fleet Assignment (Optional)"
-          badge="Fleet"
-          description="Truck vehicle number and driver assignment for linehaul transit"
-        >
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Assigned Truck / Vehicle #
-            </Label>
-            <HybridCombobox
-              value={formData.vehicleNumber}
-              onChange={(val) => setFormData({ ...formData, vehicleNumber: val })}
-              onSelectOption={(opt) => {
-                const v = opt.meta;
-                if (v) {
-                  setFormData((prev) => ({
-                    ...prev,
-                    vehicleId: v.id,
-                    vehicleNumber: v.vehicleNumber || v.registrationNumber || opt.value,
-                    driverId: v.driverId || prev.driverId,
-                    driverName: v.driver?.name || prev.driverName,
-                  }));
-                }
-              }}
-              options={vehicles.map((v) => ({
-                value: v.vehicleNumber || v.registrationNumber || "",
-                label: `${v.vehicleNumber || v.registrationNumber} (${v.type || v.make || "Truck"})`,
-                subLabel: `Owner: ${v.ownerName || "SPD"} • Status: ${v.status || "AVAILABLE"}`,
-                meta: v,
-              }))}
-              placeholder=""
-              inputClassName="h-10 rounded-xl"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Assigned Driver Name
-            </Label>
-            <HybridCombobox
-              value={formData.driverName}
-              onChange={(val) => setFormData({ ...formData, driverName: val })}
-              onSelectOption={(opt) => {
-                const d = opt.meta;
-                if (d) {
-                  setFormData((prev) => ({
-                    ...prev,
-                    driverId: d.id,
-                    driverName: d.name || opt.value,
-                  }));
-                }
-              }}
-              options={driverSelectOptions}
-              placeholder=""
-              inputClassName="h-10 rounded-xl"
-            />
-          </div>
-        </FormSectionCard>
-
         {/* Bottom Actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-6 border-t border-slate-200 dark:border-slate-800">
           <Link href="/admin/bilty">
@@ -2586,7 +2574,32 @@ export default function NewBiltyPage() {
               </span>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-[10px] font-bold">Agreed Rate (PKR)</Label>
+                  <Label className="text-[10px] font-bold">KG Rate (PKR/KG)</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={quickCustomerData.kgRate}
+                    placeholder="e.g. 15"
+                    onChange={(e) => setQuickCustomerData({ ...quickCustomerData, kgRate: e.target.value })}
+                    className="rounded-xl h-9 text-xs font-mono font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold">CBM Rate (PKR/CBM)</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={quickCustomerData.cbmRate}
+                    placeholder="e.g. 4500"
+                    onChange={(e) => setQuickCustomerData({ ...quickCustomerData, cbmRate: e.target.value })}
+                    className="rounded-xl h-9 text-xs font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold">Default Rate (PKR)</Label>
                   <Input
                     type="number"
                     step="any"
@@ -2610,6 +2623,17 @@ export default function NewBiltyPage() {
                   </select>
                 </div>
               </div>
+
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold">Rate Effective Date</Label>
+                <Input
+                  type="date"
+                  value={quickCustomerData.effectiveDate}
+                  onChange={(e) => setQuickCustomerData({ ...quickCustomerData, effectiveDate: e.target.value })}
+                  className="rounded-xl h-9 text-xs"
+                />
+              </div>
+
               <div className="space-y-1">
                 <Label className="text-[10px] font-bold">Rate Notes / Special Agreement</Label>
                 <Input

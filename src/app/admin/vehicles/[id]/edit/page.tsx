@@ -23,6 +23,7 @@ import {
   getDeletedDriverIds,
   mergeLocalWithApi,
 } from "@/lib/local-persistence";
+import { safeUpsertVehicle, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function EditVehiclePage() {
   const router = useRouter();
@@ -140,6 +141,7 @@ export default function EditVehiclePage() {
     setSubmitting(true);
     try {
       const selectedDriver = drivers.find((d: any) => d.id === formData.driverId) || null;
+      const parsedCap = formData.capacity ? (String(formData.capacity).toLowerCase().includes("ton") ? formData.capacity : `${formData.capacity} Tons`) : "N/A";
       const payload = {
         id: vehicleId,
         vehicleNumber: formData.vehicleNumber.trim().toUpperCase(),
@@ -149,7 +151,7 @@ export default function EditVehiclePage() {
         make: formData.make.trim(),
         model: formData.model.trim(),
         year: formData.year ? parseInt(formData.year) : null,
-        capacity: formData.capacity ? parseFloat(formData.capacity) : null,
+        capacity: parsedCap,
         ownerName: formData.ownerName.trim(),
         currentLocation: formData.currentLocation.trim(),
         route: formData.route.trim(),
@@ -161,6 +163,25 @@ export default function EditVehiclePage() {
 
       // Save immediately to localStorage
       saveStoredVehicle(payload);
+
+      // Direct Supabase update
+      if (isSupabaseConfigured) {
+        try {
+          await safeUpsertVehicle({
+            id: vehicleId,
+            vehicle_number: payload.vehicleNumber,
+            registration_number: payload.registrationNumber,
+            vehicle_type: payload.vehicleType,
+            capacity: parsedCap !== "N/A" ? parsedCap : null,
+            owner_name: payload.ownerName,
+            driver_name: selectedDriver?.name || null,
+            driver_phone: selectedDriver?.phone || null,
+            status: payload.status,
+          });
+        } catch (sbErr) {
+          console.warn("Supabase vehicle edit update warning:", sbErr);
+        }
+      }
 
       try {
         await fetch("/api/admin/vehicles", {
@@ -292,19 +313,22 @@ export default function EditVehiclePage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Vehicle Type *
+              Vehicle Type & Body *
             </Label>
             <select
               value={formData.vehicleType}
               onChange={(e) => setFormData({ ...formData, vehicleType: e.target.value })}
               className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200"
             >
-              <option value="Heavy Truck (22-Wheeler)">Heavy Truck (22-Wheeler)</option>
-              <option value="Flatbed Trailer">Flatbed Trailer</option>
-              <option value="Container Carrier">Container Carrier</option>
-              <option value="10-Wheeler Truck">10-Wheeler Truck</option>
-              <option value="Mazda / Light Commercial">Mazda / Light Commercial</option>
-              <option value="Pickup / Van">Pickup / Van</option>
+              <option value="22-Wheeler Container Carrier">22-Wheeler Container Carrier</option>
+              <option value="18-Wheeler">18-Wheeler</option>
+              <option value="14-Wheeler">14-Wheeler</option>
+              <option value="Bedford Truck">Bedford Truck</option>
+              <option value="Open Trailer">Open Trailer</option>
+              <option value="Half Body Trailer">Half Body Trailer</option>
+              <option value="Mazda / Linehaul Truck">Mazda / Linehaul Truck</option>
+              <option value="Shahzore / Pickup">Shahzore / Pickup</option>
+              <option value="Other / Custom Carrier">Other / Custom Carrier</option>
             </select>
           </div>
 

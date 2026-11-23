@@ -1,134 +1,44 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import { validateAdminSession } from "@/lib/auth";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import {
+  getLivePayables,
+  getSystemSettingJson,
+  setSystemSettingJson,
+  recordCashTransaction,
+  PayableItem,
+} from "@/lib/accounting-store";
+import { generateUUID } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
-
-const DEFAULT_PAYABLES: any[] = [];
 
 export async function GET(request: Request) {
   try {
     const auth = await validateAdminSession(request, ["SUPER_ADMIN", "ADMIN", "STAFF"]);
     if (auth.errorResponse) return auth.errorResponse;
-    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
-    const search = (searchParams.get("search") || "").trim().toLowerCase();
+    const search = (searchParams.get("search") || "").trim();
     const category = searchParams.get("category") || "ALL";
     const status = searchParams.get("status") || "ALL";
 
-    const where: any = {};
-    if (category !== "ALL") where.category = category;
-    if (status !== "ALL") where.status = status;
-    if (search) {
-      where.OR = [
-        { vendorName: { contains: search } },
-        { reference: { contains: search } },
-        { description: { contains: search } },
-        { vehicleNumber: { contains: search } },
-        { driverName: { contains: search } },
-      ];
-    }
-
-    let payables: any[] = [];
-    try {
-      payables = await prisma.payable.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        include: {
-          customer: { select: { id: true, name: true, phone: true } },
-        },
-      });
-    } catch (dbErr) {
-      console.warn("DB error fetching payables (using fallback):", dbErr);
-    }
-
-    // Fallback: If local database has no payables, query live Supabase PostgreSQL challans
-    if ((!payables || payables.length === 0) && isSupabaseConfigured) {
-      try {
-        const { data: sbChallans, error: sbErr } = await supabase
-          .from("challans")
-          .select("*")
-          .order("created_at", { ascending: false });
-
-        if (!sbErr && Array.isArray(sbChallans)) {
-          for (const ch of sbChallans) {
-            const hireCost = Number(ch.truck_freight || ch.broker_freight || 0);
-            const advance = Number(ch.advance_paid_to_driver || ch.broker_advance || 0);
-            const remaining = Math.max(0, hireCost - advance);
-            if (hireCost > 0 || advance > 0) {
-              payables.push({
-                id: `pay-${ch.id}`,
-                vendorName: ch.driver_name || ch.broker_name || (ch.vehicle_number ? `Truck ${ch.vehicle_number}` : "Fleet Carrier"),
-                vendorPhone: ch.driver_phone || "",
-                category: "TRUCK_HIRE",
-                reference: ch.challan_number || `CHL-${ch.id}`,
-                description: `Truck Hire / Brokerage: ${ch.origin_station || "Karachi"} to ${ch.destination_station || "Lahore"}`,
-                vehicleNumber: ch.vehicle_number || "",
-                driverName: ch.driver_name || "",
-                totalAmount: hireCost,
-                paidAmount: advance,
-                remainingAmount: remaining,
-                status: remaining <= 0 && hireCost > 0 ? "PAID" : advance > 0 ? "PARTIAL" : "UNPAID",
-                createdAt: ch.created_at || new Date().toISOString(),
-                dueDate: ch.created_at || new Date().toISOString(),
-              });
-            }
-          }
-        }
-      } catch (sbEx) {
-        console.warn("Supabase payables fallback warning:", sbEx);
-      }
-    }
-
-    if (!payables || payables.length === 0) {
-      let filtered = [...DEFAULT_PAYABLES];
-      if (category !== "ALL") filtered = filtered.filter((p) => p.category === category);
-      if (status !== "ALL") filtered = filtered.filter((p) => p.status === status);
-      if (search) {
-        filtered = filtered.filter(
-          (p) =>
-            p.vendorName.toLowerCase().includes(search) ||
-            p.reference.toLowerCase().includes(search) ||
-            p.description.toLowerCase().includes(search)
-        );
-      }
-      const summary = {
-        totalPayables: filtered.reduce((acc, p) => acc + (p.totalAmount || 0), 0),
-        totalPaid: filtered.reduce((acc, p) => acc + (p.paidAmount || 0), 0),
-        totalRemaining: filtered.reduce((acc, p) => acc + (p.remainingAmount || 0), 0),
-        overdueCount: 0,
-      };
-      return NextResponse.json({ success: true, data: { summary, payables: filtered } });
-    }
-
-    const now = new Date();
-    const summary = {
-      totalPayables: payables.reduce((acc, p) => acc + (p.totalAmount || 0), 0),
-      totalPaid: payables.reduce((acc, p) => acc + (p.paidAmount || 0), 0),
-      totalRemaining: payables.reduce((acc, p) => acc + (p.remainingAmount || 0), 0),
-      overdueCount: payables.filter((p) => p.dueDate && new Date(p.dueDate) < now && (p.remainingAmount || 0) > 0).length,
-    };
+    const { payables, summary } = await getLivePayables({
+      search,
+      category,
+      status,
+    });
 
     return NextResponse.json({
       success: true,
-      data: {
-        summary,
-        payables,
-      },
+      data: { summary, payables },
     });
   } catch (error: any) {
     console.error("[Payables GET API Error]", error);
-    const summary = {
-      totalPayables: 0,
-      totalPaid: 0,
-      totalRemaining: 0,
-      overdueCount: 0,
-    };
     return NextResponse.json({
       success: true,
-      data: { summary, payables: [] },
+      data: {
+        summary: { totalPayables: 0, totalPaid: 0, totalRemaining: 0, overdueCount: 0 },
+        payables: [],
+      },
     });
   }
 }
@@ -146,11 +56,16 @@ export async function POST(request: Request) {
       reference,
       vehicleNumber,
       driverName,
+      challanId,
+      challanNumber,
+      brokerId,
+      brokerName,
       description,
       totalAmount,
       paidAmount = 0,
       dueDate,
       notes,
+      cashBookId,
     } = body;
 
     if (!vendorName || !String(vendorName).trim()) {
@@ -163,63 +78,64 @@ export async function POST(request: Request) {
     const totalNum = parseFloat(totalAmount) || 0;
     const paidNum = parseFloat(paidAmount) || 0;
     const remainingNum = Math.max(0, totalNum - paidNum);
-    const payableStatus = remainingNum <= 0 ? "PAID" : paidNum > 0 ? "PARTIAL" : "UNPAID";
-    const ref = reference || `PAY-${Date.now().toString().slice(-6)}`;
+    const payableStatus: "UNPAID" | "PARTIAL" | "PAID" =
+      remainingNum <= 0 && totalNum > 0 ? "PAID" : paidNum > 0 ? "PARTIAL" : "UNPAID";
+    const ref = reference?.trim() || `PAY-${Date.now().toString().slice(-6)}`;
+    const timestamp = new Date().toISOString();
 
-    let payable: any = null;
-    try {
-      payable = await prisma.payable.create({
-        data: {
-          vendorName: String(vendorName).trim(),
-          category,
-          reference: ref,
-          vehicleNumber: vehicleNumber ? String(vehicleNumber).trim() : null,
-          driverName: driverName ? String(driverName).trim() : null,
-          description: String(description).trim(),
-          totalAmount: totalNum,
-          paidAmount: paidNum,
-          remainingAmount: remainingNum,
-          status: payableStatus,
-          dueDate: dueDate ? new Date(dueDate) : null,
-          notes: notes ? String(notes).trim() : null,
-        },
-      });
-    } catch (dbErr) {
-      console.warn("DB payable create error (using virtual return):", dbErr);
-    }
+    const newPayable: PayableItem = {
+      id: generateUUID(),
+      vendorName: String(vendorName).trim(),
+      category,
+      reference: ref,
+      vehicleNumber: vehicleNumber ? String(vehicleNumber).trim() : undefined,
+      driverName: driverName ? String(driverName).trim() : undefined,
+      challanId: challanId || undefined,
+      challanNumber: challanNumber || undefined,
+      brokerId: brokerId || undefined,
+      brokerName: brokerName || undefined,
+      description: String(description).trim(),
+      totalAmount: totalNum,
+      paidAmount: paidNum,
+      remainingAmount: remainingNum,
+      status: payableStatus,
+      dueDate: dueDate || timestamp,
+      notes: notes || undefined,
+      createdAt: timestamp,
+    };
 
-    if (!payable) {
-      payable = {
-        id: `pay_loc_${Date.now()}`,
-        vendorName: String(vendorName).trim(),
+    // Persist to custom_payables
+    const currentPayables = await getSystemSettingJson<PayableItem[]>("custom_payables", []);
+    currentPayables.unshift(newPayable);
+    await setSystemSettingJson("custom_payables", currentPayables);
+
+    // If an initial payment was made and cashBookId selected, record Cash OUT
+    if (paidNum > 0 && cashBookId) {
+      await recordCashTransaction({
+        cashBookId,
+        type: "CASH_OUT",
         category,
+        amount: paidNum,
+        partyName: vendorName,
+        vehicleNumber,
+        driverName,
+        brokerName,
+        challanId,
+        challanNumber,
+        paymentMethod: "CASH",
         reference: ref,
-        vehicleNumber: vehicleNumber || null,
-        driverName: driverName || null,
-        description: String(description).trim(),
-        totalAmount: totalNum,
-        paidAmount: paidNum,
-        remainingAmount: remainingNum,
-        status: payableStatus,
-        dueDate: dueDate || null,
-        notes: notes || null,
-        createdAt: new Date().toISOString(),
-      };
+        description: `Payable Advance / Payment — ${vendorName} (${description})`,
+        notes,
+      });
     }
 
-    return NextResponse.json({ success: true, data: payable });
+    return NextResponse.json({ success: true, data: newPayable });
   } catch (error: any) {
     console.error("[Payables POST API Error]", error);
-    return NextResponse.json({
-      success: true,
-      data: {
-        id: `pay_loc_${Date.now()}`,
-        vendorName: "General Vendor",
-        category: "OTHER",
-        totalAmount: 1000,
-        status: "UNPAID",
-      },
-    });
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to create payable" },
+      { status: 500 }
+    );
   }
 }
 
@@ -236,56 +152,110 @@ export async function PUT(request: Request) {
       return NextResponse.json({ success: false, error: "Payable ID is required" }, { status: 400 });
     }
 
-    let updated: any = null;
-    try {
-      const current = await prisma.payable.findUnique({ where: { id } });
-      if (current) {
-        if (recordPayment) {
-          const payNum = parseFloat(paymentAmount) || 0;
-          const newPaid = (current.paidAmount || 0) + payNum;
-          const newRemaining = Math.max(0, current.totalAmount - newPaid);
-          const newStatus = newRemaining <= 0 ? "PAID" : "PARTIAL";
+    const currentPayables = await getSystemSettingJson<PayableItem[]>("custom_payables", []);
+    const idx = currentPayables.findIndex((p) => p.id === id);
 
-          updated = await prisma.payable.update({
-            where: { id },
-            data: {
-              paidAmount: newPaid,
-              remainingAmount: newRemaining,
-              status: newStatus,
-            },
-          });
-        } else {
-          updated = await prisma.payable.update({
-            where: { id },
-            data: rest,
+    let updatedPayable: PayableItem | null = null;
+
+    if (idx >= 0) {
+      const cur = currentPayables[idx];
+      if (recordPayment) {
+        const payNum = parseFloat(paymentAmount) || 0;
+        const newPaid = cur.paidAmount + payNum;
+        const newRemaining = Math.max(0, cur.totalAmount - newPaid);
+        const newStatus: "UNPAID" | "PARTIAL" | "PAID" = newRemaining <= 0 ? "PAID" : "PARTIAL";
+
+        updatedPayable = {
+          ...cur,
+          paidAmount: newPaid,
+          remainingAmount: newRemaining,
+          status: newStatus,
+        };
+        currentPayables[idx] = updatedPayable;
+
+        // If Cash Book selected, record Cash OUT transaction
+        if (cashBookId && payNum > 0) {
+          await recordCashTransaction({
+            cashBookId,
+            type: "CASH_OUT",
+            category: cur.category || "VENDOR_PAYMENT",
+            amount: payNum,
+            partyName: cur.vendorName,
+            vehicleNumber: cur.vehicleNumber,
+            driverName: cur.driverName,
+            brokerName: cur.brokerName,
+            challanId: cur.challanId,
+            challanNumber: cur.challanNumber,
+            paymentMethod,
+            reference: cur.reference,
+            description: `Payment Settled — ${cur.vendorName} (${cur.description})`,
+            notes,
           });
         }
+      } else {
+        const merged: PayableItem = { ...cur, ...rest };
+        updatedPayable = merged;
+        currentPayables[idx] = merged;
       }
-    } catch (dbErr) {
-      console.warn("DB update payable error (using fallback):", dbErr);
+      await setSystemSettingJson("custom_payables", currentPayables);
+    } else {
+      // If it's a generated challan payable, record settlement into custom_payables
+      const payNum = parseFloat(paymentAmount) || 0;
+      updatedPayable = {
+        id,
+        vendorName: body.vendorName || "Payee",
+        category: body.category || "TRUCK_HIRE",
+        reference: body.reference || `PAY-${id}`,
+        vehicleNumber: body.vehicleNumber,
+        driverName: body.driverName,
+        description: body.description || "Challan hire payment",
+        totalAmount: Number(body.totalAmount) || payNum,
+        paidAmount: payNum,
+        remainingAmount: Math.max(0, (Number(body.totalAmount) || payNum) - payNum),
+        status: (Number(body.totalAmount) || payNum) <= payNum ? "PAID" : "PARTIAL",
+        createdAt: new Date().toISOString(),
+      };
+      currentPayables.unshift(updatedPayable);
+      await setSystemSettingJson("custom_payables", currentPayables);
+
+      if (cashBookId && payNum > 0) {
+        await recordCashTransaction({
+          cashBookId,
+          type: "CASH_OUT",
+          category: updatedPayable.category,
+          amount: payNum,
+          partyName: updatedPayable.vendorName,
+          vehicleNumber: updatedPayable.vehicleNumber,
+          driverName: updatedPayable.driverName,
+          paymentMethod,
+          reference: updatedPayable.reference,
+          description: `Challan Hire Payment — ${updatedPayable.vendorName}`,
+          notes,
+        });
+      }
     }
 
-    if (!updated) {
-      updated = { id, status: "PAID", ...body };
-    }
-
-    return NextResponse.json({ success: true, data: updated });
+    return NextResponse.json({ success: true, data: updatedPayable });
   } catch (error: any) {
-    return NextResponse.json({ success: true, data: { id: "pay-updated" } });
+    console.error("[Payables PUT API Error]", error);
+    return NextResponse.json({ success: false, error: error.message || "Failed to update payable" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await validateAdminSession(request, ["SUPER_ADMIN", "ADMIN"]);
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (id) {
-      try {
-        await prisma.payable.delete({ where: { id } });
-      } catch (_) {}
+      const current = await getSystemSettingJson<PayableItem[]>("custom_payables", []);
+      const filtered = current.filter((p) => p.id !== id);
+      await setSystemSettingJson("custom_payables", filtered);
     }
     return NextResponse.json({ success: true, message: "Payable deleted successfully" });
   } catch (error: any) {
-    return NextResponse.json({ success: true, message: "Payable deleted successfully" });
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

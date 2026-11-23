@@ -124,6 +124,7 @@ export default function EditBiltyPage() {
     billTo: "Sender" as "Sender" | "Receiver",
     amountType: "To Pay" as "Paid" | "To Pay" | "To Be Billed",
     dispatchMode: "Normal" as "Normal" | "Urgent",
+    consignmentType: "LCL" as string,
     biltyNumber: "",
     trackingId: "",
     date: new Date().toISOString().slice(0, 10),
@@ -258,6 +259,7 @@ export default function EditBiltyPage() {
           billTo: found.billTo || "Sender",
           amountType: found.amountType || (found.paymentStatus === "PAID" ? "Paid" : "To Pay"),
           dispatchMode: found.dispatchMode || "Normal",
+          consignmentType: found.consignmentType || "LCL",
           biltyNumber: found.biltyNumber || "",
           trackingId: found.trackingId || "",
           date: found.date ? found.date.split("T")[0] : new Date().toISOString().slice(0, 10),
@@ -1097,6 +1099,46 @@ export default function EditBiltyPage() {
               className="rounded-xl h-10 text-xs uppercase font-mono tracking-wider"
             />
           </div>
+
+          {/* Consignment Type (PDF p. 21) */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Consignment Type *
+            </Label>
+            <select
+              value={formData.consignmentType || "LCL"}
+              onChange={(e) => setFormData({ ...formData, consignmentType: e.target.value })}
+              className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200"
+            >
+              <option value="LCL">LCL (Less Than Container Load)</option>
+              <option value="FCL">FCL (Full Container Load)</option>
+              <option value="Export">Export</option>
+              <option value="Import">Import</option>
+              <option value="Inter City">Inter City</option>
+              <option value="By Road">By Road</option>
+              <option value="By Rail">By Rail</option>
+            </select>
+          </div>
+
+          {/* Shipment Status */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+              Shipment Status *
+            </Label>
+            <select
+              value={formData.shipmentStatus}
+              onChange={(e) => setFormData({ ...formData, shipmentStatus: e.target.value })}
+              className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200"
+            >
+              <option value="BOOKED">Booked (At Station)</option>
+              <option value="IN_WAREHOUSE">In Warehouse Storage</option>
+              <option value="LOADED">Loaded on Vehicle</option>
+              <option value="DISPATCHED">Dispatched</option>
+              <option value="IN_TRANSIT">In Transit</option>
+              <option value="ARRIVED">Arrived</option>
+              <option value="DELIVERED">Delivered</option>
+            </select>
+          </div>
         </FormSectionCard>
 
         {/* Parties */}
@@ -1762,66 +1804,6 @@ export default function EditBiltyPage() {
               }
               className="rounded-xl h-10 text-xs font-mono"
             />
-          </div>
-        </FormSectionCard>
-
-        {/* Fleet Assignment */}
-        <FormSectionCard
-          title="Fleet Vehicle & Driver Assignment (Optional)"
-          badge="Linehaul"
-          description="Assigned linehaul fleet and driver"
-        >
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Assigned Truck / Vehicle #
-            </Label>
-            <HybridCombobox
-              value={formData.vehicleNumber}
-              onChange={(val) => setFormData({ ...formData, vehicleNumber: val })}
-              options={vehicles.map((v) => ({
-                value: v.vehicleNumber || v.registrationNumber || "",
-                label: `${v.vehicleNumber || v.registrationNumber} (${v.type || v.make || "Truck"})`,
-                meta: v,
-              }))}
-              placeholder=""
-              inputClassName="h-10 rounded-xl"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Assigned Driver Name
-            </Label>
-            <HybridCombobox
-              value={formData.driverName}
-              onChange={(val) => setFormData({ ...formData, driverName: val })}
-              options={drivers.map((d) => ({
-                value: d.name || "",
-                label: `${d.name} (${d.phone || d.contact || "No phone"})`,
-                meta: d,
-              }))}
-              placeholder=""
-              inputClassName="h-10 rounded-xl"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Shipment Status
-            </Label>
-            <select
-              value={formData.shipmentStatus}
-              onChange={(e) => setFormData({ ...formData, shipmentStatus: e.target.value })}
-              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold"
-            >
-              <option value="BOOKED">Booked (At Station)</option>
-              <option value="IN_WAREHOUSE">In Warehouse Storage</option>
-              <option value="LOADED">Loaded on Vehicle</option>
-              <option value="DISPATCHED">Dispatched</option>
-              <option value="IN_TRANSIT">In Transit</option>
-              <option value="ARRIVED">Arrived</option>
-              <option value="DELIVERED">Delivered</option>
-            </select>
           </div>
         </FormSectionCard>
 

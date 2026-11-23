@@ -37,12 +37,15 @@ export default function NewVehiclePage() {
   const [formData, setFormData] = useState({
     vehicleNumber: "",
     registrationNumber: "",
-    vehicleType: "Heavy Truck (22-Wheeler)",
+    vehicleType: "22-Wheeler Container Carrier",
+    ownerType: "SPD Fleet (Own)",
+    ownerName: "SPD Logistics Fleet",
+    transporterName: "",
+    brokerReference: "",
     make: "",
     model: "",
     year: "",
     capacity: "",
-    ownerName: "SPD Logistics Fleet",
     currentLocation: "",
     route: "",
     driverId: "",
@@ -92,17 +95,21 @@ export default function NewVehiclePage() {
       const plate = formData.vehicleNumber.trim().toUpperCase();
       const selectedDrv = drivers.find((d) => String(d.id) === String(formData.driverId));
 
+      const parsedCap = formData.capacity ? (String(formData.capacity).toLowerCase().includes("ton") ? formData.capacity : `${formData.capacity} Tons`) : "N/A";
       const newVehicleRecord = {
         id: uniqueId,
         vehicleNumber: plate,
         registrationNumber: formData.registrationNumber.trim() || plate,
-        vehicleType: formData.vehicleType || "Heavy Truck (22-Wheeler)",
-        type: formData.vehicleType || "Heavy Truck (22-Wheeler)",
+        vehicleType: formData.vehicleType || "22-Wheeler Container Carrier",
+        type: formData.vehicleType || "22-Wheeler Container Carrier",
         make: formData.make.trim() || "Hino",
         model: formData.model.trim() || "700 Series",
         year: formData.year ? parseInt(formData.year) : 2022,
-        capacity: formData.capacity ? parseFloat(formData.capacity) : 35,
-        ownerName: formData.ownerName.trim() || "SPD Logistics Fleet",
+        capacity: parsedCap,
+        ownerType: formData.ownerType,
+        ownerName: formData.ownerType === "SPD Fleet (Own)" ? (formData.ownerName.trim() || "SPD Logistics Fleet") : (formData.transporterName.trim() || formData.ownerName.trim() || "Market Transporter"),
+        transporterName: formData.transporterName.trim() || null,
+        brokerReference: formData.brokerReference.trim() || null,
         currentLocation: formData.currentLocation.trim() || "Lahore Terminal",
         route: formData.route.trim() || "Lahore - Karachi Highway",
         driverId: formData.driverId || null,
@@ -120,7 +127,13 @@ export default function NewVehiclePage() {
         try {
           const { success, data: sbData } = await safeUpsertVehicle({
             vehicle_number: plate,
-            vehicle_type: formData.vehicleType || "Heavy Truck (22-Wheeler)",
+            registration_number: formData.registrationNumber.trim() || plate,
+            vehicle_type: formData.vehicleType || "22-Wheeler Container Carrier",
+            capacity: parsedCap !== "N/A" ? parsedCap : null,
+            owner_type: formData.ownerType,
+            owner_name: newVehicleRecord.ownerName,
+            transporter_name: formData.transporterName.trim() || null,
+            broker_reference: formData.brokerReference.trim() || null,
             driver_name: selectedDrv?.name || null,
             driver_phone: selectedDrv?.phone || null,
             status: formData.status || "AVAILABLE",
@@ -260,32 +273,77 @@ export default function NewVehiclePage() {
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Vehicle Type *
+              Vehicle Type & Body *
             </Label>
             <select
               value={formData.vehicleType}
               onChange={(e) => setFormData({ ...formData, vehicleType: e.target.value })}
               className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200"
             >
-              <option value="Heavy Truck (22-Wheeler)">Heavy Truck (22-Wheeler)</option>
-              <option value="Flatbed Trailer">Flatbed Trailer</option>
-              <option value="Container Carrier">Container Carrier</option>
-              <option value="10-Wheeler Truck">10-Wheeler Truck</option>
-              <option value="Mazda / Light Commercial">Mazda / Light Commercial</option>
-              <option value="Pickup / Van">Pickup / Van</option>
+              <option value="22-Wheeler Container Carrier">22-Wheeler Container Carrier</option>
+              <option value="18-Wheeler">18-Wheeler</option>
+              <option value="14-Wheeler">14-Wheeler</option>
+              <option value="Bedford Truck">Bedford Truck</option>
+              <option value="Open Trailer">Open Trailer</option>
+              <option value="Half Body Trailer">Half Body Trailer</option>
+              <option value="Mazda / Linehaul Truck">Mazda / Linehaul Truck</option>
+              <option value="Shahzore / Pickup">Shahzore / Pickup</option>
+              <option value="Other / Custom Carrier">Other / Custom Carrier</option>
             </select>
           </div>
 
           <div className="space-y-1.5">
             <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Fleet / Owner Name
+              Fleet Asset Category *
             </Label>
-            <Input
-              value={formData.ownerName}
-              onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
-              className="rounded-xl h-10 text-xs"
-            />
+            <select
+              value={formData.ownerType}
+              onChange={(e) => setFormData({ ...formData, ownerType: e.target.value })}
+              className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200"
+            >
+              <option value="SPD Fleet (Own)">SPD Fleet (Own Asset)</option>
+              <option value="Market Vehicle / Third-Party Transporter">Market Vehicle / Third-Party Transporter</option>
+            </select>
           </div>
+
+          {formData.ownerType === "Market Vehicle / Third-Party Transporter" ? (
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                  Transporter / Company Name *
+                </Label>
+                <Input
+                  value={formData.transporterName}
+                  onChange={(e) => setFormData({ ...formData, transporterName: e.target.value })}
+                  placeholder="e.g. Haris Goods Transport"
+                  className="rounded-xl h-10 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                  Broker Reference (e.g. Faheem Khan, Haris)
+                </Label>
+                <Input
+                  value={formData.brokerReference}
+                  onChange={(e) => setFormData({ ...formData, brokerReference: e.target.value })}
+                  placeholder="e.g. Faheem Khan"
+                  className="rounded-xl h-10 text-xs"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                Fleet / Owner Name
+              </Label>
+              <Input
+                value={formData.ownerName}
+                onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
+                className="rounded-xl h-10 text-xs"
+              />
+            </div>
+          )}
         </FormSectionCard>
 
         {/* Section 2: Technical Specifications & Capacity */}

@@ -113,6 +113,8 @@ export default function ReceivablesPage() {
 
   // Cash books for payment modal
   const [cashBooks, setCashBooks] = useState<any[]>([]);
+  const [allBilties, setAllBilties] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<"BILTY" | "CUSTOMER">("BILTY");
 
   // Storage Keys for Offline & Netlify Resilience
   const LOCAL_RECEIVABLES_PAYMENTS_KEY = "spd_local_receivables_payments";
@@ -130,6 +132,7 @@ export default function ReceivablesPage() {
   const [paymentReference, setPaymentReference] = useState<string>("");
   const [paymentNotes, setPaymentNotes] = useState<string>("");
   const [paymentBiltyId, setPaymentBiltyId] = useState<string>("");
+  const [paymentBiltyNumber, setPaymentBiltyNumber] = useState<string>("");
   const [selectedCashBookId, setSelectedCashBookId] = useState<string>("");
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [paymentSuccessMsg, setPaymentSuccessMsg] = useState("");
@@ -290,20 +293,28 @@ export default function ReceivablesPage() {
 
         setCustomers(custList);
 
-        // Recalculate summary stats
-        const totInvoiced = custList.reduce((sum, c) => sum + (c.totalInvoicedAmount || 0), 0);
-        const totReceived = custList.reduce((sum, c) => sum + (c.totalPaidAmount || 0), 0);
-        const totOutstanding = custList.reduce((sum, c) => sum + (c.totalOutstandingBalance || 0), 0);
-        const totBilties = custList.reduce((sum, c) => sum + (c.totalBiltiesCount || 0), 0);
-        const unpaidCount = custList.filter((c) => c.totalOutstandingBalance > 0).length;
+        if (data.data.bilties && Array.isArray(data.data.bilties)) {
+          setAllBilties(data.data.bilties);
+        }
 
-        setSummary({
-          totalInvoiced: totInvoiced,
-          totalReceived: totReceived,
-          totalOutstanding: totOutstanding,
-          totalBilties: totBilties,
-          unpaidCustomerCount: unpaidCount,
-        });
+        if (data.data.summary && Number(data.data.summary.totalInvoiced) > 0) {
+          setSummary(data.data.summary);
+        } else {
+          // Recalculate summary stats fallback
+          const totInvoiced = custList.reduce((sum, c) => sum + (c.totalInvoicedAmount || 0), 0);
+          const totReceived = custList.reduce((sum, c) => sum + (c.totalPaidAmount || 0), 0);
+          const totOutstanding = custList.reduce((sum, c) => sum + (c.totalOutstandingBalance || 0), 0);
+          const totBilties = custList.reduce((sum, c) => sum + (c.totalBiltiesCount || 0), 0);
+          const unpaidCount = custList.filter((c) => c.totalOutstandingBalance > 0).length;
+
+          setSummary({
+            totalInvoiced: totInvoiced,
+            totalReceived: totReceived,
+            totalOutstanding: totOutstanding,
+            totalBilties: totBilties,
+            unpaidCustomerCount: unpaidCount,
+          });
+        }
       }
     } catch (err) {
       console.error("Failed to load receivables:", err);
@@ -323,13 +334,68 @@ export default function ReceivablesPage() {
       .catch(() => {});
   }, [fetchData]);
 
+  // Memoized filter for Bilty-wise Ledger view (PDF p. 36)
+  const filteredBilties = useMemo(() => {
+    let list = allBilties;
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (b) =>
+          b.biltyNumber?.toLowerCase().includes(q) ||
+          b.invoiceNumber?.toLowerCase().includes(q) ||
+          b.billedParty?.toLowerCase().includes(q) ||
+          b.senderName?.toLowerCase().includes(q) ||
+          b.receiverName?.toLowerCase().includes(q) ||
+          b.origin?.toLowerCase().includes(q) ||
+          b.destination?.toLowerCase().includes(q) ||
+          b.goodsDescription?.toLowerCase().includes(q)
+      );
+    }
+    if (statusFilter !== "ALL") {
+      list = list.filter((b) => b.paymentStatus === statusFilter);
+    }
+    return list;
+  }, [allBilties, search, statusFilter]);
+
   // Open Record Payment modal
-  const handleOpenPayment = (customer: CustomerReceivable, biltyId?: string) => {
-    setSelectedCustomer(customer);
+  const handleOpenPayment = (
+    customer: any,
+    biltyId?: string,
+    biltyNum?: string,
+    biltyBal?: number
+  ) => {
+    let targetCustomer = customer;
+    if (customer && !customer.customerId && customer.billedParty) {
+      const found = customers.find(
+        (c) =>
+          c.customerId === customer.customerId ||
+          c.customerName?.toLowerCase() === customer.billedParty?.toLowerCase()
+      );
+      targetCustomer = found || {
+        customerId: customer.billedParty || "UNKNOWN",
+        customerName: customer.billedParty,
+        companyName: customer.billedParty,
+        phone: customer.senderPhone || customer.receiverPhone || "",
+        city: customer.destination || "",
+        totalBiltiesCount: 1,
+        totalInvoicedAmount: customer.totalAmount || 0,
+        totalPaidAmount: customer.paidAmount || 0,
+        totalOutstandingBalance: customer.remainingBalance || 0,
+        paymentStatus: customer.paymentStatus || "UNPAID",
+        bilties: [customer],
+        payments: [],
+      };
+    }
+
+    setSelectedCustomer(targetCustomer);
     setPaymentBiltyId(biltyId || "");
-    const defaultAmount = biltyId
-      ? customer.bilties.find((b) => b.id === biltyId)?.remainingBalance || 0
-      : customer.totalOutstandingBalance;
+    setPaymentBiltyNumber(biltyNum || "");
+    const defaultAmount =
+      biltyBal !== undefined
+        ? biltyBal
+        : biltyId
+        ? ((targetCustomer?.bilties || []).find((b: any) => b.id === biltyId)?.remainingBalance || 0)
+        : targetCustomer?.totalOutstandingBalance || 0;
     setPaymentAmount(defaultAmount ? String(defaultAmount) : "");
     setPaymentReference(`REC-${Date.now().toString().slice(-6)}`);
     setPaymentNotes("");
@@ -445,14 +511,20 @@ export default function ReceivablesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerId: selectedCustomer.customerId,
+          customerName: selectedCustomer.customerName,
           consignmentId: paymentBiltyId || undefined,
+          biltyNumber: paymentBiltyNumber || undefined,
           amount: num,
           paymentMethod,
           reference: paymentRef,
           notes: paymentNotes,
           cashBookId: selectedCashBookId || undefined,
         }),
-      }).catch((err) => console.warn("Background receivables payment sync warning:", err));
+      })
+        .then(() => {
+          fetchData();
+        })
+        .catch((err) => console.warn("Background receivables payment sync warning:", err));
 
       setTimeout(() => {
         setRecordPaymentOpen(false);
@@ -466,20 +538,42 @@ export default function ReceivablesPage() {
 
   // Universal Excel Export
   const handleExportExcel = () => {
-    if (customers.length === 0) return;
-    const data = customers.map((c) => ({
-      "Customer Name": c.customerName || "",
-      "Company": c.companyName || "",
-      "Phone": c.phone || "",
-      "City": c.city || "",
-      "Total Bilties": c.totalBiltiesCount || 0,
-      "Total Invoiced (PKR)": c.totalInvoicedAmount || 0,
-      "Total Paid (PKR)": c.totalPaidAmount || 0,
-      "Outstanding Balance (PKR)": c.totalOutstandingBalance || 0,
-      "Payment Status": c.paymentStatus || "UNPAID",
-    }));
-
-    exportToExcel(data, "SPD_Receivables_Summary");
+    if (viewMode === "BILTY") {
+      if (filteredBilties.length === 0) return;
+      const data = filteredBilties.map((b) => ({
+        "Date": formatDate(b.date),
+        "Invoice #": b.invoiceNumber || "—",
+        "Bilty #": b.biltyNumber,
+        "Billed Party Name": b.billedParty,
+        "Billed Role": b.billedPartyRole,
+        "Consignor (Sender)": b.senderName,
+        "Consignee (Receiver)": b.receiverName,
+        "Cargo Description": b.goodsDescription,
+        "Quantity": b.quantity,
+        "Weight (Kg)": b.weight,
+        "Origin": b.origin,
+        "Destination": b.destination,
+        "Total Freight (PKR)": b.totalAmount,
+        "Paid (PKR)": b.paidAmount,
+        "Remaining Balance (PKR)": b.remainingBalance,
+        "Status": b.paymentStatus,
+      }));
+      exportToExcel(data, "SPD_Receivables_Bilty_Ledger");
+    } else {
+      if (customers.length === 0) return;
+      const data = customers.map((c) => ({
+        "Customer Name": c.customerName || "",
+        "Company": c.companyName || "",
+        "Phone": c.phone || "",
+        "City": c.city || "",
+        "Total Bilties": c.totalBiltiesCount || 0,
+        "Total Invoiced (PKR)": c.totalInvoicedAmount || 0,
+        "Total Paid (PKR)": c.totalPaidAmount || 0,
+        "Outstanding Balance (PKR)": c.totalOutstandingBalance || 0,
+        "Payment Status": c.paymentStatus || "UNPAID",
+      }));
+      exportToExcel(data, "SPD_Receivables_Summary");
+    }
   };
 
   // Print Report
@@ -585,13 +679,47 @@ export default function ReceivablesPage() {
         />
       </div>
 
-      {/* Filters and Search Bar */}
-      <div className="print:hidden flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card p-4 rounded-xl border">
+      {/* View Switcher & Filters */}
+      <div className="print:hidden flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-4 rounded-xl border">
+        {/* Toggle between Bilty-wise Ledger (PDF p. 36) and Customer Summary */}
+        <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode("BILTY")}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+              viewMode === "BILTY"
+                ? "bg-spd-red text-white shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            <span>Bilty / Invoices (PDF p. 36)</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${viewMode === "BILTY" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+              {filteredBilties.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("CUSTOMER")}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+              viewMode === "CUSTOMER"
+                ? "bg-spd-blue text-white shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Building2 className="h-3.5 w-3.5" />
+            <span>Customer Ledgers</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${viewMode === "CUSTOMER" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+              {customers.length}
+            </span>
+          </button>
+        </div>
+
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search by customer name, phone, or bilty #..."
+            placeholder="Search by customer, bilty #, invoice #, or route..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-background focus-visible:ring-spd-red"
@@ -606,159 +734,302 @@ export default function ReceivablesPage() {
               onClick={() => setStatusFilter(status)}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                 statusFilter === status
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-sm font-bold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {status === "ALL" ? "All Customers" : status}
+              {status === "ALL" ? "All Status" : status}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Main Customers Breakdown Table */}
-      {loading && customers.length === 0 ? (
-        <LogisticsTableSkeleton rows={5} subtitle="Calculating Live Customer Receivables & Balances..." />
-      ) : customers.length === 0 ? (
-        <EmptyState
-          icon={ArrowDownLeft}
-          title="No records found"
-          description="Click '+ Add New' to create your first entry."
-        />
-      ) : (
-        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table className="min-w-[850px]">
-              <TableHeader>
-                <TableRow className="bg-muted/40">
-                  <TableHead className="font-bold">Customer / Dealer</TableHead>
-                  <TableHead className="font-bold">Phone / City</TableHead>
-                  <TableHead className="font-bold text-center">Bilties</TableHead>
-                  <TableHead className="font-bold text-right">Total Invoiced</TableHead>
-                  <TableHead className="font-bold text-right">Paid Amount</TableHead>
-                  <TableHead className="font-bold text-right text-spd-red">Outstanding Balance</TableHead>
-                  <TableHead className="font-bold text-center">Status</TableHead>
-                  <TableHead className="font-bold text-center print:hidden">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {customers.map((customer) => (
-                  <TableRow key={customer.customerId} className="hover:bg-muted/30 transition-colors">
-                    <TableCell>
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-full bg-primary/10 text-primary shrink-0">
-                          <User className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-foreground">{customer.customerName}</div>
-                          {customer.companyName && (
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Building2 className="h-3 w-3" />
-                              <span>{customer.companyName}</span>
+      {/* VIEW 1: Bilty-Wise Invoices & Receivables Table (PDF Page 36 Requirement) */}
+      {viewMode === "BILTY" && (
+        <>
+          {loading && filteredBilties.length === 0 ? (
+            <LogisticsTableSkeleton rows={5} subtitle="Loading Live Bilty Receivables & Invoices..." />
+          ) : filteredBilties.length === 0 ? (
+            <EmptyState
+              icon={Package}
+              title="No bilties found"
+              description="No active consignments match your search and filter criteria."
+            />
+          ) : (
+            <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table className="min-w-[1050px]">
+                  <TableHeader>
+                    <TableRow className="bg-muted/50 text-xs">
+                      <TableHead className="font-bold">Date</TableHead>
+                      <TableHead className="font-bold">Invoice #</TableHead>
+                      <TableHead className="font-bold">Bilty #</TableHead>
+                      <TableHead className="font-bold">Billed Party Name</TableHead>
+                      <TableHead className="font-bold">Consignee & Consignor</TableHead>
+                      <TableHead className="font-bold">Cargo Items & Qty</TableHead>
+                      <TableHead className="font-bold">Origin / Destination</TableHead>
+                      <TableHead className="font-bold text-right">Total Freight</TableHead>
+                      <TableHead className="font-bold text-right">Paid</TableHead>
+                      <TableHead className="font-bold text-right text-spd-red">Remaining Balance</TableHead>
+                      <TableHead className="font-bold text-center">Status</TableHead>
+                      <TableHead className="font-bold text-center print:hidden">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredBilties.map((b) => (
+                      <TableRow key={b.id || b.biltyNumber} className="hover:bg-muted/30 transition-colors text-xs">
+                        {/* 1. Date */}
+                        <TableCell className="whitespace-nowrap font-medium text-foreground">
+                          {formatDate(b.date)}
+                        </TableCell>
+
+                        {/* 2. Invoice # */}
+                        <TableCell className="font-mono font-bold text-spd-blue">
+                          {b.invoiceNumber || `INV-${String(b.biltyNumber).replace(/^(SPD-|BLT-)/i, "")}`}
+                        </TableCell>
+
+                        {/* 3. Bilty # */}
+                        <TableCell>
+                          <div className="font-black text-spd-red font-mono">{b.biltyNumber}</div>
+                          <div className="text-[10px] text-muted-foreground">{b.paymentMode || "TO-PAY"}</div>
+                        </TableCell>
+
+                        {/* 4. Billed Party Name */}
+                        <TableCell>
+                          <div className="font-bold text-foreground">{b.billedParty}</div>
+                          <div className="text-[10px] font-semibold text-muted-foreground">
+                            <span className={`px-1.5 py-0.5 rounded ${b.billedPartyRole?.includes("Receiver") ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"}`}>
+                              {b.billedPartyRole || "Billed Party"}
+                            </span>
+                          </div>
+                        </TableCell>
+
+                        {/* 5. Consignee & Consignor */}
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <div className="text-foreground">
+                              <span className="font-semibold text-muted-foreground">To:</span> {b.receiverName}
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
+                            <div className="text-muted-foreground text-[11px]">
+                              <span className="font-semibold">From:</span> {b.senderName}
+                            </div>
+                          </div>
+                        </TableCell>
 
-                    <TableCell>
-                      <div className="text-xs space-y-0.5">
-                        <div className="font-medium text-foreground flex items-center gap-1">
-                          <Phone className="h-3 w-3 text-muted-foreground" />
-                          <span>{customer.phone}</span>
-                        </div>
-                        <div className="text-muted-foreground">{customer.city}</div>
-                      </div>
-                    </TableCell>
+                        {/* 6. Cargo Items & Qty */}
+                        <TableCell>
+                          <div className="font-medium text-foreground truncate max-w-[160px]" title={b.goodsDescription}>
+                            {b.goodsDescription || "Commercial Goods"}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground font-semibold">
+                            {b.quantity || 1} Pkgs {b.weight ? `• ${b.weight} kg` : ""}
+                          </div>
+                        </TableCell>
 
-                    <TableCell className="text-center font-bold">
-                      <span className="px-2 py-1 rounded-full bg-muted text-xs font-semibold">
-                        {customer.totalBiltiesCount}
-                      </span>
-                    </TableCell>
+                        {/* 7. Origin / Destination */}
+                        <TableCell>
+                          <div className="font-semibold text-foreground whitespace-nowrap">
+                            {b.origin} &rarr; {b.destination}
+                          </div>
+                        </TableCell>
 
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(customer.totalInvoicedAmount)}
-                    </TableCell>
+                        {/* 8. Total Freight */}
+                        <TableCell className="text-right font-bold text-foreground whitespace-nowrap">
+                          {formatCurrency(b.totalAmount)}
+                        </TableCell>
 
-                    <TableCell className="text-right text-emerald-600 font-semibold">
-                      {formatCurrency(customer.totalPaidAmount)}
-                    </TableCell>
+                        {/* 9. Paid */}
+                        <TableCell className="text-right font-bold text-emerald-600 whitespace-nowrap">
+                          {formatCurrency(b.paidAmount)}
+                        </TableCell>
 
-                    <TableCell className="text-right font-black text-spd-red text-base">
-                      {formatCurrency(customer.totalOutstandingBalance)}
-                    </TableCell>
+                        {/* 10. Remaining Balance */}
+                        <TableCell className="text-right font-black text-spd-red text-sm whitespace-nowrap">
+                          {formatCurrency(b.remainingBalance)}
+                        </TableCell>
 
-                    <TableCell className="text-center">
-                      {getStatusBadge(customer.paymentStatus)}
-                    </TableCell>
+                        {/* 11. Status */}
+                        <TableCell className="text-center whitespace-nowrap">
+                          {getStatusBadge(b.paymentStatus)}
+                        </TableCell>
 
-                    <TableCell className="text-center print:hidden">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedCustomer(customer);
-                            setViewBiltiesOpen(true);
-                          }}
-                          className="h-8 text-xs gap-1"
-                          title="View Bilty breakdown"
-                        >
-                          <Package className="h-3.5 w-3.5" />
-                          Bilties ({customer.bilties.length})
-                        </Button>
+                        {/* 12. Actions */}
+                        <TableCell className="text-center print:hidden whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1">
+                            {b.remainingBalance > 0 ? (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleOpenPayment(b, b.id, b.biltyNumber, b.remainingBalance)}
+                                className="h-7 text-xs bg-spd-red hover:bg-red-700 text-white font-bold gap-1 px-2.5"
+                              >
+                                <CreditCard className="h-3 w-3" />
+                                Pay
+                              </Button>
+                            ) : (
+                              <span className="text-emerald-600 text-xs font-bold flex items-center gap-0.5 px-2">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Paid
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedCustomer(customer);
-                            setViewLedgerOpen(true);
-                          }}
-                          className="h-8 text-xs gap-1"
-                          title="View Payment History"
-                        >
-                          <FileText className="h-3.5 w-3.5" />
-                          <span>Ledger</span>
-                        </Button>
+      {/* VIEW 2: Customer Grouped Summary Table */}
+      {viewMode === "CUSTOMER" && (
+        <>
+          {loading && customers.length === 0 ? (
+            <LogisticsTableSkeleton rows={5} subtitle="Calculating Live Customer Receivables & Balances..." />
+          ) : customers.length === 0 ? (
+            <EmptyState
+              icon={ArrowDownLeft}
+              title="No customer records found"
+              description="No customers match your current filter."
+            />
+          ) : (
+            <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table className="min-w-[850px]">
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="font-bold">Customer / Dealer</TableHead>
+                      <TableHead className="font-bold">Phone / City</TableHead>
+                      <TableHead className="font-bold text-center">Bilties</TableHead>
+                      <TableHead className="font-bold text-right">Total Invoiced</TableHead>
+                      <TableHead className="font-bold text-right">Paid Amount</TableHead>
+                      <TableHead className="font-bold text-right text-spd-red">Outstanding Balance</TableHead>
+                      <TableHead className="font-bold text-center">Status</TableHead>
+                      <TableHead className="font-bold text-center print:hidden">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {customers.map((customer) => (
+                      <TableRow key={customer.customerId} className="hover:bg-muted/30 transition-colors">
+                        <TableCell>
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 rounded-full bg-primary/10 text-primary shrink-0">
+                              <User className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <div className="font-bold text-foreground">{customer.customerName}</div>
+                              {customer.companyName && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Building2 className="h-3 w-3" />
+                                  <span>{customer.companyName}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setMonthlyBillCustomer({
-                              id: customer.customerId,
-                              name: customer.customerName,
-                              companyName: customer.companyName,
-                              phone: customer.phone,
-                              city: customer.city,
-                            });
-                          }}
-                          className="h-8 text-xs gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800"
-                          title="Monthly Freight Bill Statement (A4 & Excel)"
-                        >
-                          <FileSpreadsheet className="h-3.5 w-3.5" />
-                          <span>Bill</span>
-                        </Button>
+                        <TableCell>
+                          <div className="text-xs space-y-0.5">
+                            <div className="font-medium text-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3 text-muted-foreground" />
+                              <span>{customer.phone}</span>
+                            </div>
+                            <div className="text-muted-foreground">{customer.city}</div>
+                          </div>
+                        </TableCell>
 
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleOpenPayment(customer)}
-                          className="h-8 text-xs bg-spd-red hover:bg-red-700 text-white gap-1"
-                        >
-                          <CreditCard className="h-3.5 w-3.5" />
-                          Pay
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+                        <TableCell className="text-center font-bold">
+                          <span className="px-2 py-1 rounded-full bg-muted text-xs font-semibold">
+                            {customer.totalBiltiesCount}
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(customer.totalInvoicedAmount)}
+                        </TableCell>
+
+                        <TableCell className="text-right text-emerald-600 font-semibold">
+                          {formatCurrency(customer.totalPaidAmount)}
+                        </TableCell>
+
+                        <TableCell className="text-right font-black text-spd-red text-base">
+                          {formatCurrency(customer.totalOutstandingBalance)}
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          {getStatusBadge(customer.paymentStatus)}
+                        </TableCell>
+
+                        <TableCell className="text-center print:hidden">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCustomer(customer);
+                                setViewBiltiesOpen(true);
+                              }}
+                              className="h-8 text-xs gap-1"
+                              title="View Bilty breakdown"
+                            >
+                              <Package className="h-3.5 w-3.5" />
+                              Bilties ({customer.bilties.length})
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCustomer(customer);
+                                setViewLedgerOpen(true);
+                              }}
+                              className="h-8 text-xs gap-1"
+                              title="View Payment History"
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              <span>Ledger</span>
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setMonthlyBillCustomer({
+                                  id: customer.customerId,
+                                  name: customer.customerName,
+                                  companyName: customer.companyName,
+                                  phone: customer.phone,
+                                  city: customer.city,
+                                });
+                              }}
+                              className="h-8 text-xs gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800"
+                              title="Monthly Freight Bill Statement (A4 & Excel)"
+                            >
+                              <FileSpreadsheet className="h-3.5 w-3.5" />
+                              <span>Bill</span>
+                            </Button>
+
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleOpenPayment(customer)}
+                              className="h-8 text-xs bg-spd-red hover:bg-red-700 text-white gap-1"
+                            >
+                              <CreditCard className="h-3.5 w-3.5" />
+                              Pay
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Main Report Printable Footer */}
