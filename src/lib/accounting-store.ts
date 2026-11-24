@@ -492,8 +492,24 @@ export async function recordReceivablePayment(payload: {
   };
 
   try {
-    // 1. Persist to custom_receivable_settlements
+    // 1. Check for duplicate settlement within 60 seconds or identical reference to prevent duplicates
     const existingSettlements = await getSystemSettingJson<any[]>("custom_receivable_settlements", []);
+    const isDup = existingSettlements.some((s) => {
+      if (s.reference && paymentRef && s.reference === paymentRef) return true;
+      const sameCust = s.customerId === payload.customerId || s.customerName === payload.customerName;
+      const sameAmt = Number(s.amount) === amount;
+      const sameBilty = s.biltyNumber && payload.biltyNumber ? s.biltyNumber === payload.biltyNumber : true;
+      const isRecent = Math.abs(new Date(s.createdAt || s.date).getTime() - new Date(timestamp).getTime()) < 60000;
+      return sameCust && sameAmt && sameBilty && isRecent;
+    });
+
+    if (isDup) {
+      console.log("[AccountingStore] Duplicate receivable payment detected & suppressed:", paymentRef);
+      const match = existingSettlements.find((s) => s.reference === paymentRef) || existingSettlements[0];
+      return { success: true, data: match };
+    }
+
+    // Persist to custom_receivable_settlements
     existingSettlements.unshift(settlementRecord);
     await setSystemSettingJson("custom_receivable_settlements", existingSettlements);
 
@@ -867,6 +883,24 @@ export async function recordCashTransaction(tx: {
 
   try {
     const existing = await getSystemSettingJson<CashTransactionRecord[]>("custom_cash_transactions", []);
+    const isDup = existing.some((t) => {
+      if (t.reference && voucherNumber && t.reference === voucherNumber) return true;
+      if (t.voucherNumber && voucherNumber && t.voucherNumber === voucherNumber) return true;
+      const sameBook = t.cashBookId === tx.cashBookId;
+      const sameAmt = Number(t.amount) === amount;
+      const sameType = t.type === tx.type;
+      const sameParty = (t.partyName || "").trim().toLowerCase() === (tx.partyName || "").trim().toLowerCase();
+      const sameBilty = t.biltyNumber && tx.biltyNumber ? t.biltyNumber === tx.biltyNumber : false;
+      const isRecent = Math.abs(new Date(t.createdAt || t.date).getTime() - new Date(timestamp).getTime()) < 60000;
+      return sameBook && sameAmt && sameType && (sameParty || sameBilty) && isRecent;
+    });
+
+    if (isDup) {
+      console.log("[AccountingStore] Duplicate cash transaction detected & suppressed:", voucherNumber);
+      const match = existing.find((t) => (t.reference && voucherNumber && t.reference === voucherNumber) || (t.voucherNumber && voucherNumber && t.voucherNumber === voucherNumber)) || existing[0];
+      return { success: true, data: match };
+    }
+
     existing.unshift(newTx);
     await setSystemSettingJson("custom_cash_transactions", existing);
     return { success: true, data: newTx };

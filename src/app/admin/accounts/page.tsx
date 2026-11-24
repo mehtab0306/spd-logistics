@@ -419,6 +419,89 @@ export default function AccountsPage() {
           return isSenderMatch;
         });
 
+        // Track unique credit receipts to prevent double/triple posting across Cash Book, Receivables and Bilties
+        const processedPaymentKeys = new Set<string>();
+
+        // 1. Post Cash Books receipts as CREDIT entries (Book of original financial entry)
+        const matchedCashTxs = localCashTxs.filter((ctx: any) => {
+          if (ctx.type !== "CREDIT" && ctx.type !== "IN") return false;
+          const person = (ctx.accountPerson || "").toLowerCase().trim();
+          const desc = (ctx.description || "").toLowerCase().trim();
+          return (
+            (custNameNorm && (person.includes(custNameNorm) || desc.includes(custNameNorm))) ||
+            (custCompNorm && (person.includes(custCompNorm) || desc.includes(custCompNorm))) ||
+            (accNameNorm && (person.includes(accNameNorm) || desc.includes(accNameNorm)))
+          );
+        });
+
+        for (const ctx of matchedCashTxs) {
+          const amt = Number(ctx.amount) || 0;
+          if (amt <= 0) continue;
+
+          const refKey = (ctx.voucherNumber || ctx.reference || `csh-${ctx.id}`).trim();
+          const bNum = (ctx.biltyNumber || "").trim();
+
+          processedPaymentKeys.add(refKey);
+          if (bNum) processedPaymentKeys.add(`bilty-${bNum}`);
+
+          runningBalance -= amt;
+          txList.push({
+            id: `tx-cash-${ctx.id}`,
+            date: ctx.date || new Date().toISOString(),
+            voucherNumber: ctx.voucherNumber || `CSH-${ctx.id.slice(-5)}`,
+            description: `Cash Book Receipt: ${ctx.description || "Cash Received"} (${ctx.accountPerson || "Party"})`,
+            debit: 0,
+            credit: amt,
+            balance: runningBalance,
+            paymentMethod: ctx.paymentMethod || "CASH",
+            reference: ctx.voucherNumber,
+            source: "CASH_BOOK",
+          });
+        }
+
+        // 2. Post Receivables Settlements (only if NOT already posted via Cash Book)
+        const matchedReceivables = localReceivables.filter((r: any) => {
+          const rCId = r.customerId && r.customerId === custId;
+          const rName = (r.customerName || "").toLowerCase().trim();
+          return (
+            rCId ||
+            (custNameNorm && rName.includes(custNameNorm)) ||
+            (custCompNorm && rName.includes(custCompNorm)) ||
+            (accNameNorm && rName.includes(accNameNorm))
+          );
+        });
+
+        for (const r of matchedReceivables) {
+          const amt = Number(r.amount) || 0;
+          if (amt <= 0) continue;
+
+          const rRef = (r.reference || `rec-${r.id}`).trim();
+          const bNum = (r.biltyNumber || "").trim();
+
+          // Suppress if already captured in Cash Book to avoid duplicate ledger entry
+          if (processedPaymentKeys.has(rRef) || (bNum && processedPaymentKeys.has(`bilty-${bNum}`))) {
+            continue;
+          }
+
+          processedPaymentKeys.add(rRef);
+          if (bNum) processedPaymentKeys.add(`bilty-${bNum}`);
+
+          runningBalance -= amt;
+          txList.push({
+            id: `tx-rec-${r.id}`,
+            date: r.date || new Date().toISOString(),
+            voucherNumber: r.reference || `REC-${r.id.slice(-5)}`,
+            description: `Receivable Settlement via ${r.paymentMethod || "Bank"} (Ref: ${r.reference || "N/A"})`,
+            debit: 0,
+            credit: amt,
+            balance: runningBalance,
+            paymentMethod: r.paymentMethod || "ONLINE_TRANSFER",
+            reference: r.reference,
+            source: "RECEIVABLES",
+          });
+        }
+
+        // 3. Post Bilties as DEBIT entries (Freight billed to responsible party)
         for (const b of matchedBilties) {
           const freight = Number(b.totalAmount) || 0;
           if (freight > 0) {
@@ -437,9 +520,16 @@ export default function AccountsPage() {
             });
           }
 
-          // If Bilty was paid advance or settled at booking, post CREDIT entry
+          // If Bilty has advance paid, only credit IF NOT already captured in Cash Book or Receivables
           const advancePaid = Number(b.paidAmount) || 0;
-          if (advancePaid > 0) {
+          const bNo = (b.biltyNumber || "").trim();
+          if (
+            advancePaid > 0 &&
+            !processedPaymentKeys.has(`bilty-${bNo}`) &&
+            !processedPaymentKeys.has(`ADV-${bNo}`)
+          ) {
+            processedPaymentKeys.add(`bilty-${bNo}`);
+            processedPaymentKeys.add(`ADV-${bNo}`);
             runningBalance -= advancePaid;
             txList.push({
               id: `tx-bilty-crd-${b.id}`,
@@ -452,68 +542,6 @@ export default function AccountsPage() {
               paymentMethod: "CASH",
               reference: b.biltyNumber,
               source: "BILTY",
-            });
-          }
-        }
-
-        // B. Post Cash Books receipts as CREDIT entries (Money received from customer)
-        const matchedCashTxs = localCashTxs.filter((ctx: any) => {
-          if (ctx.type !== "CREDIT") return false; // Money received
-          const person = (ctx.accountPerson || "").toLowerCase().trim();
-          const desc = (ctx.description || "").toLowerCase().trim();
-          return (
-            (custNameNorm && (person.includes(custNameNorm) || desc.includes(custNameNorm))) ||
-            (custCompNorm && (person.includes(custCompNorm) || desc.includes(custCompNorm))) ||
-            (accNameNorm && (person.includes(accNameNorm) || desc.includes(accNameNorm)))
-          );
-        });
-
-        for (const ctx of matchedCashTxs) {
-          const amt = Number(ctx.amount) || 0;
-          if (amt > 0) {
-            runningBalance -= amt;
-            txList.push({
-              id: `tx-cash-${ctx.id}`,
-              date: ctx.date || new Date().toISOString(),
-              voucherNumber: ctx.voucherNumber || `CSH-${ctx.id.slice(-5)}`,
-              description: `Cash Book Receipt: ${ctx.description || "Cash Received"} (${ctx.accountPerson || "Party"})`,
-              debit: 0,
-              credit: amt,
-              balance: runningBalance,
-              paymentMethod: ctx.paymentMethod || "CASH",
-              reference: ctx.voucherNumber,
-              source: "CASH_BOOK",
-            });
-          }
-        }
-
-        // C. Post Receivables Settlements as CREDIT entries
-        const matchedReceivables = localReceivables.filter((r: any) => {
-          const rCId = r.customerId && r.customerId === custId;
-          const rName = (r.customerName || "").toLowerCase().trim();
-          return (
-            rCId ||
-            (custNameNorm && rName.includes(custNameNorm)) ||
-            (custCompNorm && rName.includes(custCompNorm)) ||
-            (accNameNorm && rName.includes(accNameNorm))
-          );
-        });
-
-        for (const r of matchedReceivables) {
-          const amt = Number(r.amount) || 0;
-          if (amt > 0) {
-            runningBalance -= amt;
-            txList.push({
-              id: `tx-rec-${r.id}`,
-              date: r.date || new Date().toISOString(),
-              voucherNumber: r.reference || `REC-${r.id.slice(-5)}`,
-              description: `Receivable Settlement via ${r.paymentMethod || "Bank"} (Ref: ${r.reference || "N/A"})`,
-              debit: 0,
-              credit: amt,
-              balance: runningBalance,
-              paymentMethod: r.paymentMethod || "ONLINE_TRANSFER",
-              reference: r.reference,
-              source: "RECEIVABLES",
             });
           }
         }

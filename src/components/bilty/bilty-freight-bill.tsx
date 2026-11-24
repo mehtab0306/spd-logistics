@@ -67,11 +67,13 @@ export function BiltyFreightBill({ bilty }: BiltyFreightBillProps) {
 
   const discount = parseFloat(bilty.discount) || 0;
   const netFreightSubtotal = Math.max(0, initialFreight + totalAdditional - discount);
-  const incomeTax6Pct = bilty.incomeTax !== undefined ? (parseFloat(bilty.incomeTax) || 0) : Math.round(netFreightSubtotal * 0.06);
-  const salesTax15Pct = bilty.salesTax !== undefined ? (parseFloat(bilty.salesTax) || 0) : Math.round(netFreightSubtotal * 0.15);
-  const totalInvoiceAmount = bilty.totalAmount ? parseFloat(bilty.totalAmount) : netFreightSubtotal + incomeTax6Pct + salesTax15Pct;
+  const incomeTax6Pct = bilty.incomeTax !== undefined ? (parseFloat(bilty.incomeTax) || 0) : (bilty.incomeTaxEnabled ? Math.round(netFreightSubtotal * 0.06) : 0);
+  const salesTax15Pct = bilty.salesTax !== undefined ? (parseFloat(bilty.salesTax) || 0) : (bilty.salesTaxEnabled !== false ? Math.round(netFreightSubtotal * 0.15) : 0);
+  const totalInvoiceAmount = bilty.totalAmount && Number(bilty.totalAmount) >= netFreightSubtotal + salesTax15Pct
+    ? parseFloat(bilty.totalAmount)
+    : netFreightSubtotal + incomeTax6Pct + salesTax15Pct;
   const paidAmount = parseFloat(bilty.paidAmount) || 0;
-  const balancePayable = totalInvoiceAmount - paidAmount;
+  const balancePayable = Math.max(0, totalInvoiceAmount - paidAmount);
 
   const amountInWords = numberToWordsPKR(totalInvoiceAmount);
 

@@ -149,13 +149,30 @@ export default function AdminDashboard() {
         } catch (sbErr) {
           console.warn("Supabase dashboard live query error:", sbErr);
         }
-      } else {
-        // Fallback only if Supabase environment variables are missing
+      }
+
+      // 2. Resilient API Fallback if direct Supabase fetch returned empty or had network glitch
+      if (biltiesList.length === 0) {
         try {
           const res = await fetch("/api/admin/bilty", { cache: "no-store" });
-          const data = await res.json();
-          if (data.success && Array.isArray(data.data)) {
-            biltiesList = data.data.filter((b: any) => !b.is_deleted && b.status !== "DELETED");
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.data)) {
+              biltiesList = data.data.filter((b: any) => !b.is_deleted && b.status !== "DELETED");
+            }
+          }
+        } catch (apiErr) {
+          console.warn("Fallback bilty API error:", apiErr);
+        }
+      }
+
+      if (custCount === 0) {
+        try {
+          const cRes = await fetch("/api/admin/customers", { cache: "no-store" });
+          if (cRes.ok) {
+            const cData = await cRes.json();
+            const list = Array.isArray(cData.customers) ? cData.customers : Array.isArray(cData.data) ? cData.data : [];
+            custCount = list.length;
           }
         } catch {}
       }
@@ -206,17 +223,26 @@ export default function AdminDashboard() {
         return st === "delivered" || st.includes("deliver");
       }).length;
 
-      const totalBiltyFreight = uniqueBilties.reduce((acc: number, b: any) => {
-        return acc + (Number(b.freight_amount ?? b.total_freight ?? b.totalFreight ?? b.totalAmount) || 0);
-      }, 0);
+      // Mathematically reconciled financial metrics across all active bilties
+      let totalBiltyFreight = 0;
+      let totalPaidAmount = 0;
+      let outstandingBalance = 0;
 
-      const totalPaidAmount = uniqueBilties.reduce((acc: number, b: any) => {
-        return acc + (Number(b.advance_paid ?? b.paidAmount) || 0);
-      }, 0);
+      for (const b of uniqueBilties) {
+        const freight = Number(b.freight_amount ?? b.freight ?? b.total_freight ?? b.totalFreight ?? b.totalAmount ?? 0);
+        const addl = Number(b.additional_charges ?? b.additionalCharges ?? 0);
+        const tax = Number(b.sales_tax ?? b.salesTax ?? 0);
+        const disc = Number(b.discount ?? 0);
+        const total = Number(b.total_amount ?? b.totalAmount ?? (freight + addl + tax - disc)) || freight;
 
-      const outstandingBalance = uniqueBilties.reduce((acc: number, b: any) => {
-        return acc + (Number(b.remaining_balance ?? b.remainingBalance) || 0);
-      }, 0);
+        const isPaidMode = String(b.payment_mode || b.paymentMode || "").toUpperCase() === "PAID";
+        const paid = Number(b.advance_paid ?? b.paidAmount ?? (isPaidMode ? total : 0));
+        const rem = Number(b.remaining_balance ?? b.remainingBalance ?? Math.max(0, total - paid));
+
+        totalBiltyFreight += total;
+        totalPaidAmount += paid;
+        outstandingBalance += rem;
+      }
 
       // Hub Volume Calculations
       let lhr = 0;

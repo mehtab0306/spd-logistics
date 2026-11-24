@@ -585,6 +585,62 @@ export async function POST(request: Request) {
         } catch {}
       }
 
+      // 1. Duplicate prevention check in Central collection
+      const centralTxs = (getCentralCollection('cashTransactions') || []) as any[];
+      const centralDup = centralTxs.find((t: any) =>
+        t.cashBookId === cashBookId &&
+        Number(t.debit || 0) === debit &&
+        Number(t.credit || 0) === credit &&
+        ((vch && t.voucherNumber === vch) ||
+         (resolvedBiltyNumber && t.biltyNumber === resolvedBiltyNumber) ||
+         (t.party === resolvedParty && Math.abs(new Date(t.createdAt || 0).getTime() - Date.now()) < 60000))
+      );
+      if (centralDup) {
+        return NextResponse.json({
+          success: true,
+          message: 'Duplicate cash transaction prevented (idempotent)',
+          data: centralDup,
+        });
+      }
+
+      // 2. Duplicate prevention check in Prisma
+      try {
+        const recentWindow = new Date(Date.now() - 60000);
+        const duplicateTx = await prisma.cashBookTransaction.findFirst({
+          where: {
+            cashBookId,
+            debit,
+            credit,
+            OR: [
+              ...(vch ? [{ voucherNumber: vch }] : []),
+              ...(resolvedBiltyNumber ? [{ biltyNumber: resolvedBiltyNumber }] : []),
+              ...(resolvedChallanNumber ? [{ challanNumber: resolvedChallanNumber }] : []),
+              {
+                party: resolvedParty,
+                createdAt: { gte: recentWindow },
+              },
+            ],
+          },
+          include: {
+            customer: { select: { id: true, name: true, phone: true } },
+            vehicle: { select: { id: true, vehicleNumber: true, vehicleType: true } },
+            driver: { select: { id: true, name: true, phone: true } },
+            challan: { select: { id: true, challanNumber: true, origin: true, destination: true } },
+            bilty: { select: { id: true, biltyNumber: true, trackingId: true } },
+          },
+        });
+
+        if (duplicateTx) {
+          return NextResponse.json({
+            success: true,
+            message: 'Duplicate cash transaction prevented (idempotent)',
+            data: duplicateTx,
+          });
+        }
+      } catch (checkErr) {
+        // Continue if check fails
+      }
+
       // Create transaction via Prisma
       transaction = await prisma.cashBookTransaction.create({
         data: {

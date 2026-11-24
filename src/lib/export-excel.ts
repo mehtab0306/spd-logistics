@@ -353,9 +353,11 @@ export function export4SheetBiltyExcel(bilty: any): boolean {
   const paidAmount = parseFloat(bilty.paidAmount) || 0;
 
   // Taxes
-  const incomeTax = bilty.incomeTax !== undefined ? parseFloat(bilty.incomeTax) || 0 : Math.round(subTotal * 0.06);
-  const salesTax = bilty.salesTax !== undefined ? parseFloat(bilty.salesTax) || 0 : Math.round(subTotal * 0.15);
-  const grandTotal = bilty.totalAmount ? parseFloat(bilty.totalAmount) : subTotal + incomeTax + salesTax;
+  const incomeTax = bilty.incomeTax !== undefined ? parseFloat(bilty.incomeTax) || 0 : (bilty.incomeTaxEnabled ? Math.round(subTotal * 0.06) : 0);
+  const salesTax = bilty.salesTax !== undefined ? parseFloat(bilty.salesTax) || 0 : (bilty.salesTaxEnabled !== false ? Math.round(subTotal * 0.15) : 0);
+  const grandTotal = bilty.totalAmount && Number(bilty.totalAmount) >= subTotal + salesTax
+    ? parseFloat(bilty.totalAmount)
+    : subTotal + incomeTax + salesTax;
   const balance = Math.max(0, grandTotal - paidAmount);
 
   const a = [

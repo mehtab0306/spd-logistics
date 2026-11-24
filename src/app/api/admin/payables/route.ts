@@ -104,8 +104,24 @@ export async function POST(request: Request) {
       createdAt: timestamp,
     };
 
-    // Persist to custom_payables
+    // Check for duplicate payable (Idempotency)
     const currentPayables = await getSystemSettingJson<PayableItem[]>("custom_payables", []);
+    const isDup = currentPayables.some((p) => {
+      if (p.reference && ref && p.reference === ref) return true;
+      const sameVendor = p.vendorName.trim().toLowerCase() === String(vendorName).trim().toLowerCase();
+      const sameAmt = Number(p.totalAmount) === totalNum;
+      const sameChallan = p.challanNumber && challanNumber ? p.challanNumber === challanNumber : true;
+      const isRecent = Math.abs(new Date(p.createdAt).getTime() - new Date(timestamp).getTime()) < 60000;
+      return sameVendor && sameAmt && sameChallan && isRecent;
+    });
+
+    if (isDup) {
+      console.log("[Payables API] Duplicate payable detected & suppressed:", ref);
+      const match = currentPayables.find((p) => p.reference === ref) || currentPayables[0];
+      return NextResponse.json({ success: true, data: match, message: "Duplicate payable prevented (idempotent)" });
+    }
+
+    // Persist to custom_payables
     currentPayables.unshift(newPayable);
     await setSystemSettingJson("custom_payables", currentPayables);
 

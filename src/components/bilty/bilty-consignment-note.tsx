@@ -58,11 +58,13 @@ export function BiltyConsignmentNote({
   const initialFreight = parseFloat(bilty.freightAmount !== undefined ? bilty.freightAmount : bilty.freight) || 0;
   const discount = parseFloat(bilty.discount) || 0;
   const subTotal = Math.max(0, initialFreight + totalAdditional - discount);
-  const incomeTax6Pct = bilty.incomeTax !== undefined ? (parseFloat(bilty.incomeTax) || 0) : Math.round(subTotal * 0.06);
-  const salesTax15Pct = bilty.salesTax !== undefined ? (parseFloat(bilty.salesTax) || 0) : Math.round(subTotal * 0.15);
-  const grandTotal = bilty.totalAmount ? parseFloat(bilty.totalAmount) : subTotal + incomeTax6Pct + salesTax15Pct;
+  const incomeTax6Pct = bilty.incomeTax !== undefined ? (parseFloat(bilty.incomeTax) || 0) : (bilty.incomeTaxEnabled ? Math.round(subTotal * 0.06) : 0);
+  const salesTax15Pct = bilty.salesTax !== undefined ? (parseFloat(bilty.salesTax) || 0) : (bilty.salesTaxEnabled !== false ? Math.round(subTotal * 0.15) : 0);
+  const grandTotal = bilty.totalAmount && Number(bilty.totalAmount) >= subTotal + salesTax15Pct
+    ? parseFloat(bilty.totalAmount)
+    : subTotal + incomeTax6Pct + salesTax15Pct;
   const paidAmount = parseFloat(bilty.paidAmount) || 0;
-  const remainingBalance = grandTotal - paidAmount;
+  const remainingBalance = Math.max(0, grandTotal - paidAmount);
 
   // Masking logic: If "Hide Amount in Bilty" is checked, mask monetary figures for Driver & Customer copies
   const isAmountHidden = Boolean(bilty.hideAmount) && (selectedCopy === "Driver / Fleet Copy" || selectedCopy === "Customer Copy");
